@@ -14,6 +14,8 @@ sensor_ids = {
     'Humidity': current_status.filter(polars.col('SensorType') =='Humidity')['SensorID'].unique()
 }
 
+current_status.columns
+
 if test:
    for key in sensor_ids:        
         sensor_ids[key] = sensor_ids[key][0:10]

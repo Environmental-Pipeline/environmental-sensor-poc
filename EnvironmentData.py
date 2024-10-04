@@ -1,5 +1,4 @@
-import os, requests, polars, time
-from tqdm import tqdm
+import os, requests, polars, time, duckdb, numpy, tqdm
 
 class EnvironmentData():
 
@@ -31,13 +30,46 @@ class EnvironmentData():
 
         return sensor_ids
 
+    def db_filename(self, reading_type, testing = False):
+        return f'{self.data_path}/{reading_type}{"-testing" if testing else ""}.parquet'
 
     def get_current_status(self):
         
+        current_utc = int(time.time())
         url = f'https://cats.corismonitoring.com/api/cats/user/?ApiKey={self.apikeys["CORIS"]}&CatsUserID={self.CatsUserID}'
         response = requests.get(url)
         current_status = polars.DataFrame(response.json()['Sensors'])
-        return current_status
+        
+        # extract data from the repsonse in the format to match the database. database format is:
+        #  - one file per reading type at self.data_path/readingtype.parquet
+        #  - columns: UTC, Reading, SensorID
+        readings = {
+            'Temperature': {'ReadingType': 'SensorReadingF', 'data': []}, 
+            'Humidity':{'ReadingType': 'SensorReadingRh', 'data': []}
+        }
+
+        # polars iterator uses tuples so we need numeric indices of columns.
+        def val(row, x): 
+            if x not in current_status.columns:
+                raise ValueError(f'Column {x} not in response columns.')
+            colidx = list(numpy.where(numpy.array(current_status.columns) == x)[0])
+            return row[ colidx[0] ]
+        
+        for row in current_status.iter_rows():
+            sensortype = val(row, 'SensorType')
+            if sensortype in readings:
+                readings[ val(row, 'SensorType') ]['data'].append({
+                    'UTC': val(row, 'SensorReadingUTC'), 
+                    'Reading': val(row, 'SensorReading'), 
+                    'SensorID': val(row, 'SensorID')
+                })
+
+        # concatenate data and save it.
+        for key in readings:
+            if len(readings[key]['data']) > 0:                
+                os.makedirs(f'{self.data_path}/new-readings/', exist_ok = True)
+                filename = f'{self.data_path}/new-readings/{key}-{current_utc}.parquet'
+                polars.DataFrame(readings[key]['data']).write_parquet(filename)
 
     def initialize_database(self, days_back, testing = False):
 
@@ -62,7 +94,7 @@ class EnvironmentData():
                 print('Get sensor Ids.')
                 sensor_ids = self.get_sensor_ids(testing = testing)
 
-            pbar = tqdm(total = len(sensor_ids[key]), desc=f'Gather readings for {key}')
+            pbar = tqdm.tqdm(total = len(sensor_ids[key]), desc=f'Gather readings for {key}')
             for sensor_id in sensor_ids[key]:
                 url = '&'.join([
                     f'https://cats.corismonitoring.com/api/sensor/historical/?ApiKey={self.apikeys["CORIS"]}',
