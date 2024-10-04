@@ -1,4 +1,4 @@
-import os, requests, polars, time, duckdb, numpy, tqdm
+import os, requests, polars, time, duckdb, numpy, tqdm, copy
 
 class EnvironmentData():
 
@@ -11,27 +11,30 @@ class EnvironmentData():
         self.apikeys = {'CORIS': os.environ.get('CORIS_API_KEY')}
         self.CatsUserID = CatsUserID
         self.data_path = data_path
+        self.testing = testing
 
-        self.initialize_database(days_back = days_back, testing = testing)
+        # set up the readings data structure that will be used throughout.
+        self.readings = {
+            'Temperature': {'ReadingType': 'SensorReadingF', 'data': []}, 
+            'Humidity':{'ReadingType': 'SensorReadingRh', 'data': []}
+        }
+        for key in self.readings:
+            self.readings[key]['datafile'] = f'{data_path}/{key}{"-testing" if testing else ""}.parquet'
 
-    def get_sensor_ids(self, testing = False):
+        self.initialize_database(days_back = days_back)
+
+    def get_sensor_ids(self):
 
         url = f'https://cats.corismonitoring.com/api/cats/user/?ApiKey={self.apikeys["CORIS"]}&CatsUserID={self.CatsUserID}'
         response = requests.get(url)
         current_status = polars.DataFrame(response.json()['Sensors'])
-        sensor_ids = {
-            'Temperature': current_status.filter(polars.col('SensorType') == 'Temperature')['SensorID'].unique(),
-            'Humidity': current_status.filter(polars.col('SensorType') =='Humidity')['SensorID'].unique()
-        }
-
-        if testing:
-            for key in sensor_ids:        
-                    sensor_ids[key] = sensor_ids[key][0:10]
+        sensor_ids = copy.deepcopy(self.readings)
+        for key in sensor_ids:
+            sensor_ids[key]['sensor_ids'] = current_status.filter(polars.col('SensorType') == key)['SensorID'].unique().to_list()
+            if self.testing:            
+                sensor_ids[key]['sensor_ids'] = sensor_ids[key]['sensor_ids'][0:3]
 
         return sensor_ids
-
-    def db_filename(self, reading_type, testing = False):
-        return f'{self.data_path}/{reading_type}{"-testing" if testing else ""}.parquet'
 
     def get_current_status(self):
         
@@ -43,10 +46,6 @@ class EnvironmentData():
         # extract data from the repsonse in the format to match the database. database format is:
         #  - one file per reading type at self.data_path/readingtype.parquet
         #  - columns: UTC, Reading, SensorID
-        readings = {
-            'Temperature': {'ReadingType': 'SensorReadingF', 'data': []}, 
-            'Humidity':{'ReadingType': 'SensorReadingRh', 'data': []}
-        }
 
         # polars iterator uses tuples so we need numeric indices of columns.
         def val(row, x): 
@@ -55,6 +54,7 @@ class EnvironmentData():
             colidx = list(numpy.where(numpy.array(current_status.columns) == x)[0])
             return row[ colidx[0] ]
         
+        readings = copy.deepcopy(self.readings)
         for row in current_status.iter_rows():
             sensortype = val(row, 'SensorType')
             if sensortype in readings:
@@ -71,31 +71,27 @@ class EnvironmentData():
                 filename = f'{self.data_path}/new-readings/{key}-{current_utc}.parquet'
                 polars.DataFrame(readings[key]['data']).write_parquet(filename)
 
-    def initialize_database(self, days_back, testing = False):
+    def initialize_database(self, days_back):
 
         sensor_ids = []
         current_utc = int(time.time())
         start_utc = current_utc - days_back * 24 * 60 * 60
 
         # get historical readings.
-        readings = {
-            'Temperature': {'ReadingType': 'SensorReadingF', 'data': []}, 
-            'Humidity':{'ReadingType': 'SensorReadingRh', 'data': []}
-        }
+        readings = copy.deepcopy(self.readings)
         for key in readings:
 
             # if the data already exists, skip this reading type.
-            readings[key]['datafile'] = f'{self.data_path}/{key}{"-testing" if testing else ""}.parquet'
             if os.path.exists(readings[key]['datafile']):
                 continue
 
             # get sensor ids here to prevent doing it if we don't actually need any new data. 
             if len(sensor_ids) == 0:
                 print('Get sensor Ids.')
-                sensor_ids = self.get_sensor_ids(testing = testing)
+                sensor_ids = self.get_sensor_ids()
 
-            pbar = tqdm.tqdm(total = len(sensor_ids[key]), desc=f'Gather readings for {key}')
-            for sensor_id in sensor_ids[key]:
+            pbar = tqdm.tqdm(total = len(sensor_ids[key]['sensor_ids']), desc=f'Gather readings for {key}')
+            for sensor_id in sensor_ids[key]['sensor_ids']:
                 url = '&'.join([
                     f'https://cats.corismonitoring.com/api/sensor/historical/?ApiKey={self.apikeys["CORIS"]}',
                     f'SensorID={sensor_id}',
@@ -124,4 +120,28 @@ class EnvironmentData():
                 print(f'Initialize database for {key}.')
                 polars.concat(readings[key]['data']).write_parquet(readings[key]['datafile'])
 
+    def consolidate_readings(self):
         
+        # bring new-readings into the database.
+        new_readings = copy.deepcopy(self.readings)
+        for key in new_readings:
+
+            # get new readings. 
+            files = [i for i in os.listdir(f'{self.data_path}/new-readings/') if i.startswith(f'{key}-')]
+            for file in files:
+                new_readings[key]['data'].append(polars.read_parquet(f'{self.data_path}/new-readings/{file}'))
+
+            # combine new readings and set correct data types. 
+            dt = polars.concat(new_readings[key]['data']).with_columns(polars.col("Reading").cast(polars.Float32))
+            dt = dt.with_columns(polars.col("UTC").cast(polars.Int64))
+            dt = dt.with_columns(polars.col("SensorID").cast(polars.Int32))
+
+            # append these to the database.
+            dt = polars.concat([polars.read_parquet(new_readings[key]['datafile']), dt])
+            dt.write_parquet(new_readings[key]['datafile'])
+
+            # if all this was successful, remove the new-readings files. 
+            for file in files:
+                os.remove(f'{self.data_path}/new-readings/{file}')
+
+        os.rmdir(f'{self.data_path}/new-readings')

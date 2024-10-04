@@ -1,24 +1,59 @@
-import os, requests, polars, time
+import os, requests, polars, time, numpy
 from tqdm import tqdm
 
 apikey = os.environ.get('CORIS_API_KEY')
 CatsUserID = 2496
 test = True
+data_path = 'data/'
+
+readings = {
+    'Temperature': {'ReadingType': 'SensorReadingF', 'data': []}, 
+    'Humidity':{'ReadingType': 'SensorReadingRh', 'data': []}
+}
+current_utc = int(time.time())
 
 # get current data, which includes all the sensors. 
 url = f'https://cats.corismonitoring.com/api/cats/user/?ApiKey={apikey}&CatsUserID={CatsUserID}'
 response = requests.get(url)
 current_status = polars.DataFrame(response.json()['Sensors'])
-sensor_ids = {
-    'Temperature': current_status.filter(polars.col('SensorType') == 'Temperature')['SensorID'].unique(),
-    'Humidity': current_status.filter(polars.col('SensorType') =='Humidity')['SensorID'].unique()
-}
 
-current_status.columns
+# get sensor ids. 
+for key in readings:
+    readings[key]['sensor_ids'] = current_status.filter(polars.col('SensorType') == key)['SensorID'].unique().to_list()
+    if test:            
+        readings[key]['sensor_ids'] = readings[key]['sensor_ids'][0:10]
 
-if test:
-   for key in sensor_ids:        
-        sensor_ids[key] = sensor_ids[key][0:10]
+# current status to the format that historical data is in.
+        
+# extract data from the repsonse in the format to match the database. database format is:
+#  - one file per reading type at self.data_path/readingtype.parquet
+#  - columns: UTC, Reading, SensorID
+
+# polars iterator uses tuples so we need numeric indices of columns.
+def val(row, x): 
+    if x not in current_status.columns:
+        raise ValueError(f'Column {x} not in response columns.')
+    colidx = list(numpy.where(numpy.array(current_status.columns) == x)[0])
+    return row[ colidx[0] ]
+
+for row in current_status.iter_rows():
+    sensortype = val(row, 'SensorType')
+    if sensortype in readings:
+        readings[ val(row, 'SensorType') ]['data'].append({
+            'UTC': val(row, 'SensorReadingUTC'), 
+            'Reading': val(row, 'SensorReading'), 
+            'SensorID': val(row, 'SensorID')
+        })
+
+# concatenate data and save it.
+for key in readings:
+    if len(readings[key]['data']) > 0:                
+        os.makedirs(f'{data_path}/new-readings/', exist_ok = True)
+        filename = f'{data_path}/new-readings/{key}-{current_utc}.parquet'
+        polars.DataFrame(readings[key]['data']).write_parquet(filename)
+        
+        
+        
 
 # get historical readings.
 
