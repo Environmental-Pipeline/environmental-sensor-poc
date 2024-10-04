@@ -1,17 +1,29 @@
-import os, requests, polars, time, duckdb, numpy, tqdm, copy
+import os, requests, polars, time, duckdb, numpy, tqdm, copy, logging
 
 class EnvironmentData():
 
     def __init__(self, CatsUserID, data_path = 'data/', days_back = 90, testing = False):
 
         if not os.path.exists(data_path):
-            print('Create data folder.')
+            self.logger.info('Create data folder.')
             os.makedirs(data_path)
         
         self.apikeys = {'CORIS': os.environ.get('CORIS_API_KEY')}
         self.CatsUserID = CatsUserID
         self.data_path = data_path
         self.testing = testing
+
+        # set up logging. 
+        # https://docs.python.org/3/howto/logging-cookbook.html#logging-cookbook
+        self.logger = logging.getLogger('EnvironmentData')
+        self.logger.setLevel(logging.DEBUG)
+        ch = logging.StreamHandler()
+        fh = logging.FileHandler(f'{data_path}/EnvironmentData.log')
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        ch.setFormatter(formatter)
+        fh.setFormatter(formatter)
+        self.logger.addHandler(ch)
+        self.logger.addHandler(fh)
 
         # set up the readings data structure that will be used throughout.
         self.readings = {
@@ -21,10 +33,12 @@ class EnvironmentData():
         for key in self.readings:
             self.readings[key]['datafile'] = f'{data_path}/{key}{"-testing" if testing else ""}.parquet'
 
+        # initialize the database and kick off the chron job.
         self.initialize_database(days_back = days_back)
 
     def get_sensor_ids(self):
 
+        self.logger.info('get_sensor_ids')
         url = f'https://cats.corismonitoring.com/api/cats/user/?ApiKey={self.apikeys["CORIS"]}&CatsUserID={self.CatsUserID}'
         response = requests.get(url)
         current_status = polars.DataFrame(response.json()['Sensors'])
@@ -38,6 +52,7 @@ class EnvironmentData():
 
     def get_current_status(self):
         
+        self.logger.info('get_current_status')
         current_utc = int(time.time())
         url = f'https://cats.corismonitoring.com/api/cats/user/?ApiKey={self.apikeys["CORIS"]}&CatsUserID={self.CatsUserID}'
         response = requests.get(url)
@@ -50,6 +65,7 @@ class EnvironmentData():
         # polars iterator uses tuples so we need numeric indices of columns.
         def val(row, x): 
             if x not in current_status.columns:
+                self.logger.error(f'Column {x} not in response columns.')
                 raise ValueError(f'Column {x} not in response columns.')
             colidx = list(numpy.where(numpy.array(current_status.columns) == x)[0])
             return row[ colidx[0] ]
@@ -73,6 +89,7 @@ class EnvironmentData():
 
     def initialize_database(self, days_back):
 
+        self.logger.info('initialize_database')
         sensor_ids = []
         current_utc = int(time.time())
         start_utc = current_utc - days_back * 24 * 60 * 60
@@ -87,7 +104,7 @@ class EnvironmentData():
 
             # get sensor ids here to prevent doing it if we don't actually need any new data. 
             if len(sensor_ids) == 0:
-                print('Get sensor Ids.')
+                self.logger.info('Get sensor Ids.')
                 sensor_ids = self.get_sensor_ids()
 
             pbar = tqdm.tqdm(total = len(sensor_ids[key]['sensor_ids']), desc=f'Gather readings for {key}')
@@ -103,6 +120,7 @@ class EnvironmentData():
                 ])
                 response = requests.get(url)
                 if not response.ok:
+                    self.logger.error(f'Error getting historical data for {sensor_id}: {response.json()}')
                     raise Exception(response.json())
                 data = polars.read_csv(response.content, has_header = False)
                 data.columns = ['UTC', 'Reading']
@@ -117,10 +135,12 @@ class EnvironmentData():
         # initialize database.
         for key in readings:
             if len(readings[key]['data']) > 0:
-                print(f'Initialize database for {key}.')
+                self.logger.info(f'Initialize database for {key}.')
                 polars.concat(readings[key]['data']).write_parquet(readings[key]['datafile'])
 
     def consolidate_readings(self):
+
+        self.logger.info('consolidate_readings')
         
         # bring new-readings into the database.
         new_readings = copy.deepcopy(self.readings)
@@ -145,3 +165,4 @@ class EnvironmentData():
                 os.remove(f'{self.data_path}/new-readings/{file}')
 
         os.rmdir(f'{self.data_path}/new-readings')
+
