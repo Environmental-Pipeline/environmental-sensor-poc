@@ -1,16 +1,16 @@
 import os, requests, polars, time
 from tqdm import tqdm
 
-class CorisAPI():
+class EnvironmentData():
 
     def __init__(self, CatsUserID):
 
-        self.apikey = os.environ.get('CORIS_API_KEY')
+        self.apikeys = {'CORIS': os.environ.get('CORIS_API_KEY')}
         self.CatsUserID = CatsUserID
 
     def get_current_status(self):
 
-        url = f'https://cats.corismonitoring.com/api/cats/user/?ApiKey={self.apikey}&CatsUserID={self.CatsUserID}'
+        url = f'https://cats.corismonitoring.com/api/cats/user/?ApiKey={self.apikeys['CORIS']}&CatsUserID={self.CatsUserID}'
         response = requests.get(url)
         self.current_status = polars.DataFrame(response.json()['Sensors'])
         self.sensor_ids = {
@@ -32,7 +32,7 @@ class CorisAPI():
         readings = {'Temperature': [], 'Humidity': []}
         for sensor_id in self.sensor_ids['Temperature']:
             url = '&'.join([
-                f'https://cats.corismonitoring.com/api/sensor/historical/?ApiKey={self.apikey}',
+                f'https://cats.corismonitoring.com/api/sensor/historical/?ApiKey={self.apikeys['CORIS']}',
                 f'SensorID={sensor_id}',
                 f'ReadingType=SensorReadingF',
                 f'StartUTC={start_utc}',
@@ -52,7 +52,7 @@ class CorisAPI():
 
         for sensor_id in self.sensor_ids['Humidity']:
             url = '&'.join([
-                f'https://cats.corismonitoring.com/api/sensor/historical/?ApiKey={self.apikey}',
+                f'https://cats.corismonitoring.com/api/sensor/historical/?ApiKey={self.apikeys['CORIS']}',
                 f'SensorID={sensor_id}',
                 f'ReadingType=SensorReadingRh',
                 f'StartUTC={start_utc}',
