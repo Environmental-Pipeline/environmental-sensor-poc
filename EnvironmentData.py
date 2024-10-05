@@ -1,17 +1,15 @@
-import os, requests, polars, time, duckdb, numpy, tqdm, copy, logging
+import os, requests, polars, time, numpy, tqdm, copy, logging
 
 class EnvironmentData():
 
-    def __init__(self, CatsUserID, data_path = 'data/', days_back = 90, testing = False):
-
-        if not os.path.exists(data_path):
-            self.logger.info('Create data folder.')
-            os.makedirs(data_path)
+    def __init__(self, CatsUserID, data_path = './data/', days_back = 90, testing = False):
         
-        self.apikeys = {'CORIS': os.environ.get('CORIS_API_KEY')}
         self.CatsUserID = CatsUserID
         self.data_path = data_path
         self.testing = testing
+
+        if not os.path.exists(data_path):
+            os.makedirs(data_path)
 
         # set up logging. 
         # https://docs.python.org/3/howto/logging-cookbook.html#logging-cookbook
@@ -24,6 +22,16 @@ class EnvironmentData():
         fh.setFormatter(formatter)
         self.logger.addHandler(ch)
         self.logger.addHandler(fh)
+        
+        # attempt to get and set the api key.
+        # cron can't read environment variables so we need it set in a .env file.        
+        def read_env_variable(var_name):
+            with open('.env') as f:
+                for line in f:
+                    if line.startswith(var_name):
+                        return line.split('=', 1)[1].strip()
+
+        self.apikeys = {'CORIS': read_env_variable('CORIS_API_KEY')}
 
         # set up the readings data structure that will be used throughout.
         self.readings = {
@@ -33,7 +41,7 @@ class EnvironmentData():
         for key in self.readings:
             self.readings[key]['datafile'] = f'{data_path}/{key}{"-testing" if testing else ""}.parquet'
 
-        # initialize the database and kick off the chron job.
+        # initialize the database.
         self.initialize_database(days_back = days_back)
 
     def get_sensor_ids(self):
@@ -41,6 +49,11 @@ class EnvironmentData():
         self.logger.info('get_sensor_ids')
         url = f'https://cats.corismonitoring.com/api/cats/user/?ApiKey={self.apikeys["CORIS"]}&CatsUserID={self.CatsUserID}'
         response = requests.get(url)
+        
+        if not response.ok:
+            self.logger.error(f'Error getting sensor ids: {response.json()}')
+            raise Exception(response.json())
+        
         current_status = polars.DataFrame(response.json()['Sensors'])
         sensor_ids = copy.deepcopy(self.readings)
         for key in sensor_ids:
@@ -80,7 +93,7 @@ class EnvironmentData():
                     'SensorID': val(row, 'SensorID')
                 })
 
-        # concatenate data and save it.
+        # concatenate data and save it.        
         for key in readings:
             if len(readings[key]['data']) > 0:                
                 os.makedirs(f'{self.data_path}/new-readings/', exist_ok = True)
@@ -155,14 +168,14 @@ class EnvironmentData():
             dt = polars.concat(new_readings[key]['data']).with_columns(polars.col("Reading").cast(polars.Float32))
             dt = dt.with_columns(polars.col("UTC").cast(polars.Int64))
             dt = dt.with_columns(polars.col("SensorID").cast(polars.Int32))
+            self.logger.info(f'New readings for {key}: {dt.shape[0]}')
 
             # append these to the database.
             dt = polars.concat([polars.read_parquet(new_readings[key]['datafile']), dt])
             dt.write_parquet(new_readings[key]['datafile'])
+            self.logger.info(f'New total readings for {key}: {dt.shape[0]}')
 
             # if all this was successful, remove the new-readings files. 
             for file in files:
                 os.remove(f'{self.data_path}/new-readings/{file}')
-
-        os.rmdir(f'{self.data_path}/new-readings')
 
