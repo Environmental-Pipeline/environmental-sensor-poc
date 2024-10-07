@@ -1,4 +1,4 @@
-# Envrinmental Sensor Proof-of-Concept
+# Environmental Sensor Proof-of-Concept
 
 
 ## Local Setup
@@ -10,7 +10,7 @@ This project can be partially run using Python. Some feature require Docker.
 Virtual environment are used to prevent conflicts with other Python projects. It is assumed that the user has Python 3.8 or later installed. Commands should be run from the project root, possibly by using the terminal after opening the project root in VS Code.
 
 * To initialize the virtual environment, run `python -m venv .venv`, wait until it finishes, and then `.venv/Scripts/activate` (on Windows).
-* Install the necessary packages into the enviornmnet with `pip install -r requirements.txt`.
+* Install the necessary packages into the environment with `pip install -r requirements.txt`.
 * Request the .env file from the developer and place it in the project root.
 
 Python files can then be run in Python using your preferred IDE. See example.ipynb, scratch/scratch.py, etc. Make sure to select the python.exe interpreter at .venv/Scripts/python.exe.
@@ -36,7 +36,7 @@ The project reads `SensorType` = "Temperature", "Humidity" from the Coris API. N
 
 * Individual sensors only make one type of reading, so data is stored as one table per sensor type to prevent excessively repetitive or sparse tables. 
 * The `cats/user` endpoint is used to get the readings for all sensors, as well as the list of sensor ids. Example: https://cats.corismonitoring.com/api/cats/user/?ApiKey={mykey}&CatsUserID={myid}.
-* The `sensor/historical` endpoing is used to get historical readings for a single sensor and type. Example: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey={mykey}&SensorID={sensor_id}&ReadingType={readingtype}&StartUTC={start_utc}&EndUTC={current_utc}&MinReadingSpacing=600&RequestedOutputFormat=raw
+* The `sensor/historical` endpoint is used to get historical readings for a single sensor and type. Example: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey={mykey}&SensorID={sensor_id}&ReadingType={readingtype}&StartUTC={start_utc}&EndUTC={current_utc}&MinReadingSpacing=600&RequestedOutputFormat=raw
 
 
 **Importing Other APIs**
