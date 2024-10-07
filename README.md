@@ -53,3 +53,6 @@ Other APIs can be implemented to replace or supplement Coris by expanding `Envir
 * Security can be enhanced by only allowing the key to be used from white-listed IP addresses. 
 * Best practice would be to use a cloud service to schedule jobs instead of cron because cloud jobs can be set up using environment variables. 
 
+**polars vs pandas**
+
+Polars was selected as our data framework because it is faster and more memory efficient, and will therefore help the project scale better.

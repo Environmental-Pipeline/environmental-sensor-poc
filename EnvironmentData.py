@@ -10,7 +10,7 @@ class EnvironmentData():
         Parameters
         ----------
         CatsUserID: int
-            Cats User ID from Coris. Necessary for quering the API.
+            Cats User ID from Coris. Necessary for querying the API.
 
         data_path: str
             Data is stored using parquet files. Indicate the path to store the data. Default is './data/'.
@@ -42,6 +42,13 @@ class EnvironmentData():
         fh.setFormatter(formatter)
         #self.logger.addHandler(ch)
         self.logger.addHandler(fh)
+
+        # Set up a second logger for errors only. 
+        self.logger_err = logging.getLogger('EnvironmentData-Errors')
+        self.logger_err.setLevel(logging.ERROR)
+        fh = logging.FileHandler(f'{data_path}/EnvironmentData-Errors.log')
+        fh.setFormatter(formatter)
+        self.logger_err.addHandler(fh)
         
         # Get the API key.
         # cron can't read environment variables so we need read the key in from the .env file.
@@ -64,6 +71,26 @@ class EnvironmentData():
 
         # Initialize the database by creating a parquet file for each reading type and populate it with historical data.
         self.initialize_database(days_back = days_back)
+
+    def error(self, msg, raise_exception):
+
+        """
+        Log an error message to the error log file and regular log file and raise an exception.
+
+        Parameters
+        ----------
+        msg: str
+            Error message.
+
+        raise_exception: bool
+            If True, raise an exception and halt processing. If False, log the error and continue processing.
+        """
+
+        self.logger_err.error(msg)
+        self.logger.error(msg)
+
+        if raise_exception:
+            raise Exception(msg)
 
     def initialize_database(self, days_back: int):
 
@@ -95,7 +122,7 @@ class EnvironmentData():
             if len(sensor_ids) == 0:
                 sensor_ids = self.get_sensor_ids()
 
-            # Query the API for each sensor and save the data as a polars dataframe with optimal data types.
+            # Query the API for each sensor and save the data as a polars DataFrame with optimal data types.
             pbar = tqdm.tqdm(total = len(sensor_ids[key]['sensor_ids']), desc=f'Gather readings for {key}')
             for sensor_id in sensor_ids[key]['sensor_ids']:
 
@@ -108,6 +135,8 @@ class EnvironmentData():
                     f'MinReadingSpacing=600', # every 10 minutes.
                     f'RequestedOutputFormat=raw'
                 ])
+
+                # create a duplicate of the url for logging purposes, which doesn't include sensitive information.
                 logurl = '&'.join([
                     f'https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX',
                     f'SensorID={sensor_id}',
@@ -125,7 +154,7 @@ class EnvironmentData():
                     self.logger.error(f'Error getting historical data for {sensor_id}: {response.json()}')
                     raise Exception(response.json())
                 
-                # Data comes in as comma separated values with no header. Convert this to a polars dataframe.
+                # Data comes in as comma separated values with no header. Convert this to a polars DataFrame.
                 data = polars.read_csv(response.content, has_header = False)
                 data.columns = ['UTC', 'Reading']
 
@@ -133,17 +162,20 @@ class EnvironmentData():
                 data = data.with_columns(polars.lit(sensor_id).alias('SensorID'))
                 data = data.with_columns(polars.col("Reading").cast(polars.Float32)) # 32 bit is more efficient than 64 bit.
                 
-                # Append the data to the list of dataframes for this sensor type.
+                # Append the data to the list of DataFrame for this sensor type.
                 readings[key]['data'].append(data.drop_nulls())
                 pbar.update(1)
 
             pbar.close()
 
-        # Combine the multiple readings into one dataframe per sensor type and write the data to a parquet file.
+        # Combine the multiple readings into one DataFrame per sensor type, clean/validate it, and write the data to a parquet file.
         for key in readings:
             if len(readings[key]['data']) > 0:
                 self.logger.info(f'Initialize database for {key}.')
-                polars.concat(readings[key]['data']).write_parquet(readings[key]['datafile'])
+                readings[key]['data'] = polars.concat(readings[key]['data'])
+                self.clean_readings_table(readings[key]['data'])
+                self.validate(readings[key]['data'])
+                readings[key]['data'].write_parquet(readings[key]['datafile'])
 
     def get_sensor_ids(self) -> dict:
 
@@ -159,7 +191,7 @@ class EnvironmentData():
         # Build the URL and call the API.
         self.logger.info('get_sensor_ids')
         url = f'https://cats.corismonitoring.com/api/cats/user/?ApiKey={self.apikeys["CORIS"]}&CatsUserID={self.CatsUserID}'
-        self.logger.info(f'API call: https://cats.corismonitoring.com/api/cats/user/?ApiKey=XXXX&CatsUserID=XXXX')
+        self.logger.info(f'API call: https://cats.corismonitoring.com/api/cats/user/?ApiKey=XXXX&CatsUserID=XXXX') # log a duplicate of the url for logging purposes, which doesn't include sensitive information.
         response = requests.get(url)
         
         # Check for errors and raise an exception if there is one.
@@ -196,26 +228,27 @@ class EnvironmentData():
 
         # Get the current status from the API.
         url = f'https://cats.corismonitoring.com/api/cats/user/?ApiKey={self.apikeys["CORIS"]}&CatsUserID={self.CatsUserID}'
-        self.logger.info(f'API call: https://cats.corismonitoring.com/api/cats/user/?ApiKey=XXXX&CatsUserID=XXXX')
+        self.logger.info(f'API call: https://cats.corismonitoring.com/api/cats/user/?ApiKey=XXXX&CatsUserID=XXXX') # log a duplicate of the url for logging purposes, which doesn't include sensitive information.
         response = requests.get(url)
         
         # Check for errors and raise an exception if there is one.
         if not response.ok:
-            self.logger.error(f'Error getting sensor ids: {response.json()}')
-            raise Exception(response.json())
+            self.error(f'Error getting sensor ids: {response.json()}')
+
+        # Extract and clean the readings.
+        current_status = [self.clean_single_reading(x) for x in response.json()['Sensors']]
+        current_status = polars.DataFrame(current_status)        
 
         # The polars iterator uses tuples. Use a function to extract data, since it is a multi-step process.
         def val(row, x): 
             if x not in current_status.columns:
-                self.logger.error(f'Column {x} not in response columns.')
-                raise ValueError(f'Column {x} not in response columns.')
+                self.error(f'Column {x} not in response columns.')
             colidx = list(numpy.where(numpy.array(current_status.columns) == x)[0])
             return row[ colidx[0] ]
 
         # Extract data from the response in the format of the database:
         #  - One file per reading type at self.data_path/{readingtype}.parquet
         #  - Three columns: UTC (int64), Reading (float32), SensorID (int32)
-        current_status = polars.DataFrame(response.json()['Sensors'])
         readings = copy.deepcopy(self.readings)
         for row in current_status.iter_rows():
             sensortype = val(row, 'SensorType')
@@ -226,12 +259,14 @@ class EnvironmentData():
                     'SensorID': val(row, 'SensorID')
                 })
 
-        # Concatenate data and save it.
+        # Concatenate data, clean/validate it, and save it.
         for key in readings:
             if len(readings[key]['data']) > 0:                
                 readings[key]['data'] = polars.DataFrame(readings[key]['data'])
                 os.makedirs(f'{self.data_path}/new-readings/', exist_ok = True)
                 filename = f'{self.data_path}/new-readings/{key}-{current_utc}.parquet'
+                self.clean_readings_table(readings[key]['data'])
+                self.validate(readings[key]['data'])
                 readings[key]['data'].write_parquet(filename)
 
         # Return the readings in case the developer wants to use them.
@@ -260,7 +295,7 @@ class EnvironmentData():
             for file in files:
                 new_readings[key]['data'].append(polars.read_parquet(f'{self.data_path}/new-readings/{file}'))
 
-            # Combine the readings into a single polars dataframe and set optimal and set correct data types. 
+            # Combine the readings into a single polars DataFrame and set optimal data types. 
             dt = polars.concat(new_readings[key]['data']).with_columns(polars.col("Reading").cast(polars.Float32))
             dt = dt.with_columns(polars.col("UTC").cast(polars.Int64))
             dt = dt.with_columns(polars.col("SensorID").cast(polars.Int32))
@@ -275,3 +310,70 @@ class EnvironmentData():
             for file in files:
                 os.remove(f'{self.data_path}/new-readings/{file}')
 
+    def validate(self, data: polars.DataFrame):
+
+        """
+        Validate sensor reading data.
+
+        Parameters
+        ----------
+        data: polars.DataFrame
+            DataFrame to validate.
+        """
+
+        errs = []
+        
+        # Are there missing values?
+        rows_with_null = data.shape[0] - data.drop_nulls().shape[0]
+        if rows_with_null > 0:
+            errs.append(f'Rows with missing values: {rows_with_null}.')
+
+        # Is the data format as expected?
+        if data.schema != {"UTC": polars.Int64, "Reading": polars.Float32, "SensorID": polars.Int32}:
+            errs.append(f'Unexpected data schema: {data.schema}.')
+
+        # Log the errors.
+        if len(errs) > 0:
+            self.error(f'Validation errors: {". ".join(errs)}', raise_exception = False)
+    
+    def clean_single_reading(self, data: dict) -> dict:
+
+        """
+        Clean a single sensor reading.
+
+        Parameters
+        ----------
+        data: dict
+            Single sensor reading.
+
+        Returns
+        -------
+        data: dict
+            Cleaned sensor reading.
+        """
+
+        # If the reading is in Celsius, convert it to Fahrenheit.
+        if data['SensorType'] == 'Temperature':
+            if data['UserTempPref'] == 'C':
+                data['Reading'] = data['Reading'] * 9/5 + 32
+                data['UserTempPref'] == 'F'
+        
+        return data
+    
+    def clean_readings_table(self, data: polars.DataFrame) -> polars.DataFrame:
+
+        """
+        Clean sensor reading data. 
+
+        Parameters
+        ----------
+        data: polars.DataFrame
+            DataFrame to clean.
+
+        Returns
+        -------
+        data: polars.DataFrame
+            Cleaned DataFrame.
+        """
+
+        return data

@@ -50,7 +50,8 @@ for key in readings:
     if len(readings[key]['data']) > 0:                
         os.makedirs(f'{data_path}/new-readings/', exist_ok = True)
         filename = f'{data_path}/new-readings/{key}-{current_utc}.parquet'
-        polars.DataFrame(readings[key]['data']).write_parquet(filename)
+        readings[key]['data'] = polars.DataFrame(readings[key]['data'])
+        readings[key]['data'].write_parquet(filename)
         
         
         
