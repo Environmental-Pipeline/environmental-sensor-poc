@@ -1,6 +1,6 @@
 polars
 tdqm
-duckdb
-spyder-kernels==3.0.* # optional if you plan to use the Spyder IDE.
 requests
 numpy
+spyder-kernels==3.0.* # optional if you plan to use the Spyder IDE.
+notebook # optional if you plan to use the Jupyter notebooks

@@ -11,7 +11,7 @@ humidity = polars.read_parquet('data/Humidity-testing.parquet')
 print(humidity.shape)
 
 # get current status.
-api.get_current_status()
+api.get_current_readings()
 
 # note how new reading files exist. 
 print(os.listdir('data/new-readings'))

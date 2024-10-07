@@ -1,21 +1,48 @@
-```python
-python -m venv .venv
-venv/Scripts/activate
-```
+# Envrinmental Sensor Proof-of-Concept
 
-https://cats.corismonitoring.com/api/cats/user/?ApiKey=XXXX&CatsUserID=2496
 
-https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=21381&ReadingType=SensorReadingF&StartUTC=1718424000&EndUTC=1718596800&MinReadingSpacing=43200&RequestedOutputFormat=raw
+## Local Setup
 
-## Docker Commands
+This project can be partially run using Python. Some feature require Docker. 
+
+**Python Setup**
+
+Virtual environment are used to prevent conflicts with other Python projects. It is assumed that the user has Python 3.8 or later installed. Commands should be run from the project root, possibly by using the terminal after opening the project root in VS Code.
+
+* To initialize the virtual environment, run `python -m venv .venv`, wait until it finishes, and then `.venv/Scripts/activate` (on Windows).
+* Install the necessary packages into the enviornmnet with `pip install -r requirements.txt`.
+* Request the .env file from the developer and place it in the project root.
+
+Python files can then be run in Python using your preferred IDE. See example.ipynb, scratch/scratch.py, etc. Make sure to select the python.exe interpreter at .venv/Scripts/python.exe.
+
+**Docker Setup**
+
+Commands should be run from the project root, possibly by using the terminal after opening the project root in VS Code.
 
 * Install Docker Desktop from https://docs.docker.com/engine/install/. 
-* Run Docker Desktop to start the utility running in the background. 
-* Open this project in VS Code. Use the VS Code terminal to run these commands.
-* Build the Docker image by running `docker build . -t environment`. This will read the file Dockerfile and use it to build an image, which we'll use to initiate a container later on.
-* Start the image by running the app via `docker run --name environment-run --env-file .env environment`.
+* Run Docker Desktop to start the docker daemon running in the background. 
+* Request the .env file from the developer and place it in the project root.
+* Build the Docker image by running `docker build . -t environment`. This will read the Dockerfile and use it to build an image, which we'll use to initiate a container later on.
+* Initiate the container with `docker run --name environment-run`.
 * Once it is running, you can open an interactive session in a new terminal with `docker exec -it environment-run /bin/bash` and watch the logs with `tail data/EnvironmentData.log`
 * When you are done, remove any running containers by clicking the trash button on Docker Desktop. You can also do it with the CLI: `docker stop $(docker ps -a -q)` and then `docker rm $(docker ps -a -q)`.
+
+
+## APIs
+
+**Coris** 
+
+The project reads `SensorType` = "Temperature", "Humidity" from the Coris API. New types can be brought in by adding a new entry to the `readings` object in the `EnvironmentData` class. 
+
+* Individual sensors only make one type of reading, so data is stored as one table per sensor type to prevent excessively repetitive or sparse tables. 
+* The `cats/user` endpoint is used to get the readings for all sensors, as well as the list of sensor ids. Example: https://cats.corismonitoring.com/api/cats/user/?ApiKey={mykey}&CatsUserID={myid}.
+* The `sensor/historical` endpoing is used to get historical readings for a single sensor and type. Example: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey={mykey}&SensorID={sensor_id}&ReadingType={readingtype}&StartUTC={start_utc}&EndUTC={current_utc}&MinReadingSpacing=600&RequestedOutputFormat=raw
+
+
+**Importing Other APIs**
+
+Other APIs can be implemented to replace or supplement Coris by expanding `EnvironmentData.initialize_database()` and `EnvironmentData.get_current_readings()` to read sensors from the new API.
+
 
 ## Design Notes
 
