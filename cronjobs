@@ -1,2 +1,0 @@
-*/1 * * * * cd /src/ && /usr/local/bin/python3 /src/1-pull.py
-*/10 * * * * cd /src/ && /usr/local/bin/python3 /src/2-consolidate.py
