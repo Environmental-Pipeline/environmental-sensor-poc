@@ -62,12 +62,7 @@ class EnvironmentData():
         self.apikeys = {'CORIS': read_env_variable('CORIS_API_KEY')} # Use a dictionary in case we need more keys in the future.
 
         # Set up the readings data structure that will be used throughout.
-        self.readings = {
-            'Temperature': {'ReadingType': 'SensorReadingF', 'data': []}, 
-            'Humidity':{'ReadingType': 'SensorReadingRh', 'data': []}
-        }
-        for key in self.readings:
-            self.readings[key]['datafile'] = f'{data_path}/{key}{"-testing" if testing else ""}.parquet'
+        self.do_historical_readings = ['SensorReadingF', 'SensorReadingRh']
 
         # Initialize the database by creating a parquet file for each reading type and populate it with historical data.
         self.initialize_database(days_back = days_back)
@@ -103,33 +98,33 @@ class EnvironmentData():
             Number of days of historical data to pull when initializing the database.
         """
 
+        # If the data already exists, initialization is not necessary.
+        if os.path.exists(f'{self.data_path}/sensors.parquet'):
+            return
+
         # Make a log entry and gather current and starting UTC.
         self.logger.info('initialize_database')
         sensor_ids = []
         current_utc = int(time.time())
         start_utc = current_utc - days_back * 24 * 60 * 60
+        sensors = self.get_sensors()
 
         # Use the API to get historical data for each sensor type.
-        readings = copy.deepcopy(self.readings)
-        for key in readings:
+        readings = []
+        for reading in self.do_historical_readings:
 
-            # If the data already exists, skip this reading type.
-            # This function will run each time the class is initialized, but we only need to pull historical data once.
-            if os.path.exists(readings[key]['datafile']):
-                continue
-
-            # Get sensor IDs so we can pull data for each sensor.
-            if len(sensor_ids) == 0:
-                sensor_ids = self.get_sensor_ids()
+            sensor_ids = sensors.filter(polars.col(reading).is_nan().not_())['SensorID'].unique().to_list()
+            if self.testing:           
+                sensor_ids = sensor_ids[0:3]
 
             # Query the API for each sensor and save the data as a polars DataFrame with optimal data types.
-            pbar = tqdm.tqdm(total = len(sensor_ids[key]['sensor_ids']), desc=f'Gather readings for {key}')
-            for sensor_id in sensor_ids[key]['sensor_ids']:
+            pbar = tqdm.tqdm(total = len(sensor_ids), desc=f'Gather readings: {reading}')
+            for sensor_id in sensor_ids:
 
                 url = '&'.join([
                     f'https://cats.corismonitoring.com/api/sensor/historical/?ApiKey={self.apikeys["CORIS"]}',
                     f'SensorID={sensor_id}',
-                    f'ReadingType={readings[key]["ReadingType"]}',
+                    f'ReadingType={reading}',
                     f'StartUTC={start_utc}',
                     f'EndUTC={current_utc}',
                     f'MinReadingSpacing=600', # every 10 minutes.
@@ -140,7 +135,7 @@ class EnvironmentData():
                 logurl = '&'.join([
                     f'https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX',
                     f'SensorID={sensor_id}',
-                    f'ReadingType={readings[key]["ReadingType"]}',
+                    f'ReadingType={reading}',
                     f'StartUTC={start_utc}',
                     f'EndUTC={current_utc}',
                     f'MinReadingSpacing=600', # every 10 minutes.
@@ -151,126 +146,76 @@ class EnvironmentData():
 
                 # Check for errors.
                 if not response.ok:
-                    self.logger.error(f'Error getting historical data for {sensor_id}: {response.json()}')
-                    raise Exception(response.json())
+                    self.logger.error(f'Error getting historical {reading} for {sensor_id}: {response.json()}', raise_exception = True)
                 
                 # Data comes in as comma separated values with no header. Convert this to a polars DataFrame.
                 data = polars.read_csv(response.content, has_header = False)
-                data.columns = ['UTC', 'Reading']
+                data.columns = ['SensorReadingUTC', reading]
 
                 # Add the sensor ID.
                 data = data.with_columns(polars.lit(sensor_id).alias('SensorID'))
-                data = data.with_columns(polars.col("Reading").cast(polars.Float32)) # 32 bit is more efficient than 64 bit.
+
+                # Set data types. 
+                data.with_columns(polars.col('SensorID').cast(polars.Int32))
+                data.with_columns(polars.col('SensorReadingUTC').cast(polars.Int64))
+                data.with_columns(polars.col(reading).cast(polars.Float32))
+
+                # Rearrange columns.
+                data = data[['SensorID', 'SensorReadingUTC', reading]]
                 
                 # Append the data to the list of DataFrame for this sensor type.
-                readings[key]['data'].append(data.drop_nulls())
+                readings.append(data)
                 pbar.update(1)
 
             pbar.close()
 
-        # Combine the multiple readings into one DataFrame per sensor type, clean/validate it, and write the data to a parquet file.
-        for key in readings:
-            if len(readings[key]['data']) > 0:
-                self.logger.info(f'Initialize database for {key}.')
-                readings[key]['data'] = polars.concat(readings[key]['data'])
-                self.clean_readings_table(readings[key]['data'])
-                self.validate(readings[key]['data'])
-                readings[key]['data'].write_parquet(readings[key]['datafile'])
+        # Combine the readings into a single polars DataFrame.
+        dt = polars.concat(readings, how = 'diagonal')
+        
+        # Write the database file. 
+        dt.write_parquet(f'{self.data_path}/sensors.parquet')
 
-    def get_sensor_ids(self) -> dict:
+    def get_sensors(self) -> polars.DataFrame:
 
         """
-        Get the list of sensor ids. This is necessary for querying the API to read each sensor.
+        Get data from the sensors.
 
         Returns
         -------
-        sensor_ids: dict
-            Dictionary matching the format of self.readings with the sensor ids for each sensor type added with key = "sensor_ids".
+        sensor: polars.DataFrame
+            DataFrame containing the sensors returned by the API. Contains SensorID, Device, readings, and more. 
         """
 
         # Build the URL and call the API.
-        self.logger.info('get_sensor_ids')
+        self.logger.info('get_sensors')
         url = f'https://cats.corismonitoring.com/api/cats/user/?ApiKey={self.apikeys["CORIS"]}&CatsUserID={self.CatsUserID}'
         self.logger.info(f'API call: https://cats.corismonitoring.com/api/cats/user/?ApiKey=XXXX&CatsUserID=XXXX') # log a duplicate of the url for logging purposes, which doesn't include sensitive information.
         response = requests.get(url)
         
         # Check for errors and raise an exception if there is one.
         if not response.ok:
-            self.logger.error(f'Error getting sensor ids: {response.json()}')
+            self.logger.error(f'Error getting sensors: {response.json()}')
             raise Exception(response.json())
         
-        # Extract the sensor ids and separate them by type.
-        current_status = polars.DataFrame(response.json()['Sensors'])
-        sensor_ids = copy.deepcopy(self.readings)
-        for key in sensor_ids:
-            sensor_ids[key]['sensor_ids'] = current_status.filter(polars.col('SensorType') == key)['SensorID'].unique().to_list()
-            if self.testing:            
-                sensor_ids[key]['sensor_ids'] = sensor_ids[key]['sensor_ids'][0:3]
-
-        return sensor_ids
+        # Return the data. 
+        return polars.DataFrame(response.json()['Sensors'])
 
     def get_current_readings(self) -> dict:
 
         """
         Get current readings from the API and save them to a file. 
-        A batch process will consolidate readings later, 
-        this function will save data as separate files to facilitate easy tracking of new data vs consolidated data.
-
-        Returns
-        -------
-        readings: dict
-            Dictionary matching the format of self.readings with the sensor readings added to key = "data".
+        This function will save data as separate files to facilitate easy tracking of new data vs consolidated data.
+        A batch process will clean, validate, and consolidate readings later.
         """
         
         # Make a log entry and gather the current UTC.
-        self.logger.info('get_current_readings')
         current_utc = int(time.time())
+        self.logger.info(f'get_current_readings: {current_utc}')
 
         # Get the current status from the API.
-        url = f'https://cats.corismonitoring.com/api/cats/user/?ApiKey={self.apikeys["CORIS"]}&CatsUserID={self.CatsUserID}'
-        self.logger.info(f'API call: https://cats.corismonitoring.com/api/cats/user/?ApiKey=XXXX&CatsUserID=XXXX') # log a duplicate of the url for logging purposes, which doesn't include sensitive information.
-        response = requests.get(url)
-        
-        # Check for errors and raise an exception if there is one.
-        if not response.ok:
-            self.error(f'Error getting sensor ids: {response.json()}')
-
-        # Extract and clean the readings.
-        current_status = [self.clean_single_reading(x) for x in response.json()['Sensors']]
-        current_status = polars.DataFrame(current_status)        
-
-        # The polars iterator uses tuples. Use a function to extract data, since it is a multi-step process.
-        def val(row, x): 
-            if x not in current_status.columns:
-                self.error(f'Column {x} not in response columns.')
-            colidx = list(numpy.where(numpy.array(current_status.columns) == x)[0])
-            return row[ colidx[0] ]
-
-        # Extract data from the response in the format of the database:
-        #  - One file per reading type at self.data_path/{readingtype}.parquet
-        #  - Three columns: UTC (int64), Reading (float32), SensorID (int32)
-        readings = copy.deepcopy(self.readings)
-        for row in current_status.iter_rows():
-            sensortype = val(row, 'SensorType')
-            if sensortype in readings:
-                readings[ val(row, 'SensorType') ]['data'].append({
-                    'UTC': val(row, 'SensorReadingUTC'), 
-                    'Reading': val(row, 'SensorReading'), 
-                    'SensorID': val(row, 'SensorID')
-                })
-
-        # Concatenate data, clean/validate it, and save it.
-        for key in readings:
-            if len(readings[key]['data']) > 0:                
-                readings[key]['data'] = polars.DataFrame(readings[key]['data'])
-                os.makedirs(f'{self.data_path}/new-readings/', exist_ok = True)
-                filename = f'{self.data_path}/new-readings/{key}-{current_utc}.parquet'
-                self.clean_readings_table(readings[key]['data'])
-                self.validate(readings[key]['data'])
-                readings[key]['data'].write_parquet(filename)
-
-        # Return the readings in case the developer wants to use them.
-        return readings
+        # Save the new-readings file. A daily process will pull these later to clean, validate, and consolidate them into the database.
+        os.makedirs(f'{self.data_path}/new-readings/', exist_ok = True)
+        self.get_sensors().write_parquet(f'{self.data_path}/new-readings/{current_utc}.parquet')
 
     def consolidate_readings(self):
 
@@ -281,34 +226,91 @@ class EnvironmentData():
 
         # Make a log entry.
         self.logger.info('consolidate_readings')
+        new_readings = []
+               
+        # Read new readings from the parquet files saved by calls to get_current_readings.
+        # These are deleted after each consolidation, so these files will always be the un-consolidated files. 
+        files = os.listdir(f'{self.data_path}/new-readings/')        
+        for file in files:
+            new_readings.append(polars.read_parquet(f'{self.data_path}/new-readings/{file}'))
+
+        # Combine the readings into a single polars DataFrame.
+        dt = polars.concat(new_readings)
+        self.logger.info(f'{dt.shape[0]} new readings.')
+
+        # Set the column data types to match the database.
+        db = polars.read_parquet(f'{self.data_path}/sensors.parquet')
+        for col in set(db.columns).intersection(set(dt.columns)):
+            if dt[col].dtype != db[col].dtype:
+                dt = dt.with_columns(dt[col].cast(db[col].dtype))
+
+        # Append these to the database.
+        dt = polars.concat([db, dt], how = 'diagonal')
+
+        # Move the most important columns to the front. 
+        first_cols = ['DeviceDevID', 'DeviceName', 'SensorID', 'SensorReadingUTC'] + self.do_historical_readings
+        dt = dt.select(first_cols + [x for x in dt.columns if x not in first_cols])
+
+        # Write the file. 
+        dt.write_parquet(f'{self.data_path}/sensors.parquet')
+        self.logger.info(f'{dt.shape[0]} total readings.')
+
+        # If all this was successful, remove the new-readings files to prepare for the next consolidation.
+        for file in files:
+            os.remove(f'{self.data_path}/new-readings/{file}')
+
+        # Refresh the devices table. 
+        self.build_devices(dt).write_parquet(f'{self.data_path}/devices.parquet')
+
+    def build_devices(self, data: polars.DataFrame) -> polars.DataFrame:
+
+        """
+        Build a devices table from the sensor data.
+        This requires pulling unique devices and joining sensor data.
+
+        Parameters
+        ----------
+        data: polars.DataFrame
+            DataFrame containing the sensor data.
+
+        Returns
+        -------
+        devices: polars.DataFrame
+            DataFrame containing the devices data.
+        """
+
+        # Get the data for each of the selected sensors.
+        devices = None
+        data = data.filter(polars.col('DeviceDevID').is_null().not_())
+        for reading in self.do_historical_readings:
+            idt = data.filter(polars.col(reading).is_null().not_()).select(['DeviceDevID', 'SensorReadingUTC', reading])
+            if isinstance(devices, polars.DataFrame):
+                devices = devices.join(idt, how = 'full', on = ['DeviceDevID', 'SensorReadingUTC'])
+            else:
+                devices = idt
+            del idt, reading
         
-        # Run consolidate for each sensor reading type.
-        new_readings = copy.deepcopy(self.readings)
-        for key in new_readings:
+        # this will result in columns like DeviceDevID_right when there is not a perfect match. 
+        # coalesce to a single column.
+        cols_DeviceDevID = [x for x in devices.columns if 'DeviceDevID' in x]
+        cols_SensorReadingUTC = [x for x in devices.columns if 'SensorReadingUTC' in x]
+        devices = devices.with_columns(polars.coalesce(cols_DeviceDevID).alias('DeviceDevID'))
+        devices = devices.with_columns(polars.coalesce(cols_SensorReadingUTC).alias('SensorReadingUTC'))
+        devices = devices.drop([x for x in cols_DeviceDevID + cols_SensorReadingUTC if x not in ['DeviceDevID', 'SensorReadingUTC']])
+        
+        # If a device has multiple names, error out:
+        device_names = data.filter(polars.col('DeviceDevID').is_null().not_()).select(['DeviceDevID', 'DeviceName']).unique()
+        if device_names.shape[0] != device_names['DeviceName'].unique().shape[0]:
+            self.error('DeviceName to DeviceDevID is not a 1-1 mapping.', raise_exception = True)
+        
+        # Attach the device name.
+        devices = devices.join(device_names, how = 'left', on = 'DeviceDevID')
 
-            # Read new readings from the parquet files saved by calls to get_current_readings.
-            # These are deleted after each consolidation, so these files will always be the un-consolidated files. 
-            files = [i for i in os.listdir(f'{self.data_path}/new-readings/') if i.startswith(f'{key}-')]
-            if len(files) == 0:
-                continue
-            
-            for file in files:
-                new_readings[key]['data'].append(polars.read_parquet(f'{self.data_path}/new-readings/{file}'))
+        # Rearrange columns. 
+        devices = devices.select(['DeviceDevID', 'DeviceName', 'SensorReadingUTC'] + self.do_historical_readings)
 
-            # Combine the readings into a single polars DataFrame and set optimal data types. 
-            dt = polars.concat(new_readings[key]['data']).with_columns(polars.col("Reading").cast(polars.Float32))
-            dt = dt.with_columns(polars.col("UTC").cast(polars.Int64))
-            dt = dt.with_columns(polars.col("SensorID").cast(polars.Int32))
-            self.logger.info(f'{dt.shape[0]} new readings for {key}')
-
-            # Append these to the database.
-            dt = polars.concat([polars.read_parquet(new_readings[key]['datafile']), dt])
-            dt.write_parquet(new_readings[key]['datafile'])
-            self.logger.info(f'{dt.shape[0]} total readings for {key}')
-
-            # If all this was successful, remove the new-readings files to prepare for the next consolidation.
-            for file in files:
-                os.remove(f'{self.data_path}/new-readings/{file}')
+        # Return the data.
+        return devices
 
     def validate(self, data: polars.DataFrame):
 
@@ -353,10 +355,11 @@ class EnvironmentData():
         """
 
         # If the reading is in Celsius, convert it to Fahrenheit.
-        if data['SensorType'] == 'Temperature':
-            if data['UserTempPref'] == 'C':
-                data['Reading'] = data['Reading'] * 9/5 + 32
-                data['UserTempPref'] == 'F'
+        #! This is no longer necessary since we use SensorReadingF.
+        # if data['SensorType'] == 'Temperature':
+        #     if data['UserTempPref'] == 'C':
+        #         data['Reading'] = data['Reading'] * 9/5 + 32
+        #         data['UserTempPref'] == 'F'
         
         return data
     

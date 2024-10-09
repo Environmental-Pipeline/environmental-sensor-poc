@@ -15,7 +15,9 @@ current_utc = int(time.time())
 # get current data, which includes all the sensors. 
 url = f'https://cats.corismonitoring.com/api/cats/user/?ApiKey={apikey}&CatsUserID={CatsUserID}'
 response = requests.get(url)
-current_status = polars.DataFrame(response.json()['Sensors'])
+sensors = polars.DataFrame(response.json()['Sensors'])
+
+sensors.columns
 
 # get sensor ids. 
 for key in readings:
