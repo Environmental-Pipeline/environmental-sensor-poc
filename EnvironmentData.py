@@ -35,13 +35,15 @@ class EnvironmentData():
         # https://docs.python.org/3/howto/logging-cookbook.html#logging-cookbook
         self.logger = logging.getLogger('EnvironmentData')
         self.logger.setLevel(logging.DEBUG)
-        #ch = logging.StreamHandler() # log to console. disabling to prevent breaking tdqm
-        fh = logging.FileHandler(f'{data_path}/EnvironmentData.log') # log to EnvironmentData.log in the data folder.
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        #ch.setFormatter(formatter)
+        
+        fh = logging.FileHandler(f'{data_path}/EnvironmentData.log') # log to EnvironmentData.log in the data folder.
         fh.setFormatter(formatter)
-        #self.logger.addHandler(ch)
         self.logger.addHandler(fh)
+        
+        #ch = logging.StreamHandler() # log to console. disabling to prevent breaking tdqm
+        #ch.setFormatter(formatter)
+        #self.logger.addHandler(ch)
 
         # Set up a second logger for errors only. 
         self.logger_err = logging.getLogger('EnvironmentData-Errors')
@@ -171,6 +173,9 @@ class EnvironmentData():
 
         # Combine the readings into a single polars DataFrame.
         dt = polars.concat(readings, how = 'diagonal')
+
+        # Clean the data.
+        dt = self.clean_validate_sensors(dt)
         
         # Write the database file. 
         dt.write_parquet(f'{self.data_path}/sensors.parquet')
@@ -237,6 +242,9 @@ class EnvironmentData():
         # Combine the readings into a single polars DataFrame.
         dt = polars.concat(new_readings)
         self.logger.info(f'{dt.shape[0]} new readings.')
+
+        # Clean the data. 
+        dt = self.clean_validate_sensors(dt)
 
         # Set the column data types to match the database.
         db = polars.read_parquet(f'{self.data_path}/sensors.parquet')
@@ -311,67 +319,16 @@ class EnvironmentData():
 
         # Return the data.
         return devices
-
-    def validate(self, data: polars.DataFrame):
-
-        """
-        Validate sensor reading data.
-
-        Parameters
-        ----------
-        data: polars.DataFrame
-            DataFrame to validate.
-        """
-
-        errs = []
-        
-        # Are there missing values?
-        rows_with_null = data.shape[0] - data.drop_nulls().shape[0]
-        if rows_with_null > 0:
-            errs.append(f'Rows with missing values: {rows_with_null}.')
-
-        # Is the data format as expected?
-        if data.schema != {"UTC": polars.Int64, "Reading": polars.Float32, "SensorID": polars.Int32}:
-            errs.append(f'Unexpected data schema: {data.schema}.')
-
-        # Log the errors.
-        if len(errs) > 0:
-            self.error(f'Validation errors: {". ".join(errs)}', raise_exception = False)
     
-    def clean_single_reading(self, data: dict) -> dict:
+    def clean_validate_sensors(self, sensors: polars.DataFrame) -> polars.DataFrame:
 
         """
-        Clean a single sensor reading.
+        Clean sensor reading data. Data gets cleaned during consolidation.
 
         Parameters
         ----------
-        data: dict
-            Single sensor reading.
-
-        Returns
-        -------
-        data: dict
-            Cleaned sensor reading.
-        """
-
-        # If the reading is in Celsius, convert it to Fahrenheit.
-        #! This is no longer necessary since we use SensorReadingF.
-        # if data['SensorType'] == 'Temperature':
-        #     if data['UserTempPref'] == 'C':
-        #         data['Reading'] = data['Reading'] * 9/5 + 32
-        #         data['UserTempPref'] == 'F'
-        
-        return data
-    
-    def clean_readings_table(self, data: polars.DataFrame) -> polars.DataFrame:
-
-        """
-        Clean sensor reading data. 
-
-        Parameters
-        ----------
-        data: polars.DataFrame
-            DataFrame to clean.
+        sensors: polars.DataFrame
+            Sensors API response DataFrame to clean.
 
         Returns
         -------
@@ -379,4 +336,41 @@ class EnvironmentData():
             Cleaned DataFrame.
         """
 
-        return data
+        # Set data types. 
+        sensors = sensors.with_columns(polars.col('SensorID').cast(polars.Int32))
+        sensors = sensors.with_columns(polars.col('SensorReadingUTC').cast(polars.Int64))
+        for reading in self.do_historical_readings:
+            sensors = sensors.with_columns(polars.col(reading).cast(polars.Float32))
+
+        # Validate the data.
+        self.validate_sensors(sensors)
+
+        return sensors
+
+    def validate_sensors(self, sensors: polars.DataFrame):
+
+        """
+        Validate sensor reading data.
+
+        Parameters
+        ----------
+        sensors: polars.DataFrame
+            DataFrame to validate.
+        """
+
+        errs = []
+        
+        # We expect missing values in the data, so we don't check for them.
+
+        # Is the data format as expected?
+        expect_types = {"SensorReadingUTC": polars.Int64, "SensorID": polars.Int32}
+        for reading in self.do_historical_readings:
+            expect_types[reading] = polars.Float32
+        
+        for col in expect_types:
+            if sensors[col].dtype != expect_types[col]:
+                errs.append(f'Unexpected data type for [{col}]. Expected [{expect_types[col]}] got [{sensors[col]}].')
+
+        # Log the errors.
+        if len(errs) > 0:
+            self.error(f'Validation errors: {". ".join(errs)}', raise_exception = False)
