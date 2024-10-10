@@ -181,16 +181,14 @@ class EnvironmentData():
                 data = polars.read_csv(response.content, has_header = False)
                 data.columns = ['SensorReadingUTC', reading]
 
-                # Add the sensor ID.
+                # Add data from the sensors dataset. 
                 data = data.with_columns(polars.lit(sensor_id).alias('SensorID'))
+                sensor_data = sensors.filter(polars.col('SensorID') == sensor_id)
+                for col in ['SensorName', 'DeviceName', 'DeviceDevID', 'SensorType']:
+                    data = data.with_columns(polars.lit(sensor_data[col].to_list()[0]).alias(col))
 
-                # Set data types. 
-                data = data.with_columns(polars.col('SensorID').cast(polars.Int32))
-                data = data.with_columns(polars.col('SensorReadingUTC').cast(polars.Int64))
-                data = data.with_columns(polars.col(reading).cast(polars.Float32))
-
-                # Rearrange columns.
-                data = data[['SensorID', 'SensorReadingUTC', reading]]
+                # Clean and validate the data. 
+                data = self.clean_validate_sensors(data)
                 
                 # Append the data to the list of DataFrame for this sensor type.
                 readings.append(data)
@@ -398,14 +396,20 @@ class EnvironmentData():
             Cleaned DataFrame.
         """
 
-        # Set data types. 
+        # Set data types.
         sensors = sensors.with_columns(polars.col('SensorID').cast(polars.Int32))
         sensors = sensors.with_columns(polars.col('SensorReadingUTC').cast(polars.Int64))
         for reading in self.acceptable_range:
-            sensors = sensors.with_columns(polars.col(reading).cast(polars.Float32))
+            if reading in sensors.columns:
+                sensors = sensors.with_columns(polars.col(reading).cast(polars.Float32))
 
         # Validate the data.
         self.validate_sensors(sensors)
+        
+        # Rearrange columns.
+        col_order = ['DeviceDevID', 'DeviceName', 'SensorID', 'SensorReadingUTC'] + list(self.acceptable_range.keys())
+        col_order = [x for x in col_order if x in sensors.columns]
+        sensors = sensors.select(col_order + [x for x in sensors.columns if x not in col_order])
 
         return sensors
 
@@ -427,11 +431,13 @@ class EnvironmentData():
         # Is the data format as expected?
         expect_types = {"SensorReadingUTC": polars.Int64, "SensorID": polars.Int32}
         for reading in self.acceptable_range:
-            expect_types[reading] = polars.Float32
+            if reading in sensors.columns:
+                expect_types[reading] = polars.Float32
         
         for col in expect_types:
-            if sensors[col].dtype != expect_types[col]:
-                errs.append(f'Unexpected data type for [{col}]. Expected [{expect_types[col]}] got [{sensors[col]}].')
+            if col in sensors.columns:
+                if sensors[col].dtype != expect_types[col]:
+                    errs.append(f'Unexpected data type for [{col}]. Expected [{expect_types[col]}] got [{sensors[col]}].')
 
         # Log the errors.
         if len(errs) > 0:
