@@ -64,10 +64,24 @@ class EnvironmentData():
         self.apikeys = {'CORIS': read_env_variable('CORIS_API_KEY')} # Use a dictionary in case we need more keys in the future.
 
         # Set up the readings data structure that will be used throughout.
-        self.do_historical_readings = ['SensorReadingF', 'SensorReadingRh']
+        self.acceptable_range = {'SensorReadingF': [], 'SensorReadingRh': []}
 
         # Initialize the database by creating a parquet file for each reading type and populate it with historical data.
         self.initialize_database(days_back = days_back)
+
+    def close(self):
+
+        """
+        The class uses a logger to track status and errors. This function closes the logger when the class is done.
+        """
+
+        for handler in self.logger.handlers:
+            handler.close()
+            self.logger.removeHandler(handler)
+        
+        for handler in self.logger_err.handlers:
+            handler.close()
+            self.logger_err.removeHandler(handler)
 
     def error(self, msg, raise_exception):
 
@@ -113,7 +127,7 @@ class EnvironmentData():
 
         # Use the API to get historical data for each sensor type.
         readings = []
-        for reading in self.do_historical_readings:
+        for reading in self.acceptable_range:
 
             sensor_ids = sensors.filter(polars.col(reading).is_nan().not_())['SensorID'].unique().to_list()
             if self.testing:           
@@ -256,7 +270,7 @@ class EnvironmentData():
         dt = polars.concat([db, dt], how = 'diagonal')
 
         # Move the most important columns to the front. 
-        first_cols = ['DeviceDevID', 'DeviceName', 'SensorID', 'SensorReadingUTC'] + self.do_historical_readings
+        first_cols = ['DeviceDevID', 'DeviceName', 'SensorID', 'SensorReadingUTC'] + list(self.acceptable_range.keys())
         dt = dt.select(first_cols + [x for x in dt.columns if x not in first_cols])
 
         # Write the file. 
@@ -290,7 +304,7 @@ class EnvironmentData():
         # Get the data for each of the selected sensors.
         devices = None
         data = data.filter(polars.col('DeviceDevID').is_null().not_())
-        for reading in self.do_historical_readings:
+        for reading in self.acceptable_range:
             idt = data.filter(polars.col(reading).is_null().not_()).select(['DeviceDevID', 'SensorReadingUTC', reading])
             if isinstance(devices, polars.DataFrame):
                 devices = devices.join(idt, how = 'full', on = ['DeviceDevID', 'SensorReadingUTC'])
@@ -315,7 +329,7 @@ class EnvironmentData():
         devices = devices.join(device_names, how = 'left', on = 'DeviceDevID')
 
         # Rearrange columns. 
-        devices = devices.select(['DeviceDevID', 'DeviceName', 'SensorReadingUTC'] + self.do_historical_readings)
+        devices = devices.select(['DeviceDevID', 'DeviceName', 'SensorReadingUTC'] + list(self.acceptable_range.keys()))
 
         # Return the data.
         return devices
@@ -339,7 +353,7 @@ class EnvironmentData():
         # Set data types. 
         sensors = sensors.with_columns(polars.col('SensorID').cast(polars.Int32))
         sensors = sensors.with_columns(polars.col('SensorReadingUTC').cast(polars.Int64))
-        for reading in self.do_historical_readings:
+        for reading in self.acceptable_range:
             sensors = sensors.with_columns(polars.col(reading).cast(polars.Float32))
 
         # Validate the data.
@@ -364,7 +378,7 @@ class EnvironmentData():
 
         # Is the data format as expected?
         expect_types = {"SensorReadingUTC": polars.Int64, "SensorID": polars.Int32}
-        for reading in self.do_historical_readings:
+        for reading in self.acceptable_range:
             expect_types[reading] = polars.Float32
         
         for col in expect_types:
