@@ -185,15 +185,16 @@ class EnvironmentData():
                 data = data.with_columns(polars.lit(sensor_id).alias('SensorID'))
 
                 # Set data types. 
-                data.with_columns(polars.col('SensorID').cast(polars.Int32))
-                data.with_columns(polars.col('SensorReadingUTC').cast(polars.Int64))
-                data.with_columns(polars.col(reading).cast(polars.Float32))
+                data = data.with_columns(polars.col('SensorID').cast(polars.Int32))
+                data = data.with_columns(polars.col('SensorReadingUTC').cast(polars.Int64))
+                data = data.with_columns(polars.col(reading).cast(polars.Float32))
 
                 # Rearrange columns.
                 data = data[['SensorID', 'SensorReadingUTC', reading]]
                 
                 # Append the data to the list of DataFrame for this sensor type.
                 readings.append(data)
+
                 pbar.update(1)
 
             pbar.close()
@@ -280,9 +281,7 @@ class EnvironmentData():
 
         # Set the column data types to match the database.
         db = polars.read_parquet(f'{self.data_path}/sensors.parquet')
-        for col in set(db.columns).intersection(set(dt.columns)):
-            if dt[col].dtype != db[col].dtype:
-                dt = dt.with_columns(dt[col].cast(db[col].dtype))
+        dt = self.match_types(dt, db)
 
         # Append these to the database.
         dt = polars.concat([db, dt], how = 'diagonal')
@@ -301,6 +300,31 @@ class EnvironmentData():
 
         # Refresh the devices table. 
         self.build_devices(dt).write_parquet(f'{self.data_path}/devices.parquet')
+
+    def match_types(self, data: polars.DataFrame, match: polars.DataFrame) -> polars.DataFrame:
+            
+            """
+            Match the data types of two DataFrames. 
+    
+            Parameters
+            ----------
+            data: polars.DataFrame
+                DataFrame to match.
+            
+            match: polars.DataFrame
+                DataFrame to match to.
+    
+            Returns
+            -------
+            data: polars.DataFrame
+                DataFrame with matching data types.
+            """
+    
+            for col in match.columns:
+                if col in data.columns and data[col].dtype != match[col].dtype:
+                    data = data.with_columns(data[col].cast(match[col].dtype))
+            
+            return data
 
     def build_devices(self, data: polars.DataFrame) -> polars.DataFrame:
 

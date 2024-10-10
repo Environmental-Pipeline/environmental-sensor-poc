@@ -8,7 +8,8 @@ envdt = EnvironmentData(CatsUserID = 2496, testing = True) # this will initializ
     
 # Data is now in the database.
 import polars
-polars.read_parquet('data/sensors.parquet')
+sensors = polars.read_parquet('data/sensors.parquet')
+print(sensors)
 
 # Get current readings. 
 envdt.get_current_readings()
@@ -22,4 +23,6 @@ envdt.consolidate_readings()
 print(os.listdir('data/new-readings'))
 
 # We now also have the devices table. 
-polars.read_parquet('data/devices.parquet').filter(polars.col('DeviceName').is_null().not_())
+devices = polars.read_parquet('data/devices.parquet').filter(polars.col('DeviceName').is_null().not_())
+print(devices)
+
