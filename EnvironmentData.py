@@ -2,7 +2,14 @@ import os, requests, polars, time, numpy, tqdm, copy, logging
 
 class EnvironmentData():
 
-    def __init__(self, CatsUserID: int, data_path: str = './data/', days_back:int = 90, testing:bool = False):
+    def __init__(
+            self, 
+            CatsUserID: int, 
+            data_path: str = './data/', 
+            days_back: int = 90, 
+            out_of_scope: list = [],
+            testing: bool = False
+        ):
 
         """
         Initialize resources for managing the environmental readings. 
@@ -17,6 +24,11 @@ class EnvironmentData():
         
         days_back: int
             Number of days of historical data to pull when initializing the database. Default is 90.
+
+        out_of_scope: list
+            List of strings that indicate sensors that are out of scope and should be removed. 
+            SensorName will be check and sensors ignored if it starts with one of these values. 
+            Default is an empty list.
         
         testing: bool
             If True, only a few sensors will be used so tests run quickly and use fewer API calls. Default is False.
@@ -26,6 +38,7 @@ class EnvironmentData():
         self.CatsUserID = CatsUserID
         self.data_path = data_path
         self.testing = testing
+        self.out_of_scope = out_of_scope
 
         # Create the data folder.
         if not os.path.exists(data_path):
@@ -216,8 +229,13 @@ class EnvironmentData():
             self.logger.error(f'Error getting sensors: {response.json()}')
             raise Exception(response.json())
         
+        # Remove out-of-scope sensors.
+        sensors = polars.DataFrame(response.json()['Sensors'])
+        for i in self.out_of_scope:            
+            sensors = sensors.filter(polars.col('SensorName').str.starts_with(i).not_())
+
         # Return the data. 
-        return polars.DataFrame(response.json()['Sensors'])
+        return sensors
 
     def get_current_readings(self) -> dict:
 

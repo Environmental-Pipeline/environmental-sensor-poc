@@ -4,4 +4,4 @@ sys.path.append('/src/')
 
 # use EnvironmentData to initialize the database.
 from EnvironmentData import EnvironmentData
-api = EnvironmentData(CatsUserID = 2496, testing = True) # this will initialize the database.
+api = EnvironmentData(CatsUserID = 2496, out_of_scope = ['-80', 'Cryo tank', 'Water'], testing = True) # this will initialize the database.

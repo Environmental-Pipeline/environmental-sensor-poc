@@ -76,7 +76,7 @@ def tearDownModule():
 if __name__ == '__main__':
 
     # Instantiate EnvironmentData class and capture initial shape.
-    envdt = EnvironmentData(CatsUserID = 2496, data_path = 'test/data', testing = True)
+    envdt = EnvironmentData(CatsUserID = 2496, data_path = 'test/data', out_of_scope = ['-80', 'Cryo tank', 'Water'], testing = True)
     init_rows = polars.read_parquet(f'test/data/sensors.parquet').shape[0]
 
     # Run tests.
