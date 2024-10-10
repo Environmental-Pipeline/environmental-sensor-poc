@@ -251,9 +251,15 @@ class EnvironmentData():
         self.logger.info(f'get_current_readings: {current_utc}')
 
         # Get the current status from the API.
+        sensors = self.get_sensors()
+
+        # Process alerts.
+        self.send_alerts(sensors, current_utc)
+
         # Save the new-readings file. A daily process will pull these later to clean, validate, and consolidate them into the database.
         os.makedirs(f'{self.data_path}/new-readings/', exist_ok = True)
-        self.get_sensors().write_parquet(f'{self.data_path}/new-readings/{current_utc}.parquet')
+        sensors.write_parquet(f'{self.data_path}/new-readings/{current_utc}.parquet')
+
 
     def consolidate_readings(self):
 
@@ -430,3 +436,36 @@ class EnvironmentData():
         # Log the errors.
         if len(errs) > 0:
             self.error(f'Validation errors: {". ".join(errs)}', raise_exception = False)
+
+    def which(x): 
+        return list(numpy.where(x)[0])
+
+    def send_alerts(self, sensors: polars.DataFrame, utc: int):
+
+        """
+        Send alerts based on the sensor data.
+
+        Parameters
+        ----------
+        sensors: polars.DataFrame
+            DataFrame containing the sensor data.
+        """
+
+        alerts = []
+        for reading in self.acceptable_range:
+            
+            if len(self.acceptable_range[reading]) == 0:
+                continue
+
+            reading_idx = self.which(sensors.columns == reading)
+
+            for i, row in sensors.iter_rows():
+                if (not not row[reading_idx].is_null()) and (row[reading_idx] < self.acceptable_range[reading][0] or row[reading] > self.acceptable_range[reading][1]):
+                        alerts.append(row)
+
+        # Write the alerts to a file.
+        # Later, this can be connected to an alerting system like Twilio.
+        if len(alerts) > 0:
+            with open(f'{self.data_path}/alerts.txt', 'w') as f:
+                f.write('\n'.join(alerts))
+        
