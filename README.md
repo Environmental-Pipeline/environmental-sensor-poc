@@ -3,7 +3,7 @@
 
 ## Local Setup
 
-This project can be partially run using Python. Some feature require Docker. 
+If you just want to run Docker, you don't need to set up Python, and vice-versa. 
 
 **Python Setup**
 
@@ -41,7 +41,7 @@ The project reads `SensorType` = "Temperature", "Humidity" from the Coris API. N
 * Individual sensors only make one type of reading, so data is stored as one table per sensor type to prevent excessively repetitive or sparse tables. 
 * The `cats/user` endpoint is used to get the readings for all sensors, as well as the list of sensor ids. Example: https://cats.corismonitoring.com/api/cats/user/?ApiKey={mykey}&CatsUserID={myid}.
 * The `sensor/historical` endpoint is used to get historical readings for a single sensor and type. Example: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey={mykey}&SensorID={sensor_id}&ReadingType={readingtype}&StartUTC={start_utc}&EndUTC={current_utc}&MinReadingSpacing=600&RequestedOutputFormat=raw
-
+    - You can remove StartUTC and/or EndUTC to get the full historical data (this should be confirmed with the API provider though). 
 
 **Importing Other APIs**
 
