@@ -73,8 +73,11 @@ for reading in acceptable_range:
         data = polars.read_csv(response.content, has_header = False)
         data.columns = ['SensorReadingUTC', reading]
 
-        # Add the sensor ID.
+        # Add data from the sensors dataset. 
         data = data.with_columns(polars.lit(sensor_id).alias('SensorID'))
+        sensordt = sensors.filter(polars.col('SensorID') == sensor_id)
+        for col in ['SensorName', 'DeviceName', 'DeviceDevID', 'SensorType']:
+            data = data.with_columns(polars.lit(sensordt[col]).alias('SensorID'))
 
         # Set data types. 
         data = data.with_columns(polars.col('SensorID').cast(polars.Int32))

@@ -4,4 +4,8 @@ requests
 numpy
 unittest # optional to run tests
 spyder-kernels==3.0.* # optional if you plan to use the Spyder IDE.
-notebook # optional if you plan to use the Jupyter notebooks
+
+# optional for analytics:
+notebook
+duckdb 
+seaborn
