@@ -12,6 +12,7 @@ Virtual environment are used to prevent conflicts with other Python projects. It
 * To initialize the virtual environment, run `python -m venv .venv`, wait until it finishes, and then `.venv/Scripts/activate` (on Windows).
 * Install the necessary packages into the environment with `pip install -r requirements.txt`.
 * Request the .env file from the developer and place it in the project root.
+* Run `jupyter notebook` in a terminal start Jupyter Notebook and use `example.ipynb` to run code.
 
 Python files can then be run in Python using your preferred IDE. See example.ipynb, scratch/scratch.py, etc. Make sure to select the python.exe interpreter at .venv/Scripts/python.exe.
 
@@ -23,10 +24,13 @@ Commands should be run from the project root, possibly by using the terminal aft
 * Run Docker Desktop to start the docker daemon running in the background. 
 * Request the .env file from the developer and place it in the project root.
 * Build the Docker image by running `docker build . -t environment`. This will read the Dockerfile and use it to build an image, which we'll use to initiate a container later on.
-* Initiate the container with `docker run --name environment-run`.
-* Once it is running, you can open an interactive session in a new terminal with `docker exec -it environment-run /bin/bash` and watch the logs with `tail data/EnvironmentData.log`
+* Initiate the container with `docker run --name environment-run -p 8888:8888 environment`.
+* Once it is running, there are a few ways you can interact with it:
+    - Logs will print to terminal. At the start of every minute, you'll see it run `get_current_readings`. Every ten minutes, it'll run `consolidate_readings`.
+    - The terminal will print a Jupyter URL you can access, starting with http://127.0.0.1:8888. Ctrl + click it to open an interactive Jupyter Notebook. You can then open examples.ipynb and execute code. The data may look the same, but it's actually reading from data populated by cron!
+    - You can open an interactive session in a new terminal with `docker exec -it environment-run /bin/bash` and watch the logs with `tail data/EnvironmentData.log`, or run any other Linux command in the container. 
+    - Open the container in Docker Desktop and navigate to Files > src to view the project files like `sensors.parquet` and `devices.parquet`.
 * When you are done, remove any running containers by clicking the trash button on Docker Desktop. You can also do it with the CLI: `docker stop $(docker ps -a -q)` and then `docker rm $(docker ps -a -q)`.
-
 
 ## APIs
 

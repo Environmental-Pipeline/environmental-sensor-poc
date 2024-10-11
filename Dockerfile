@@ -6,15 +6,19 @@ WORKDIR /src
 COPY requirements.txt  ./
 RUN python3 -m pip install --no-cache-dir -r requirements.txt
 
-COPY EnvironmentData.py .env ./
+COPY EnvironmentData.py .env example.ipynb ./
 COPY jobs jobs/
 
 COPY jobs/cronjobs /etc/cron.d/cronjobs
 RUN chmod 0644 /etc/cron.d/cronjobs
 RUN crontab /etc/cron.d/cronjobs
 
+# Expose Jupyter port
+EXPOSE 8888
+
 # run init script, start cron, monitor the log file.
-CMD python3 jobs/0-init.py && \
+CMD jupyter notebook --ip 0.0.0.0 --port 8888 --no-browser --allow-root & \
+    python3 jobs/0-init.py && \
     cron && \
-    crontab -l && \
+    crontab -l && \    
     tail -f data/EnvironmentData.log
