@@ -1,6 +1,6 @@
 # use EnvironmentData to initialize the database.
 from EnvironmentData import EnvironmentData
-envdt = EnvironmentData(CatsUserID = 2496, testing = True) # this will initialize the database.
+envdt = EnvironmentData(CatsUserID = 2496, out_of_scope = ['-80', 'Cryo tank', 'Water'], testing = True) # this will initialize the database.
 
 # Detailed info is saved in the log.
 # with open('data/EnvironmentData.log', 'r') as file:
@@ -9,7 +9,7 @@ envdt = EnvironmentData(CatsUserID = 2496, testing = True) # this will initializ
 # Data is now in the database.
 import polars
 sensors = polars.read_parquet('data/sensors.parquet')
-print(sensors)
+#print(sensors)
 
 # Get current readings. 
 envdt.get_current_readings()
@@ -20,9 +20,13 @@ os.listdir('data/new-readings')
 
 # To consolidate these into the database, run consolidate_readings.
 envdt.consolidate_readings()
-print(os.listdir('data/new-readings'))
+#print(os.listdir('data/new-readings'))
 
 # We now also have the devices table. 
 devices = polars.read_parquet('data/devices.parquet').filter(polars.col('DeviceName').is_null().not_())
-print(devices)
+#print(devices)
 
+sensor_info = polars.read_parquet('data/sensor_info.parquet')
+utc_info = polars.read_parquet('data/utc_info.parquet')
+
+envdt.close()

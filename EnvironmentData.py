@@ -1,4 +1,4 @@
-import os, requests, polars, time, numpy, tqdm, copy, logging
+import os, requests, polars, time, numpy, tqdm, logging, datetime
 
 class EnvironmentData():
 
@@ -150,6 +150,8 @@ class EnvironmentData():
             pbar = tqdm.tqdm(total = len(sensor_ids), desc=f'Gather readings: {reading}')
             for sensor_id in sensor_ids:
 
+                # it is possible to pull everything by leaving out StartUTC and EndUTC. 
+                # leaving it in for now though, in case we do want to limit it.
                 url = '&'.join([
                     f'https://cats.corismonitoring.com/api/sensor/historical/?ApiKey={self.apikeys["CORIS"]}',
                     f'SensorID={sensor_id}',
@@ -304,6 +306,9 @@ class EnvironmentData():
 
         # Refresh the devices table. 
         self.build_devices(dt).write_parquet(f'{self.data_path}/devices.parquet')
+
+        # Update lookup tables. 
+        self.update_lookups()
 
     def match_types(self, data: polars.DataFrame, match: polars.DataFrame) -> polars.DataFrame:
             
@@ -474,4 +479,91 @@ class EnvironmentData():
         if len(alerts) > 0:
             with open(f'{self.data_path}/alerts.txt', 'w') as f:
                 f.write('\n'.join(alerts))
-        
+    
+    def update_lookups(self):
+
+        """
+        Update the lookup tables used for analytical queries. 
+        """
+
+        # Sensor Info.
+        SensorName = polars.read_parquet(f'{self.data_path}/sensors.parquet', columns = 'SensorName')['SensorName'].to_list()
+        sensor_info = []
+        for sensorname in SensorName:
+            
+            if 'floator' in sensorname.lower():
+                info = sensorname.strip().split('_')
+            else:
+                info = sensorname.strip().split(' ')
+                info = info[0:-1] + info[-1].split('_') 
+            
+            # If the cardinal direction is included, there will be 4 pieces of info.
+            if len(info) == 5:
+                
+                sensor_info.append({
+                    'SensorName': sensorname, 
+                    'SensorType_fromName': info[0],
+                    'SensorID_fromName': info[4],
+                    'Building': info[1],
+                    'Room': info[2],
+                    'CardinalDirection': info[3]
+                })
+                
+            elif len(info) == 4:
+                
+                sensor_info.append({
+                    'SensorName': sensorname, 
+                    'SensorType_fromName': info[0],
+                    'SensorID_fromName': info[3],
+                    'Building': info[1],
+                    'Room': info[2],
+                    'CardinalDirection': 'Not Indicated'
+                })
+                
+            # Floaters are len 3.
+            elif len(info) == 3:
+                
+                sensor_info.append({
+                    'SensorName': sensorname, 
+                    'SensorType_fromName': info[0],
+                    'SensorID_fromName': info[2],
+                    'Building': 'FLOATER',
+                    'Room': 'FLOATER',
+                    'Direction': None
+                })
+            
+            else:
+                
+                raise Exception(f'Unexpected SensorName format: {sensorname}.')
+                
+        # Write the table to a file.
+        polars.DataFrame(sensor_info).write_parquet(f'{self.data_path}/sensor_info.parquet')
+
+        # UTC info.
+        # Start with the timestamps and datetime in UTC.
+        utc_timestamps = polars.read_parquet(f'{self.data_path}/sensors.parquet', columns = 'SensorReadingUTC')['SensorReadingUTC'].unique().to_list()
+        utc_info = polars.DataFrame({
+            "UTC": utc_timestamps,
+            "datetime_utc": [datetime.datetime.fromtimestamp(x) for x in utc_timestamps]
+        })
+
+        # Convert to EST and round to seconds. 
+        utc_info = utc_info.with_columns(
+            polars.col("datetime_utc").dt.convert_time_zone("America/New_York").dt.round("1s").alias('datetime_est')
+        )
+
+        # Extract all the date parts. 
+        utc_info = utc_info.with_columns(
+            polars.col("datetime_est").dt.date().alias("date"),
+            polars.col("datetime_est").dt.time().alias("time"),
+            polars.col("datetime_est").dt.year().alias("year"),
+            polars.col("datetime_est").dt.month().alias("month"),
+            (polars.col("datetime_est").dt.strftime("%A")).alias("day_of_week"),
+            polars.col("datetime_est").dt.weekday().alias("day_of_week_monday1_sunday7"),
+            polars.col("datetime_est").dt.hour().alias("hour_24"),
+            (polars.col("datetime_est").dt.hour() % 12).alias("hour_12"),
+            polars.col("datetime_est").dt.strftime("%p").alias("am_pm"),
+        )
+
+        # Write the table to a file.
+        utc_info.write_parquet(f'{self.data_path}/utc_info.parquet')
