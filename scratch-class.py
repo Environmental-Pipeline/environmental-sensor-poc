@@ -27,6 +27,7 @@ devices = polars.read_parquet('data/devices.parquet').filter(polars.col('DeviceN
 #print(devices)
 
 sensor_info = polars.read_parquet('data/sensor_info.parquet')
+device_info = polars.read_parquet('data/device_info.parquet')
 utc_info = polars.read_parquet('data/utc_info.parquet')
 
 envdt.close()

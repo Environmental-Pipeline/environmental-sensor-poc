@@ -537,7 +537,11 @@ class EnvironmentData():
                 raise Exception(f'Unexpected SensorName format: {sensorname}.')
                 
         # Write the table to a file.
-        polars.DataFrame(sensor_info).write_parquet(f'{self.data_path}/sensor_info.parquet')
+        polars.DataFrame(sensor_info).unique().write_parquet(f'{self.data_path}/sensor_info.parquet')
+
+        # Device Info.
+        device_info = polars.read_parquet(f'{self.data_path}/sensors.parquet', columns = ['DeviceDevID', 'DeviceName']).unique()
+        device_info.write_parquet(f'{self.data_path}/device_info.parquet')
 
         # UTC info.
         # Start with the timestamps and datetime in UTC.
