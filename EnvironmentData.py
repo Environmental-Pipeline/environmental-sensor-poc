@@ -1,4 +1,4 @@
-import os, requests, polars, time, numpy, tqdm, logging, datetime
+import os, requests, polars, numpy, tqdm, logging, datetime, warnings
 
 class EnvironmentData():
 
@@ -117,6 +117,8 @@ class EnvironmentData():
 
         if raise_exception:
             raise Exception(msg)
+        else:
+            warnings.warn(msg)
 
     def initialize_database(self, days_back: int):
 
@@ -136,7 +138,7 @@ class EnvironmentData():
         # Make a log entry and gather current and starting UTC.
         self.logger.info('initialize_database')
         sensor_ids = []
-        current_utc = int(time.time())
+        current_utc = self.get_current_utc()
         start_utc = current_utc - days_back * 24 * 60 * 60
         sensors = self.get_sensors()
 
@@ -241,6 +243,19 @@ class EnvironmentData():
 
         # Return the data. 
         return sensors
+    
+    def get_current_utc(self) -> int:
+            
+        """
+        Get the current UTC timestamp, rounded to seconds.
+
+        Returns
+        -------
+        current_utc: int
+            Current UTC timestamp.
+        """
+
+        return int(datetime.datetime.now(datetime.timezone.utc).timestamp())
 
     def get_current_readings(self) -> dict:
 
@@ -251,11 +266,12 @@ class EnvironmentData():
         """
         
         # Make a log entry and gather the current UTC.
-        current_utc = int(time.time())
+        current_utc = self.get_current_utc()
         self.logger.info(f'get_current_readings: {current_utc}')
 
         # Get the current status from the API.
         sensors = self.get_sensors()
+        self.validate_sensors(sensors, current_utc)
 
         # Process alerts.
         self.send_alerts(sensors, current_utc)
@@ -448,7 +464,7 @@ class EnvironmentData():
         data = data[columns + [x for x in data.columns if x not in columns]]
         return data
 
-    def validate_sensors(self, sensors: polars.DataFrame):
+    def validate_sensors(self, sensors: polars.DataFrame, utc: int = None):
 
         """
         Validate sensor reading data.
@@ -473,6 +489,12 @@ class EnvironmentData():
             if col in sensors.columns:
                 if sensors[col].dtype != expect_types[col]:
                     errs.append(f'Unexpected data type for [{col}]. Expected [{expect_types[col]}] got [{sensors[col]}].')
+
+        # Are the UTC columns close enough to the expected time?
+        if utc is not None:
+            maxdiff_minutes = numpy.max(numpy.abs(sensors['SensorReadingUTC'].to_numpy() - utc)) / 60
+            if maxdiff_minutes > 2: # readings should be happening every 2 minutes. 
+                errs.append(f'SensorReadingUTC differs from UTC: UTC: {utc}, maximum absolute difference (minutes): {maxdiff_minutes}.')
 
         # Log the errors.
         if len(errs) > 0:

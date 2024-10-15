@@ -15,6 +15,13 @@ sensors = polars.DataFrame(response.json()['Sensors'])
 sensors.columns
 sensors.shape
 
+# get difference
+numpy.round(
+    (sensors['SensorReadingUTC'].to_numpy() - int(datetime.datetime.now(datetime.timezone.utc).timestamp())) / 60, 
+    0
+)
+
+
 # drop out of scope. 
 sensors = sensors.filter(polars.col('SensorName').str.starts_with('-80').not_())
 sensors = sensors.filter(polars.col('SensorName').str.contains('Cryo tank').not_())
@@ -114,7 +121,7 @@ def match_types(data: polars.DataFrame, match: polars.DataFrame) -> polars.DataF
 
 # initialize database.
 sensor_ids = []
-current_utc = int(time.time())
+current_utc = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
 start_utc = current_utc - days_back * 24 * 60 * 60
 
 # Use the API to get historical data for each sensor type.
