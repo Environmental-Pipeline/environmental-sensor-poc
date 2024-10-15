@@ -584,6 +584,13 @@ class EnvironmentData():
             '980D Unnamed Humid Sensor': 'RH Unnamed Unnamed_980D',
         }
 
+        building_name_map = {
+            'ESC': 'Environmental Science Center',
+            'YPM': 'Yale Peabody Museum',
+            'KGL': 'Kline Geology Laboratory',
+            'CSC': 'Collection Studies Center (West Campus)',
+        }
+
         # Sensor Info.
         sensors_data = polars.read_parquet(f'{self.data_path}/sensor_readings.parquet', columns = [
             'SensorName', 'SensorID_Coris', 'DeviceID_Coris', 'SensorType'
@@ -612,7 +619,8 @@ class EnvironmentData():
                     'SensorType': sensor['SensorType'],
                     'SensorID_Coris': sensor['SensorID_Coris'],
                     'DeviceID_Coris': sensor['DeviceID_Coris'],
-                    'Building': info[1],
+                    'BuildingID': info[1],
+                    'Building': building_name_map[info[1]] if info[1] in building_name_map else '',
                     'Room': info[2].replace('_', ''),
                     'CardinalDirection': info[3]
                 })
@@ -626,7 +634,8 @@ class EnvironmentData():
                     'SensorType': sensor['SensorType'],
                     'SensorID_Coris': sensor['SensorID_Coris'],
                     'DeviceID_Coris': sensor['DeviceID_Coris'],
-                    'Building': info[1],
+                    'BuildingID': info[1],
+                    'Building': building_name_map[info[1]] if info[1] in building_name_map else '',
                     'Room': info[2].replace('_', ''),
                     'CardinalDirection': 'Not Indicated'
                 })
@@ -641,7 +650,8 @@ class EnvironmentData():
                     'SensorType': sensor['SensorType'],
                     'SensorID_Coris': sensor['SensorID_Coris'],
                     'DeviceID_Coris': sensor['DeviceID_Coris'],
-                    'Building': 'FLOATER',
+                    'BuildingID': 'FLOATER',
+                    'Building': building_name_map[info[1]] if info[1] in building_name_map else '',
                     'Room': 'FLOATER',
                     'CardinalDirection': None
                 })
@@ -652,14 +662,14 @@ class EnvironmentData():
                 
         # Write the table to a file.
         sensors = polars.DataFrame(sensors).unique()
-        sensors = sensors.sort(['Building', 'Room', 'DeviceID', 'SensorName'])
+        sensors = sensors.sort(['BuildingID', 'Building', 'Room', 'DeviceID', 'SensorName'])
         sensors = self.clean_validate_sensors(sensors)
-        sensors = self.relocate(sensors, ['SensorID_Coris', 'Building', 'Room', 'CardinalDirection', 'DeviceID'])
+        sensors = self.relocate(sensors, ['SensorID_Coris', 'BuildingID', 'Room', 'CardinalDirection', 'DeviceID'])
         sensors.write_parquet(f'{self.data_path}/sensors.parquet')
 
         # It will be helpful to have the Building, Room, and CardinalDirection appended to Devices. 
         # Check for a valid mapping. 
-        device_info_from_sensors = sensors.select(['DeviceID_Coris', 'Building', 'Room', 'CardinalDirection', 'DeviceID']).unique()
+        device_info_from_sensors = sensors.select(['DeviceID_Coris', 'BuildingID', 'Building', 'Room', 'CardinalDirection', 'DeviceID']).unique()
         bad_values = device_info_from_sensors.filter(device_info_from_sensors.select("DeviceID_Coris").is_duplicated()).sort('DeviceID_Coris')
         if bad_values.shape[0] > 0:
             # If there is a bad mapping, log it and remove the duplicates so we can use the data that is properly mapped.
@@ -669,8 +679,8 @@ class EnvironmentData():
 
         # Device Info.
         devices = polars.read_parquet(f'{self.data_path}/sensor_readings.parquet', columns = ['DeviceID_Coris', 'DeviceName']).unique()
-        devices = devices.join(device_info_from_sensors, how = 'left', on = 'DeviceID_Coris').sort(['Building', 'Room', 'DeviceName'])
-        devices = self.relocate(devices, ['DeviceID', 'Building', 'Room', 'CardinalDirection', 'DeviceName'])
+        devices = devices.join(device_info_from_sensors, how = 'left', on = 'DeviceID_Coris').sort(['BuildingID', 'Room', 'DeviceName'])
+        devices = self.relocate(devices, ['DeviceID', 'BuildingID', 'Room', 'CardinalDirection', 'DeviceName'])
         devices.write_parquet(f'{self.data_path}/devices.parquet')
 
         # UTC info.
