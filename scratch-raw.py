@@ -1,4 +1,5 @@
 import os, requests, polars, time, numpy, tqdm, datetime, pytz
+import pandas as pd
 
 apikey = os.environ.get('CORIS_API_KEY')
 days_back = 90
@@ -16,10 +17,14 @@ sensors.columns
 sensors.shape
 
 # get difference
-numpy.round(
-    (sensors['SensorReadingUTC'].to_numpy() - int(datetime.datetime.now(datetime.timezone.utc).timestamp())) / 60, 
-    0
-)
+pd.DataFrame({
+    'sensor': sensors['SensorName'],
+    'time_diff_imins': numpy.round(
+        (sensors['SensorReadingUTC'].to_numpy() - int(datetime.datetime.now(datetime.timezone.utc).timestamp())) / 60, 
+        0
+    )
+}).sort_values('time_diff_imins').to_csv('timedeltas.csv')
+
 
 
 # drop out of scope. 
