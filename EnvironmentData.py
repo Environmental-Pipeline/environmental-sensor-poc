@@ -497,7 +497,7 @@ class EnvironmentData():
         if utc is not None:
             maxdiff_minutes = numpy.max(numpy.abs(sensors['SensorReadingUTC'].to_numpy() - utc)) / 60
             if maxdiff_minutes > 2: # readings should be happening every 2 minutes. 
-                errs.append(f'SensorReadingUTC differs from UTC: UTC: {utc}, maximum absolute difference (minutes): {maxdiff_minutes}.')
+                errs.append(f'SensorReadingUTC differs from UTC: UTC: {utc}, maximum absolute difference (minutes): {maxdiff_minutes:,.0}.')
 
         # Do any sensors have multiple names (indicating a change in name)?
         name_dups = sensors[['SensorID_Coris', 'SensorName']].unique().filter(sensors['SensorID_Coris'].is_duplicated())
@@ -687,18 +687,18 @@ class EnvironmentData():
         # UTC info.
         # Start with the timestamps and datetime in UTC.
         utc_timestamps = polars.read_parquet(f'{self.data_path}/sensor_readings.parquet', columns = 'SensorReadingUTC')['SensorReadingUTC'].unique().to_list()
-        utc_lookup = polars.DataFrame({
+        utcs = polars.DataFrame({
             "UTC": utc_timestamps,
             "datetime_utc": [datetime.datetime.fromtimestamp(x) for x in utc_timestamps]
         })
 
         # Convert to EST and round to seconds. 
-        utc_lookup = utc_lookup.with_columns(
+        utcs = utcs.with_columns(
             polars.col("datetime_utc").dt.convert_time_zone("America/New_York").dt.round("1s").alias('datetime_est')
         )
 
         # Extract all the date parts. 
-        utc_lookup = utc_lookup.with_columns(
+        utcs = utcs.with_columns(
             polars.col("datetime_est").dt.date().alias("date"),
             polars.col("datetime_est").dt.time().alias("time"),
             polars.col("datetime_est").dt.year().alias("year"),
@@ -711,7 +711,7 @@ class EnvironmentData():
         )
 
         # Write the table to a file.
-        utc_lookup.write_parquet(f'{self.data_path}/utc_lookup.parquet')
+        utcs.write_parquet(f'{self.data_path}/utcs.parquet')
     
     def update_cubes(self):
 
@@ -720,10 +720,10 @@ class EnvironmentData():
         """
 
         sumcols = list(self.acceptable_range.keys())
-        utc_lookup = polars.read_parquet(f'{self.data_path}/utc_lookup.parquet')
+        utcs = polars.read_parquet(f'{self.data_path}/utcs.parquet')
 
         sensor_readings = polars.read_parquet(f'{self.data_path}/sensor_readings.parquet')
-        sensor_readings = sensor_readings.join(utc_lookup[['UTC', 'date']], how = 'left', left_on = 'SensorReadingUTC', right_on = 'UTC')
+        sensor_readings = sensor_readings.join(utcs[['UTC', 'date']], how = 'left', left_on = 'SensorReadingUTC', right_on = 'UTC')
 
         sensor_readings_daily = sensor_readings.group_by(['date', 'SensorID_Coris']).agg([
             polars.len().alias("row_count"),
@@ -735,7 +735,7 @@ class EnvironmentData():
         sensor_readings_daily.write_parquet(f'{self.data_path}/sensor_readings_daily.parquet')
 
         device_readings = polars.read_parquet(f'{self.data_path}/device_readings.parquet')
-        device_readings = device_readings.join(utc_lookup[['UTC', 'date']], how = 'left', left_on = 'SensorReadingUTC', right_on = 'UTC')
+        device_readings = device_readings.join(utcs[['UTC', 'date']], how = 'left', left_on = 'SensorReadingUTC', right_on = 'UTC')
 
         device_readings_daily = device_readings.group_by(['date', 'DeviceID_Coris']).agg([
             polars.len().alias("row_count"),

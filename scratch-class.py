@@ -28,7 +28,7 @@ device_readings = polars.read_parquet('data/device_readings.parquet').filter(pol
 
 sensors = polars.read_parquet('data/sensors.parquet')
 devices = polars.read_parquet('data/devices.parquet')
-utc_lookup = polars.read_parquet('data/utc_lookup.parquet')
+utcs = polars.read_parquet('data/utcs.parquet')
 
 sensor_readings_daily = polars.read_parquet('data/sensor_readings_daily.parquet')
 device_readings_daily = polars.read_parquet('data/device_readings_daily.parquet')
