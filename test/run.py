@@ -27,8 +27,8 @@ class TestInitialization(unittest.TestCase):
 
     # Does the data exist (this will run after initialization).
     def data_exists(self):
-        self.assertTrue(os.path.exists(f'test/data/sensors.parquet'))
-        dt = polars.read_parquet(f'test/data/sensors.parquet')
+        self.assertTrue(os.path.exists(f'test/data/sensor_readings.parquet'))
+        dt = polars.read_parquet(f'test/data/sensor_readings.parquet')
         self.assertTrue(dt.shape[0] > 0)
         self.assertTrue(dt.columns == ['SensorID', 'SensorReadingUTC', 'SensorReadingF', 'SensorReadingRh'])
 
@@ -57,15 +57,15 @@ class TestGetReading(unittest.TestCase):
         self.assertTrue(len(os.listdir('test/data/new-readings/')) == 0)
 
         # Row could should increase by the number of rows in the new data.
-        dt = polars.read_parquet(f'test/data/sensors.parquet')
+        dt = polars.read_parquet(f'test/data/sensor_readings.parquet')
         self.assertTrue(dt.shape[0] == init_rows + new_rows)
 
         # Columns should have been added because the current readings have many more columns.
         self.assertTrue(dt.shape[1] > 10)
 
         # we should also have device data now. 
-        dt = polars.read_parquet(f'test/data/devices.parquet')
-        self.assertTrue(dt.columns == ['DeviceDevID', 'DeviceName', 'SensorReadingUTC', 'SensorReadingF', 'SensorReadingRh'])
+        dt = polars.read_parquet(f'test/data/device_readings.parquet')
+        self.assertTrue(dt.columns == ['DeviceID_Coris', 'DeviceName', 'SensorReadingUTC', 'SensorReadingF', 'SensorReadingRh'])
 
 def tearDownModule():
 
@@ -77,7 +77,7 @@ if __name__ == '__main__':
 
     # Instantiate EnvironmentData class and capture initial shape.
     envdt = EnvironmentData(CatsUserID = 2496, data_path = 'test/data', out_of_scope = ['-80', 'Cryo tank', 'Water'], testing = True)
-    init_rows = polars.read_parquet(f'test/data/sensors.parquet').shape[0]
+    init_rows = polars.read_parquet(f'test/data/sensor_readings.parquet').shape[0]
 
     # Run tests.
     unittest.main()

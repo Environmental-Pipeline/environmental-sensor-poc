@@ -8,7 +8,7 @@ envdt = EnvironmentData(CatsUserID = 2496, out_of_scope = ['-80', 'Cryo tank', '
     
 # Data is now in the database.
 import polars
-sensors = polars.read_parquet('data/sensors.parquet')
+sensor_readings = polars.read_parquet('data/sensor_readings.parquet')
 #print(sensors)
 
 # Get current readings. 
@@ -23,11 +23,16 @@ envdt.consolidate_readings()
 #print(os.listdir('data/new-readings'))
 
 # We now also have the devices table. 
-devices = polars.read_parquet('data/devices.parquet').filter(polars.col('DeviceName').is_null().not_())
+device_readings = polars.read_parquet('data/device_readings.parquet').filter(polars.col('DeviceName').is_null().not_())
 #print(devices)
 
-sensor_info = polars.read_parquet('data/sensor_info.parquet')
-device_info = polars.read_parquet('data/device_info.parquet')
-utc_info = polars.read_parquet('data/utc_info.parquet')
+sensors = polars.read_parquet('data/sensors.parquet')
+devices = polars.read_parquet('data/devices.parquet')
+utc_lookup = polars.read_parquet('data/utc_lookup.parquet')
 
 envdt.close()
+
+sensors
+devices
+sensor_readings
+device_readings

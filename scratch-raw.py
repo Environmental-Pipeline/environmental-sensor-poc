@@ -22,7 +22,7 @@ sensors = sensors.filter(polars.col('SensorName').str.starts_with('Water').not_(
 
 # extract info from sensor name. 
 # {measurement type} {3-digit building code} {room}_{sensor id}
-sensor_info = []
+sensors = []
 for sensorname in sensors['SensorName'].to_list():
     
     if 'floator' in sensorname.lower():
@@ -34,7 +34,7 @@ for sensorname in sensors['SensorName'].to_list():
     # if the cardinal direction is included, there will be 4 pieces of info.
     if len(info) == 5:
         
-        sensor_info.append({
+        sensors.append({
             'SensorName': sensorname, 
             'SensorType_fromName': info[0],
             'SensorID_fromName': info[4],
@@ -45,7 +45,7 @@ for sensorname in sensors['SensorName'].to_list():
         
     elif len(info) == 4:
         
-        sensor_info.append({
+        sensors.append({
             'SensorName': sensorname, 
             'SensorType_fromName': info[0],
             'SensorID_fromName': info[3],
@@ -57,7 +57,7 @@ for sensorname in sensors['SensorName'].to_list():
     # floaters are len 3.
     elif len(info) == 3:
         
-        sensor_info.append({
+        sensors.append({
             'SensorName': sensorname, 
             'SensorType_fromName': info[0],
             'SensorID_fromName': info[2],
@@ -70,12 +70,12 @@ for sensorname in sensors['SensorName'].to_list():
         
         raise Exception('Unexpected format.')
         
-sensor_info = polars.DataFrame(sensor_info)
+sensors = polars.DataFrame(sensors)
 
  # UTC info.
  
 # start with the timestamps and datetime in UTC.
-utc_timestamps = polars.read_parquet(f'{data_path}/sensors.parquet', columns = 'SensorReadingUTC')['SensorReadingUTC'].unique().to_list()
+utc_timestamps = polars.read_parquet(f'{data_path}/sensor_readings.parquet', columns = 'SensorReadingUTC')['SensorReadingUTC'].unique().to_list()
 data = polars.DataFrame({
     "UTC": utc_timestamps,
     "datetime_utc": [datetime.datetime.fromtimestamp(x) for x in utc_timestamps]
@@ -162,7 +162,7 @@ for reading in acceptable_range:
         # Add data from the sensors dataset. 
         data = data.with_columns(polars.lit(sensor_id).alias('SensorID'))
         sensor_data = sensors.filter(polars.col('SensorID') == sensor_id)
-        for col in ['SensorName', 'DeviceName', 'DeviceDevID', 'SensorType']:
+        for col in ['SensorName', 'DeviceName', 'DeviceID_Coris', 'SensorType']:
             data = data.with_columns(polars.lit(sensor_data[col].to_list()[0]).alias(col))
 
         # Set data types. 
@@ -173,7 +173,7 @@ for reading in acceptable_range:
                 sensors = sensors.with_columns(polars.col(reading).cast(polars.Float32))
 
         # Rearrange columns.
-        col_order = ['DeviceDevID', 'DeviceName', 'SensorID', 'SensorReadingUTC'] + list(acceptable_range.keys())
+        col_order = ['DeviceID_Coris', 'DeviceName', 'SensorID', 'SensorReadingUTC'] + list(acceptable_range.keys())
         col_order = [x for x in col_order if x in data.columns]
         data = data.select(col_order + [x for x in data.columns if x not in col_order])
         

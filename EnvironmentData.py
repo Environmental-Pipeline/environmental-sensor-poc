@@ -91,10 +91,12 @@ class EnvironmentData():
         for handler in self.logger.handlers:
             handler.close()
             self.logger.removeHandler(handler)
+        del self.logger
         
         for handler in self.logger_err.handlers:
             handler.close()
             self.logger_err.removeHandler(handler)
+        del self.logger_err
 
     def error(self, msg, raise_exception):
 
@@ -128,7 +130,7 @@ class EnvironmentData():
         """
 
         # If the data already exists, initialization is not necessary.
-        if os.path.exists(f'{self.data_path}/sensors.parquet'):
+        if os.path.exists(f'{self.data_path}/sensor_readings.parquet'):
             return
 
         # Make a log entry and gather current and starting UTC.
@@ -142,7 +144,7 @@ class EnvironmentData():
         readings = []
         for reading in self.acceptable_range:
 
-            sensor_ids = sensors.filter(polars.col(reading).is_nan().not_())['SensorID'].unique().to_list()
+            sensor_ids = sensors.filter(polars.col(reading).is_nan().not_())['SensorID_Coris'].unique().to_list()
             if self.testing:           
                 sensor_ids = sensor_ids[0:3]
 
@@ -184,9 +186,9 @@ class EnvironmentData():
                 data.columns = ['SensorReadingUTC', reading]
 
                 # Add data from the sensors dataset. 
-                data = data.with_columns(polars.lit(sensor_id).alias('SensorID'))
-                sensor_data = sensors.filter(polars.col('SensorID') == sensor_id)
-                for col in ['SensorName', 'DeviceName', 'DeviceDevID', 'SensorType']:
+                data = data.with_columns(polars.lit(sensor_id).alias('SensorID_Coris'))
+                sensor_data = sensors.filter(polars.col('SensorID_Coris') == sensor_id)
+                for col in ['SensorName', 'DeviceName', 'DeviceID_Coris', 'SensorType']:
                     data = data.with_columns(polars.lit(sensor_data[col].to_list()[0]).alias(col))
 
                 # Clean and validate the data. 
@@ -201,12 +203,9 @@ class EnvironmentData():
 
         # Combine the readings into a single polars DataFrame.
         dt = polars.concat(readings, how = 'diagonal')
-
-        # Clean the data.
-        dt = self.clean_validate_sensors(dt)
         
         # Write the database file. 
-        dt.write_parquet(f'{self.data_path}/sensors.parquet')
+        dt.write_parquet(f'{self.data_path}/sensor_readings.parquet')
 
     def get_sensors(self) -> polars.DataFrame:
 
@@ -227,13 +226,18 @@ class EnvironmentData():
         
         # Check for errors and raise an exception if there is one.
         if not response.ok:
-            self.logger.error(f'Error getting sensors: {response.json()}')
-            raise Exception(response.json())
+            self.error(f'Error getting sensors: {response.json()}', raise_exception = True)
         
         # Remove out-of-scope sensors.
         sensors = polars.DataFrame(response.json()['Sensors'])
         for i in self.out_of_scope:            
             sensors = sensors.filter(polars.col('SensorName').str.starts_with(i).not_())
+
+        # There are multiple sensors, so rename the ID to indicate the data source.
+        sensors = sensors.rename({'SensorID': 'SensorID_Coris', 'DeviceDevID': 'DeviceID_Coris'})
+
+        # Clean and validate the data.
+        sensors = self.clean_validate_sensors(sensors)
 
         # Return the data. 
         return sensors
@@ -274,7 +278,7 @@ class EnvironmentData():
                
         # Read new readings from the parquet files saved by calls to get_current_readings.
         # These are deleted after each consolidation, so these files will always be the un-consolidated files. 
-        files = os.listdir(f'{self.data_path}/new-readings/')        
+        files = os.listdir(f'{self.data_path}/new-readings/')
         for file in files:
             new_readings.append(polars.read_parquet(f'{self.data_path}/new-readings/{file}'))
 
@@ -286,18 +290,18 @@ class EnvironmentData():
         dt = self.clean_validate_sensors(dt)
 
         # Set the column data types to match the database.
-        db = polars.read_parquet(f'{self.data_path}/sensors.parquet')
+        db = polars.read_parquet(f'{self.data_path}/sensor_readings.parquet')
         dt = self.match_types(dt, db)
 
         # Append these to the database.
         dt = polars.concat([db, dt], how = 'diagonal')
 
         # Move the most important columns to the front. 
-        first_cols = ['DeviceDevID', 'DeviceName', 'SensorID', 'SensorReadingUTC'] + list(self.acceptable_range.keys())
+        first_cols = ['SensorID_Coris', 'SensorReadingUTC', 'DeviceID_Coris'] + list(self.acceptable_range.keys())
         dt = dt.select(first_cols + [x for x in dt.columns if x not in first_cols])
 
         # Write the file. 
-        dt.write_parquet(f'{self.data_path}/sensors.parquet')
+        dt.write_parquet(f'{self.data_path}/sensor_readings.parquet')
         self.logger.info(f'{dt.shape[0]} total readings.')
 
         # If all this was successful, remove the new-readings files to prepare for the next consolidation.
@@ -305,7 +309,7 @@ class EnvironmentData():
             os.remove(f'{self.data_path}/new-readings/{file}')
 
         # Refresh the devices table. 
-        self.build_devices(dt).write_parquet(f'{self.data_path}/devices.parquet')
+        self.build_devices(dt).write_parquet(f'{self.data_path}/device_readings.parquet')
 
         # Update lookup tables. 
         self.update_lookups()
@@ -354,33 +358,33 @@ class EnvironmentData():
 
         # Get the data for each of the selected sensors.
         devices = None
-        data = data.filter(polars.col('DeviceDevID').is_null().not_())
+        data = data.filter(polars.col('DeviceID_Coris').is_null().not_())
         for reading in self.acceptable_range:
-            idt = data.filter(polars.col(reading).is_null().not_()).select(['DeviceDevID', 'SensorReadingUTC', reading])
+            idt = data.filter(polars.col(reading).is_null().not_()).select(['DeviceID_Coris', 'SensorReadingUTC', reading])
             if isinstance(devices, polars.DataFrame):
-                devices = devices.join(idt, how = 'full', on = ['DeviceDevID', 'SensorReadingUTC'])
+                devices = devices.join(idt, how = 'full', on = ['DeviceID_Coris', 'SensorReadingUTC'])
             else:
                 devices = idt
             del idt, reading
         
-        # this will result in columns like DeviceDevID_right when there is not a perfect match. 
+        # this will result in columns like DeviceID_Coris_right when there is not a perfect match. 
         # coalesce to a single column.
-        cols_DeviceDevID = [x for x in devices.columns if 'DeviceDevID' in x]
+        cols_DeviceID_Coris = [x for x in devices.columns if 'DeviceID_Coris' in x]
         cols_SensorReadingUTC = [x for x in devices.columns if 'SensorReadingUTC' in x]
-        devices = devices.with_columns(polars.coalesce(cols_DeviceDevID).alias('DeviceDevID'))
+        devices = devices.with_columns(polars.coalesce(cols_DeviceID_Coris).alias('DeviceID_Coris'))
         devices = devices.with_columns(polars.coalesce(cols_SensorReadingUTC).alias('SensorReadingUTC'))
-        devices = devices.drop([x for x in cols_DeviceDevID + cols_SensorReadingUTC if x not in ['DeviceDevID', 'SensorReadingUTC']])
+        devices = devices.drop([x for x in cols_DeviceID_Coris + cols_SensorReadingUTC if x not in ['DeviceID_Coris', 'SensorReadingUTC']])
         
         # If a device has multiple names, error out:
-        device_names = data.filter(polars.col('DeviceDevID').is_null().not_()).select(['DeviceDevID', 'DeviceName']).unique()
+        device_names = data.filter(polars.col('DeviceID_Coris').is_null().not_()).select(['DeviceID_Coris', 'DeviceName']).unique()
         if device_names.shape[0] != device_names['DeviceName'].unique().shape[0]:
-            self.error('DeviceName to DeviceDevID is not a 1-1 mapping.', raise_exception = True)
+            self.error('DeviceName to DeviceID_Coris is not a 1-1 mapping.', raise_exception = True)
         
         # Attach the device name.
-        devices = devices.join(device_names, how = 'left', on = 'DeviceDevID')
+        devices = devices.join(device_names, how = 'left', on = 'DeviceID_Coris')
 
         # Rearrange columns. 
-        devices = devices.select(['DeviceDevID', 'DeviceName', 'SensorReadingUTC'] + list(self.acceptable_range.keys()))
+        devices = devices.select(['DeviceID_Coris', 'DeviceName', 'SensorReadingUTC'] + list(self.acceptable_range.keys()))
 
         # Return the data.
         return devices
@@ -402,21 +406,47 @@ class EnvironmentData():
         """
 
         # Set data types.
-        sensors = sensors.with_columns(polars.col('SensorID').cast(polars.Int32))
-        sensors = sensors.with_columns(polars.col('SensorReadingUTC').cast(polars.Int64))
+        dtypes = {
+            'SensorID': polars.String, # this is extracted from the SensorName, it isn't always a number.
+            'SensorID_Coris': polars.Int32,
+            'DeviceID_Coris': polars.Int32,
+            'SensorReadingUTC': polars.Int64
+        }
+        for dtype in dtypes:
+            if dtype in sensors.columns:
+                sensors = sensors.with_columns(polars.col(dtype).cast(dtypes[dtype]))
+        
         for reading in self.acceptable_range:
             if reading in sensors.columns:
                 sensors = sensors.with_columns(polars.col(reading).cast(polars.Float32))
 
         # Validate the data.
         self.validate_sensors(sensors)
-        
-        # Rearrange columns.
-        col_order = ['DeviceDevID', 'DeviceName', 'SensorID', 'SensorReadingUTC'] + list(self.acceptable_range.keys())
-        col_order = [x for x in col_order if x in sensors.columns]
-        sensors = sensors.select(col_order + [x for x in sensors.columns if x not in col_order])
 
         return sensors
+
+    def relocate(self, data: polars.DataFrame, columns: list) -> polars.DataFrame:
+
+        """
+        Relocate columns to the front of a DataFrame.
+
+        Parameters
+        ----------
+        data: polars.DataFrame
+            DataFrame to relocate columns in.
+
+        columns: list[str]
+            Columns to move to the front.
+
+        Returns
+        -------
+        data: polars.DataFrame
+            DataFrame with columns relocated.
+        """
+
+        columns = [x for x in columns if x in data.columns]
+        data = data[columns + [x for x in data.columns if x not in columns]]
+        return data
 
     def validate_sensors(self, sensors: polars.DataFrame):
 
@@ -486,10 +516,23 @@ class EnvironmentData():
         Update the lookup tables used for analytical queries. 
         """
 
+        # We need some manual fixes to reformat invalid names. 
+        name_overrides = {
+            '980D Unnamed Temp Sensor': 'Temp Unnamed Unnamed_980D',
+            '980D Unnamed Humid Sensor': 'RH Unnamed Unnamed_980D',
+        }
+
         # Sensor Info.
-        SensorName = polars.read_parquet(f'{self.data_path}/sensors.parquet', columns = 'SensorName')['SensorName'].to_list()
-        sensor_info = []
-        for sensorname in SensorName:
+        sensors_data = polars.read_parquet(f'{self.data_path}/sensor_readings.parquet', columns = [
+            'SensorName', 'SensorID_Coris', 'DeviceID_Coris', 'SensorType'
+        ])
+        sensors_data  = sensors_data.unique().to_dicts()
+        sensors = []
+        for sensor in sensors_data:
+            
+            sensorname = sensor['SensorName']
+            if sensorname in name_overrides:
+                sensorname = name_overrides[sensorname]
             
             if 'floator' in sensorname.lower():
                 info = sensorname.strip().split('_')
@@ -500,36 +543,45 @@ class EnvironmentData():
             # If the cardinal direction is included, there will be 4 pieces of info.
             if len(info) == 5:
                 
-                sensor_info.append({
+                sensors.append({
                     'SensorName': sensorname, 
-                    'SensorType_fromName': info[0],
-                    'SensorID_fromName': info[4],
+                    #'SensorType_fromName': info[0],
+                    'DeviceID': info[4],
+                    'SensorType': sensor['SensorType'],
+                    'SensorID_Coris': sensor['SensorID_Coris'],
+                    'DeviceID_Coris': sensor['DeviceID_Coris'],
                     'Building': info[1],
-                    'Room': info[2],
+                    'Room': info[2].replace('_', ''),
                     'CardinalDirection': info[3]
                 })
                 
             elif len(info) == 4:
                 
-                sensor_info.append({
+                sensors.append({
                     'SensorName': sensorname, 
-                    'SensorType_fromName': info[0],
-                    'SensorID_fromName': info[3],
+                    #'SensorType_fromName': info[0],
+                    'DeviceID': info[3],
+                    'SensorType': sensor['SensorType'],
+                    'SensorID_Coris': sensor['SensorID_Coris'],
+                    'DeviceID_Coris': sensor['DeviceID_Coris'],
                     'Building': info[1],
-                    'Room': info[2],
+                    'Room': info[2].replace('_', ''),
                     'CardinalDirection': 'Not Indicated'
                 })
                 
             # Floaters are len 3.
             elif len(info) == 3:
                 
-                sensor_info.append({
+                sensors.append({
                     'SensorName': sensorname, 
-                    'SensorType_fromName': info[0],
-                    'SensorID_fromName': info[2],
+                    #'SensorType_fromName': info[0],
+                    'DeviceID': info[2],
+                    'SensorType': sensor['SensorType'],
+                    'SensorID_Coris': sensor['SensorID_Coris'],
+                    'DeviceID_Coris': sensor['DeviceID_Coris'],
                     'Building': 'FLOATER',
                     'Room': 'FLOATER',
-                    'Direction': None
+                    'CardinalDirection': None
                 })
             
             else:
@@ -537,27 +589,43 @@ class EnvironmentData():
                 raise Exception(f'Unexpected SensorName format: {sensorname}.')
                 
         # Write the table to a file.
-        polars.DataFrame(sensor_info).unique().write_parquet(f'{self.data_path}/sensor_info.parquet')
+        sensors = polars.DataFrame(sensors).unique()
+        sensors = sensors.sort(['Building', 'Room', 'DeviceID', 'SensorName'])
+        sensors = self.clean_validate_sensors(sensors)
+        sensors = self.relocate(sensors, ['SensorID_Coris', 'Building', 'Room', 'CardinalDirection', 'DeviceID'])
+        sensors.write_parquet(f'{self.data_path}/sensors.parquet')
+
+        # It will be helpful to have the Building, Room, and CardinalDirection appended to Devices. 
+        # Check for a valid mapping. 
+        device_info_from_sensors = sensors.select(['DeviceID_Coris', 'Building', 'Room', 'CardinalDirection', 'DeviceID']).unique()
+        bad_values = device_info_from_sensors.filter(device_info_from_sensors.select("DeviceID_Coris").is_duplicated()).sort('DeviceID_Coris')
+        if bad_values.shape[0] > 0:
+            # If there is a bad mapping, log it and remove the duplicates so we can use the data that is properly mapped.
+            # For invalid mappings, Building, Room, and CardinalDirection will be null.
+            self.error(f'DeviceID_Coris to Building, Room, CardinalDirection is not a 1-1 mapping. Invalid mappings will be excluded: \n{bad_values}', raise_exception = True)
+            device_info_from_sensors = device_info_from_sensors.filter(polars.col('DeviceID_Coris').is_duplicated().not_())
 
         # Device Info.
-        device_info = polars.read_parquet(f'{self.data_path}/sensors.parquet', columns = ['DeviceDevID', 'DeviceName']).unique()
-        device_info.write_parquet(f'{self.data_path}/device_info.parquet')
+        devices = polars.read_parquet(f'{self.data_path}/sensor_readings.parquet', columns = ['DeviceID_Coris', 'DeviceName']).unique()
+        devices = devices.join(device_info_from_sensors, how = 'left', on = 'DeviceID_Coris').sort(['Building', 'Room', 'DeviceName'])
+        devices = self.relocate(devices, ['DeviceID', 'Building', 'Room', 'CardinalDirection', 'DeviceName'])
+        devices.write_parquet(f'{self.data_path}/devices.parquet')
 
         # UTC info.
         # Start with the timestamps and datetime in UTC.
-        utc_timestamps = polars.read_parquet(f'{self.data_path}/sensors.parquet', columns = 'SensorReadingUTC')['SensorReadingUTC'].unique().to_list()
-        utc_info = polars.DataFrame({
+        utc_timestamps = polars.read_parquet(f'{self.data_path}/sensor_readings.parquet', columns = 'SensorReadingUTC')['SensorReadingUTC'].unique().to_list()
+        utc_lookup = polars.DataFrame({
             "UTC": utc_timestamps,
             "datetime_utc": [datetime.datetime.fromtimestamp(x) for x in utc_timestamps]
         })
 
         # Convert to EST and round to seconds. 
-        utc_info = utc_info.with_columns(
+        utc_lookup = utc_lookup.with_columns(
             polars.col("datetime_utc").dt.convert_time_zone("America/New_York").dt.round("1s").alias('datetime_est')
         )
 
         # Extract all the date parts. 
-        utc_info = utc_info.with_columns(
+        utc_lookup = utc_lookup.with_columns(
             polars.col("datetime_est").dt.date().alias("date"),
             polars.col("datetime_est").dt.time().alias("time"),
             polars.col("datetime_est").dt.year().alias("year"),
@@ -570,4 +638,4 @@ class EnvironmentData():
         )
 
         # Write the table to a file.
-        utc_info.write_parquet(f'{self.data_path}/utc_info.parquet')
+        utc_lookup.write_parquet(f'{self.data_path}/utc_lookup.parquet')
