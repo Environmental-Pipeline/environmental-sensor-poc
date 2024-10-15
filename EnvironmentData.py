@@ -329,8 +329,9 @@ class EnvironmentData():
         self.validate_devices(devices)
         devices.write_parquet(f'{self.data_path}/device_readings.parquet')
 
-        # Update lookup tables. 
+        # Update lookup tables and cubes. 
         self.update_lookups()
+        self.update_cubes()
 
     def match_types(self, data: polars.DataFrame, match: polars.DataFrame) -> polars.DataFrame:
             
@@ -711,3 +712,37 @@ class EnvironmentData():
 
         # Write the table to a file.
         utc_lookup.write_parquet(f'{self.data_path}/utc_lookup.parquet')
+    
+    def update_cubes(self):
+
+        """
+        Update the cubed tables used for faster analytical queries. 
+        """
+
+        sumcols = list(self.acceptable_range.keys())
+        utc_lookup = polars.read_parquet(f'{self.data_path}/utc_lookup.parquet')
+
+        sensor_readings = polars.read_parquet(f'{self.data_path}/sensor_readings.parquet')
+        sensor_readings = sensor_readings.join(utc_lookup[['UTC', 'date']], how = 'left', left_on = 'SensorReadingUTC', right_on = 'UTC')
+
+        sensor_readings_daily = sensor_readings.group_by(['date', 'SensorID_Coris']).agg([
+            polars.len().alias("row_count"),
+            polars.col(sumcols).sum().name.suffix("_sum"),
+            polars.col(sumcols).min().name.suffix("_min"),
+            polars.col(sumcols).max().name.suffix("_max"),
+        ]).sort(['date', 'SensorID_Coris'])
+
+        sensor_readings_daily.write_parquet(f'{self.data_path}/sensor_readings_daily.parquet')
+
+        device_readings = polars.read_parquet(f'{self.data_path}/device_readings.parquet')
+        device_readings = device_readings.join(utc_lookup[['UTC', 'date']], how = 'left', left_on = 'SensorReadingUTC', right_on = 'UTC')
+
+        device_readings_daily = device_readings.group_by(['date', 'DeviceID_Coris']).agg([
+            polars.len().alias("row_count"),
+            polars.col(sumcols).sum().name.suffix("_sum"),
+            polars.col(sumcols).min().name.suffix("_min"),
+            polars.col(sumcols).max().name.suffix("_max"),
+        ]).sort(['date', 'DeviceID_Coris'])
+
+        device_readings_daily.write_parquet(f'{self.data_path}/device_readings_daily.parquet')
+            

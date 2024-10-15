@@ -30,9 +30,8 @@ sensors = polars.read_parquet('data/sensors.parquet')
 devices = polars.read_parquet('data/devices.parquet')
 utc_lookup = polars.read_parquet('data/utc_lookup.parquet')
 
-envdt.close()
+sensor_readings_daily = polars.read_parquet('data/sensor_readings_daily.parquet')
+device_readings_daily = polars.read_parquet('data/device_readings_daily.parquet')
 
-sensors
-devices
-sensor_readings
-device_readings
+#1 - sensor_readings_daily.shape[0] / sensor_readings.shape[0]
+# 0.993
