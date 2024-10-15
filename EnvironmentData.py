@@ -271,7 +271,7 @@ class EnvironmentData():
 
         # Get the current status from the API.
         sensors = self.get_sensors()
-        self.validate_sensors(sensors, current_utc)
+        self.validate_sensors(sensors = sensors, utc = current_utc)
 
         # Process alerts.
         self.send_alerts(sensors, current_utc)
@@ -302,15 +302,15 @@ class EnvironmentData():
         dt = polars.concat(new_readings)
         self.logger.info(f'{dt.shape[0]} new readings.')
 
-        # Clean the data. 
-        dt = self.clean_validate_sensors(dt)
+        # Clean the data.
+        historical = polars.read_parquet(f'{self.data_path}/sensor_readings.parquet')
+        dt = self.clean_validate_sensors(sensors = dt, historical = historical)
 
         # Set the column data types to match the database.
-        db = polars.read_parquet(f'{self.data_path}/sensor_readings.parquet')
-        dt = self.match_types(dt, db)
+        dt = self.match_types(dt, historical)
 
         # Append these to the database.
-        dt = polars.concat([db, dt], how = 'diagonal')
+        dt = polars.concat([historical, dt], how = 'diagonal')
 
         # Move the most important columns to the front. 
         first_cols = ['SensorID_Coris', 'SensorReadingUTC', 'DeviceID_Coris'] + list(self.acceptable_range.keys())
@@ -325,7 +325,9 @@ class EnvironmentData():
             os.remove(f'{self.data_path}/new-readings/{file}')
 
         # Refresh the devices table. 
-        self.build_devices(dt).write_parquet(f'{self.data_path}/device_readings.parquet')
+        devices = self.build_devices(dt)        
+        self.validate_devices(devices)
+        devices.write_parquet(f'{self.data_path}/device_readings.parquet')
 
         # Update lookup tables. 
         self.update_lookups()
@@ -405,7 +407,7 @@ class EnvironmentData():
         # Return the data.
         return devices
     
-    def clean_validate_sensors(self, sensors: polars.DataFrame) -> polars.DataFrame:
+    def clean_validate_sensors(self, sensors: polars.DataFrame, historical: polars.DataFrame = polars.DataFrame()) -> polars.DataFrame:
 
         """
         Clean sensor reading data. Data gets cleaned during consolidation.
@@ -437,7 +439,7 @@ class EnvironmentData():
                 sensors = sensors.with_columns(polars.col(reading).cast(polars.Float32))
 
         # Validate the data.
-        self.validate_sensors(sensors)
+        self.validate_sensors(sensors, historical)
 
         return sensors
 
@@ -464,7 +466,7 @@ class EnvironmentData():
         data = data[columns + [x for x in data.columns if x not in columns]]
         return data
 
-    def validate_sensors(self, sensors: polars.DataFrame, utc: int = None):
+    def validate_sensors(self, sensors: polars.DataFrame, historical: polars.DataFrame = polars.DataFrame(), utc: int = None):
 
         """
         Validate sensor reading data.
@@ -496,9 +498,47 @@ class EnvironmentData():
             if maxdiff_minutes > 2: # readings should be happening every 2 minutes. 
                 errs.append(f'SensorReadingUTC differs from UTC: UTC: {utc}, maximum absolute difference (minutes): {maxdiff_minutes}.')
 
+        # Do any sensors have multiple names (indicating a change in name)?
+        name_dups = sensors[['SensorID_Coris', 'SensorName']].unique().filter(sensors['SensorID_Coris'].is_duplicated())
+        dup_count = name_dups[['SensorID_Coris']].unique().shape[0]
+        if dup_count > 0:
+            errs.append(f'Count of multiple names for SensorID_Coris: {dup_count}.')
+
+        # Comparisons to historical.
+        if historical.shape[0] > 0:
+
+            # Did we lose any sensors?
+            missing = historical.filter(historical['SensorID_Coris'].is_in(sensors['SensorID_Coris']).not_())
+            if missing.shape[0] > 0:
+                errs.append(f'Count of sensors missing from historical data: {missing.shape[0]}.')
+
         # Log the errors.
         if len(errs) > 0:
-            self.error(f'Validation errors: {". ".join(errs)}', raise_exception = False)
+            self.error('Validation errors: \n' + "\n\t".join(errs), raise_exception = False)
+
+    def validate_devices(self, devices: polars.DataFrame):
+
+        """
+        Validate device data.
+
+        Parameters
+        ----------
+        devices: polars.DataFrame
+            DataFrame to validate.
+        """
+
+        errs = []
+
+        # Check for missing values.
+        for col in self.acceptable_range:
+            missing_count = devices[col].is_null().sum()
+            if missing_count > 0:
+                errs.append(f'{missing_count} missing values in [{col}].')
+
+        # Log the errors.
+        if len(errs) > 0:
+            self.error('Validation errors: \n' + "\n\t".join(errs), raise_exception = False)
+
 
     def which(x): 
         return list(numpy.where(x)[0])
