@@ -775,6 +775,7 @@ class EnvironmentData():
         utcs = polars.read_parquet(f'{self.data_path}/utcs.parquet')
 
         sensor_readings = polars.read_parquet(f'{self.data_path}/sensor_readings.parquet')
+        sensor_readings = sensor_readings.filter((polars.col('SensorReadingUTC') - polars.col('QueryUTC')).abs() < 60 * 5) # remove old readings coming in with new data.
         sensor_readings = sensor_readings.join(utcs[['UTC', 'date']], how = 'left', left_on = 'SensorReadingUTC', right_on = 'UTC')
 
         sensor_readings_daily = sensor_readings.group_by(['date', 'SensorID_Coris']).agg([
@@ -787,6 +788,7 @@ class EnvironmentData():
         sensor_readings_daily.write_parquet(f'{self.data_path}/sensor_readings_daily.parquet')
 
         device_readings = polars.read_parquet(f'{self.data_path}/device_readings.parquet')
+        device_readings = device_readings.filter((polars.col('SensorReadingUTC') - polars.col('QueryUTC')).abs() < 60 * 5) # remove old readings coming in with new data.
         device_readings = device_readings.join(utcs[['UTC', 'date']], how = 'left', left_on = 'SensorReadingUTC', right_on = 'UTC')
 
         device_readings_daily = device_readings.group_by(['date', 'DeviceID_Coris']).agg([
