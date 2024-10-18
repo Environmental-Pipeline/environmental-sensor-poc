@@ -316,6 +316,15 @@ class EnvironmentData():
         # Append these to the database.
         dt = polars.concat([historical, dt], how = 'diagonal')
 
+        # Add difference between readings. 
+        dt = dt.sort(['SensorID_Coris', 'SensorReadingUTC'])
+        SensorReadingUTC_SecondsFromPrior = dt.group_by('SensorID_Coris', maintain_order = True).map_groups(
+            lambda x: x.with_columns((
+                polars.col('SensorReadingUTC') - polars.col('SensorReadingUTC').shift(1)
+            ).alias('SensorReadingUTC_SecondsFromPrior')
+        ))['SensorReadingUTC_SecondsFromPrior']
+        dt = dt.with_columns(SensorReadingUTC_SecondsFromPrior)
+
         # Move the most important columns to the front. 
         dt = self.relocate(dt, ['SensorID_Coris', 'QueryUTC', 'SensorReadingUTC', 'DeviceID_Coris', 'SensorReadingUTC_SecondsFromPrior'] + list(self.acceptable_range.keys()))
 
@@ -527,6 +536,13 @@ class EnvironmentData():
         dup_count = name_dups[['SensorID_Coris']].unique().shape[0]
         if dup_count > 0:
             errs.append(f'Count of multiple names for SensorID_Coris: {dup_count}.')
+
+        # Time between readings should be less than ten minutes.
+        if 'SensorReadingUTC_SecondsFromPrior' in sensors.columns:
+            self.logger.info(f'{step} validation: SensorReadingUTC_SecondsFromPrior less than 15 minutes.')
+            badrows = sensors.filter(sensors['SensorReadingUTC_SecondsFromPrior'] > 60 * 15)
+            if badrows.shape[0] > 0:
+                errs.append(f'Count of SensorReadingUTC_SecondsFromPrior > 15 minutes: {badrows.shape[0]}.')
 
         # Comparisons to historical.
         if historical.shape[0] > 0:
