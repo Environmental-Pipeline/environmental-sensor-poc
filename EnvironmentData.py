@@ -38,6 +38,7 @@ class EnvironmentData():
         self.CatsUserID = CatsUserID
         self.data_path = data_path
         self.testing = testing
+        self.testing_sensor_ids = []
         self.out_of_scope = out_of_scope
 
         # Create the data folder.
@@ -154,6 +155,9 @@ class EnvironmentData():
             pbar = tqdm.tqdm(total = len(sensor_ids), desc=f'Gather readings: {reading}')
             for sensor_id in sensor_ids:
 
+                if self.testing:
+                    self.testing_sensor_ids.append(sensor_id)
+
                 # it is possible to pull everything by leaving out StartUTC and EndUTC. 
                 # leaving it in for now though, in case we do want to limit it.
                 url = '&'.join([
@@ -235,6 +239,10 @@ class EnvironmentData():
         sensors = polars.DataFrame(response.json()['Sensors'])
         for i in self.out_of_scope:            
             sensors = sensors.filter(polars.col('SensorName').str.starts_with(i).not_())
+
+        # If testing, only use the selected sensors.
+        if self.testing and (len(self.testing_sensor_ids) > 0):
+            sensors = sensors.filter(polars.col('SensorID').is_in(self.testing_sensor_ids))
 
         # There are multiple sensors, so rename the ID to indicate the data source.
         sensors = sensors.rename({'SensorID': 'SensorID_Coris', 'DeviceDevID': 'DeviceID_Coris'})
