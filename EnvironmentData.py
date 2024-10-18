@@ -6,7 +6,7 @@ class EnvironmentData():
             self, 
             CatsUserID: int, 
             data_path: str = './data/', 
-            days_back: int = 90, 
+            days_back: int = int(365 * 2), 
             out_of_scope: list = [],
             testing: bool = False
         ):
