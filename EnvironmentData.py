@@ -494,15 +494,31 @@ class EnvironmentData():
         
         for col in expect_types:
             if col in sensors.columns:
+
+                # data type.
                 if sensors[col].dtype != expect_types[col]:
                     errs.append(f'Unexpected data type for [{col}]. Expected [{expect_types[col]}] got [{sensors[col]}].')
 
-        # Are the UTC columns close enough to the expected time?
+        # Readings should have at least one non-null value from expect_types. 
+        self.logger.info(f'{step} validation: at least one non-null value in readings.')
+        allnull = sensors[[x for x in expect_types if x in sensors.columns]].filter(polars.all_horizontal(polars.all().is_null()))
+        missing_count = allnull.shape[0]
+        if missing_count > 0:
+            errs.append(f'{missing_count} missing values in [{col}].')
+
+        # Are the SensorReadingUTC close to the QueryUTC (the time the data was requested via API)?
         if utc is not None:
             self.logger.info(f'{step} validation: SensorReadingUTC columns close to QueryUTC.')
             maxdiff_minutes = numpy.max(numpy.abs(sensors['SensorReadingUTC'].to_numpy() - utc)) / 60
             if maxdiff_minutes > 2: # readings should be happening every 2 minutes. 
                 errs.append(f'SensorReadingUTC differs from UTC: UTC: {utc}, maximum absolute difference (minutes): {maxdiff_minutes:,.0}.')
+
+        # Are there any duplicated SensorReadingUTC?
+        if 'SensorReadingUTC' in sensors.columns:
+            self.logger.info(f'{step} validation: no duplicated SensorReadingUTC per SensorID_Coris.')
+            dup_count = sensors[['SensorID_Coris', 'SensorReadingUTC']].is_duplicated().sum()
+            if dup_count > 0:
+                errs.append(f'Count of duplicated SensorReadingUTC: {dup_count}.')
 
         # Do any sensors have multiple names (indicating a change in name)?
         self.logger.info(f'{step} validation: one SensorName per SensorID_Coris.')
