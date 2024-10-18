@@ -194,7 +194,7 @@ class EnvironmentData():
                     data = data.with_columns(polars.lit(sensor_data[col].to_list()[0]).alias(col))
 
                 # Clean and validate the data. 
-                data = self.clean_validate_sensors(data)
+                data = self.clean_validate_sensors(sensors = data, step = 'initialize_database')
                 
                 # Append the data to the list of DataFrame for this sensor type.
                 readings.append(data)
@@ -239,7 +239,7 @@ class EnvironmentData():
         sensors = sensors.rename({'SensorID': 'SensorID_Coris', 'DeviceDevID': 'DeviceID_Coris'})
 
         # Clean and validate the data.
-        sensors = self.clean_validate_sensors(sensors)
+        sensors = self.clean_validate_sensors(sensors = sensors, step = 'get_sensors')
 
         # Return the data. 
         return sensors
@@ -304,7 +304,7 @@ class EnvironmentData():
 
         # Clean the data.
         historical = polars.read_parquet(f'{self.data_path}/sensor_readings.parquet')
-        dt = self.clean_validate_sensors(sensors = dt, historical = historical)
+        dt = self.clean_validate_sensors(sensors = dt, historical = historical, step = 'consolidate_readings')
 
         # Set the column data types to match the database.
         dt = self.match_types(dt, historical)
@@ -408,7 +408,7 @@ class EnvironmentData():
         # Return the data.
         return devices
     
-    def clean_validate_sensors(self, sensors: polars.DataFrame, historical: polars.DataFrame = polars.DataFrame()) -> polars.DataFrame:
+    def clean_validate_sensors(self, sensors: polars.DataFrame, historical: polars.DataFrame = polars.DataFrame(), step: str = '') -> polars.DataFrame:
 
         """
         Clean sensor reading data. Data gets cleaned during consolidation.
@@ -440,7 +440,7 @@ class EnvironmentData():
                 sensors = sensors.with_columns(polars.col(reading).cast(polars.Float32))
 
         # Validate the data.
-        self.validate_sensors(sensors, historical)
+        self.validate_sensors(sensors= sensors, historical = historical, step = step)
 
         return sensors
 
@@ -467,7 +467,7 @@ class EnvironmentData():
         data = data[columns + [x for x in data.columns if x not in columns]]
         return data
 
-    def validate_sensors(self, sensors: polars.DataFrame, historical: polars.DataFrame = polars.DataFrame(), utc: int = None):
+    def validate_sensors(self, sensors: polars.DataFrame, historical: polars.DataFrame = polars.DataFrame(), utc: int = None, step: str = ''):
 
         """
         Validate sensor reading data.
@@ -483,6 +483,7 @@ class EnvironmentData():
         # We expect missing values in the data, so we don't check for them.
 
         # Is the data format as expected?
+        self.logger.info(f'{step} validation: correct column data types.')
         expect_types = {"SensorReadingUTC": polars.Int64, "SensorID": polars.Int32}
         for reading in self.acceptable_range:
             if reading in sensors.columns:
@@ -495,12 +496,15 @@ class EnvironmentData():
 
         # Are the UTC columns close enough to the expected time?
         if utc is not None:
+            self.logger.info(f'{step} validation: SensorReadingUTC columns close to QueryUTC.')
             maxdiff_minutes = numpy.max(numpy.abs(sensors['SensorReadingUTC'].to_numpy() - utc)) / 60
             if maxdiff_minutes > 2: # readings should be happening every 2 minutes. 
                 errs.append(f'SensorReadingUTC differs from UTC: UTC: {utc}, maximum absolute difference (minutes): {maxdiff_minutes:,.0}.')
 
         # Do any sensors have multiple names (indicating a change in name)?
-        name_dups = sensors[['SensorID_Coris', 'SensorName']].unique().filter(sensors['SensorID_Coris'].is_duplicated())
+        self.logger.info(f'{step} validation: one SensorName per SensorID_Coris.')
+        name_dups = sensors[['SensorID_Coris', 'SensorName']].unique()
+        name_dups = name_dups.filter(name_dups['SensorID_Coris'].is_duplicated())
         dup_count = name_dups[['SensorID_Coris']].unique().shape[0]
         if dup_count > 0:
             errs.append(f'Count of multiple names for SensorID_Coris: {dup_count}.')
@@ -509,13 +513,14 @@ class EnvironmentData():
         if historical.shape[0] > 0:
 
             # Did we lose any sensors?
+            self.logger.info(f'{step} validation: all SensorID_Coris in historical data (no dropped SensorID).')
             missing = historical.filter(historical['SensorID_Coris'].is_in(sensors['SensorID_Coris']).not_())
             if missing.shape[0] > 0:
                 errs.append(f'Count of sensors missing from historical data: {missing.shape[0]}.')
 
         # Log the errors.
         if len(errs) > 0:
-            self.error('Validation errors: \n' + "\n\t".join(errs), raise_exception = False)
+            self.error(step + ' validation errors : ' + "; ".join(errs) + '\n', raise_exception = False)
 
     def validate_devices(self, devices: polars.DataFrame):
 
@@ -664,7 +669,7 @@ class EnvironmentData():
         # Write the table to a file.
         sensors = polars.DataFrame(sensors).unique()
         sensors = sensors.sort(['BuildingID', 'Building', 'Room', 'DeviceID', 'SensorName'])
-        sensors = self.clean_validate_sensors(sensors)
+        sensors = self.clean_validate_sensors(sensors = sensors, step = 'update_lookups')
         sensors = self.relocate(sensors, ['SensorID_Coris', 'BuildingID', 'Room', 'CardinalDirection', 'DeviceID'])
         sensors.write_parquet(f'{self.data_path}/sensors.parquet')
 
