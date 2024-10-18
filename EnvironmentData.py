@@ -399,9 +399,9 @@ class EnvironmentData():
         devices = None
         data = data.filter(polars.col('DeviceID_Coris').is_null().not_())
         for reading in self.acceptable_range:
-            idt = data.filter(polars.col(reading).is_null().not_()).select(['DeviceID_Coris', 'SensorReadingUTC', reading])
+            idt = data.filter(polars.col(reading).is_null().not_()).select(['DeviceID_Coris', 'SensorReadingUTC', 'QueryUTC', reading])
             if isinstance(devices, polars.DataFrame):
-                devices = devices.join(idt, how = 'full', on = ['DeviceID_Coris', 'SensorReadingUTC'])
+                devices = devices.join(idt, how = 'full', on = ['DeviceID_Coris', 'SensorReadingUTC', 'QueryUTC'])
             else:
                 devices = idt
             del idt, reading
@@ -410,9 +410,13 @@ class EnvironmentData():
         # coalesce to a single column.
         cols_DeviceID_Coris = [x for x in devices.columns if 'DeviceID_Coris' in x]
         cols_SensorReadingUTC = [x for x in devices.columns if 'SensorReadingUTC' in x]
+        cols_QueryUTC = [x for x in devices.columns if 'QueryUTC' in x]
+
         devices = devices.with_columns(polars.coalesce(cols_DeviceID_Coris).alias('DeviceID_Coris'))
         devices = devices.with_columns(polars.coalesce(cols_SensorReadingUTC).alias('SensorReadingUTC'))
-        devices = devices.drop([x for x in cols_DeviceID_Coris + cols_SensorReadingUTC if x not in ['DeviceID_Coris', 'SensorReadingUTC']])
+        devices = devices.with_columns(polars.coalesce(cols_QueryUTC).alias('QueryUTC'))
+        
+        devices = devices.drop([x for x in cols_DeviceID_Coris + cols_SensorReadingUTC if x not in ['DeviceID_Coris', 'SensorReadingUTC', 'QueryUTC']])
         
         # If a device has multiple names, error out:
         device_names = data.filter(polars.col('DeviceID_Coris').is_null().not_()).select(['DeviceID_Coris', 'DeviceName']).unique()
@@ -423,7 +427,7 @@ class EnvironmentData():
         devices = devices.join(device_names, how = 'left', on = 'DeviceID_Coris')
 
         # Rearrange columns. 
-        devices = devices.select(['DeviceID_Coris', 'DeviceName', 'SensorReadingUTC'] + list(self.acceptable_range.keys()))
+        devices = devices.select(['DeviceID_Coris', 'DeviceName', 'SensorReadingUTC', 'QueryUTC'] + list(self.acceptable_range.keys()))
 
         # Return the data.
         return devices
