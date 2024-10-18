@@ -1,9 +1,10 @@
 import os, requests, polars, time, numpy, tqdm, datetime, pytz
 import pandas as pd
+import polars as p
 
 apikey = os.environ.get('CORIS_API_KEY')
-days_back = 90
 CatsUserID = 2496
+days_back = int(365 * 2)
 testing = True
 data_path = 'data/'
 
@@ -16,107 +17,56 @@ sensors = polars.DataFrame(response.json()['Sensors'])
 sensors.columns
 sensors.shape
 
-# get difference
-pd.DataFrame({
-    'sensor': sensors['SensorName'],
-    'time_diff_imins': numpy.round(
-        (sensors['SensorReadingUTC'].to_numpy() - int(datetime.datetime.now(datetime.timezone.utc).timestamp())) / 60, 
-        0
-    )
-}).sort_values('time_diff_imins').to_csv('timedeltas.csv')
-
-
-
 # drop out of scope. 
 sensors = sensors.filter(polars.col('SensorName').str.starts_with('-80').not_())
 sensors = sensors.filter(polars.col('SensorName').str.contains('Cryo tank').not_())
 sensors = sensors.filter(polars.col('SensorName').str.starts_with('Water').not_())
 
-# extract info from sensor name. 
-# {measurement type} {3-digit building code} {room}_{sensor id}
-sensors = []
-for sensorname in sensors['SensorName'].to_list():
+# explore differences in timestamps.
+diffs = pd.DataFrame({
+    'sensor': sensors['SensorName'],
+    'id': sensors['SensorID'],
+    'type': ['SensorReadingF' if x == 'Temperature' else 'SensorReadingRh' for x in sensors['SensorType']],
+    'reading': sensors['SensorReading'],
+    'utc': sensors['SensorReadingUTC'],
+    'time_diff_imins': numpy.round(
+        (sensors['SensorReadingUTC'].to_numpy() - int(datetime.datetime.now(datetime.timezone.utc).timestamp())) / 60, 
+        0
+    )
+}).sort_values('time_diff_imins')
+diffs.to_csv('out/timedeltas.csv')
+
+# see what historical looks like for problematic sensors. 
+current_utc = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
+start_utc = current_utc - days_back * 24 * 60 * 60
+url = '&'.join([
+    f'https://cats.corismonitoring.com/api/sensor/historical/?ApiKey={apikey}',
+    f'SensorID={diffs.id.values[0]}',
+    f'ReadingType={diffs.type.values[0]}',
+    f'StartUTC={start_utc}',
+    f'MinReadingSpacing=600', # every 10 minutes.
+    f'RequestedOutputFormat=raw'
+])
+response = requests.get(url)
+
+# Check for errors.
+if not response.ok:
+    raise Exception(f'Error getting historical: {response.json()}')
     
-    if 'floator' in sensorname.lower():
-        info = sensorname.strip().split('_')
-    else:
-        info = sensorname.strip().split(' ')
-        info = info[0:-1] + info[-1].split('_') 
-    
-    # if the cardinal direction is included, there will be 4 pieces of info.
-    if len(info) == 5:
-        
-        sensors.append({
-            'SensorName': sensorname, 
-            'SensorType_fromName': info[0],
-            'SensorID_fromName': info[4],
-            'Building': info[1],
-            'Room': info[2],
-            'Direction': info[3]
-        })
-        
-    elif len(info) == 4:
-        
-        sensors.append({
-            'SensorName': sensorname, 
-            'SensorType_fromName': info[0],
-            'SensorID_fromName': info[3],
-            'Building': info[1],
-            'Room': info[2],
-            'Direction': None
-        })
-        
-    # floaters are len 3.
-    elif len(info) == 3:
-        
-        sensors.append({
-            'SensorName': sensorname, 
-            'SensorType_fromName': info[0],
-            'SensorID_fromName': info[2],
-            'Building': 'FLOATER',
-            'Room': 'FLOATER',
-            'Direction': None
-        })
-    
-    else:
-        
-        raise Exception('Unexpected format.')
-        
-sensors = polars.DataFrame(sensors)
+hist = polars.read_csv(response.content, has_header = False)
+hist.columns = ['SensorReadingUTC', diffs.type.values[0]]
 
- # UTC info.
- 
-# start with the timestamps and datetime in UTC.
-utc_timestamps = polars.read_parquet(f'{data_path}/sensor_readings.parquet', columns = 'SensorReadingUTC')['SensorReadingUTC'].unique().to_list()
-data = polars.DataFrame({
-    "UTC": utc_timestamps,
-    "datetime_utc": [datetime.datetime.fromtimestamp(x) for x in utc_timestamps]
-})
+# is UTC unique?
+if (len(hist['SensorReadingUTC'].unique()) - hist.shape[0]) != 0:
+    raise Exception('Duplicated UTC in history.')
 
-# convert to EST and round to seconds. 
-data = data.with_columns(
-    polars.col("datetime_utc").dt.convert_time_zone("America/New_York").dt.round("1s").alias('datetime_est')
-)
+# is the current UTC found in the historical data?
+if diffs.utc[0] in hist['SensorReadingUTC']:
+    raise Exception('Current reading is duplicated in historical.')
 
-# now extract all the date parts. 
-data = data.with_columns(
-    polars.col("datetime_est").dt.date().alias("date"),
-    polars.col("datetime_est").dt.time().alias("time"),
-    polars.col("datetime_est").dt.year().alias("year"),
-    polars.col("datetime_est").dt.month().alias("month"),
-    (polars.col("datetime_est").dt.strftime("%A")).alias("day_of_week"),
-    polars.col("datetime_est").dt.weekday().alias("day_of_week_monday1_sunday7"),
-    polars.col("datetime_est").dt.hour().alias("hour_24"),
-    (polars.col("datetime_est").dt.hour() % 12).alias("hour_12"),
-    polars.col("datetime_est").dt.strftime("%p").alias("am_pm"),
-)
-
-data
-
-data.write_csv('out.csv')
-
-
-
+# print(hist.drop_nulls())
+# hist.shape
+# hist.drop_nulls().shape
 
 def match_types(data: polars.DataFrame, match: polars.DataFrame) -> polars.DataFrame:
     for col in match.columns:
@@ -174,7 +124,7 @@ for reading in acceptable_range:
         # Add data from the sensors dataset. 
         data = data.with_columns(polars.lit(sensor_id).alias('SensorID'))
         sensor_data = sensors.filter(polars.col('SensorID') == sensor_id)
-        for col in ['SensorName', 'DeviceName', 'DeviceID_Coris', 'SensorType']:
+        for col in ['SensorName', 'DeviceName', 'DeviceDevID', 'SensorType']:
             data = data.with_columns(polars.lit(sensor_data[col].to_list()[0]).alias(col))
 
         # Set data types. 
@@ -185,7 +135,7 @@ for reading in acceptable_range:
                 sensors = sensors.with_columns(polars.col(reading).cast(polars.Float32))
 
         # Rearrange columns.
-        col_order = ['DeviceID_Coris', 'DeviceName', 'SensorID', 'SensorReadingUTC'] + list(acceptable_range.keys())
+        col_order = ['DeviceDevID', 'DeviceName', 'SensorID', 'SensorReadingUTC'] + list(acceptable_range.keys())
         col_order = [x for x in col_order if x in data.columns]
         data = data.select(col_order + [x for x in data.columns if x not in col_order])
         
@@ -202,109 +152,15 @@ for reading in acceptable_range:
 # Combine the readings into a single polars DataFrame.
 dt = polars.concat(readings, how = 'diagonal')
 
+# calculate difference between readings. 
+dt = dt.sort(['SensorID', 'SensorReadingUTC'])
 
+dt.group_by('SensorID').map_groups(
+    lambda x: x.with_columns((
+        polars.col('SensorReadingUTC') - polars.col('SensorReadingUTC').shift(1)
+    ).alias('SensorReadingUTC_SecondsFromPrior')
+)).filter(polars.col('SensorID') == 21378)
 
-
-
-
-
-
-
-
-
-
-
-
-# get sensor ids. 
-# for key in readings:
-#     readings[key]['sensor_ids'] = current_status.filter(polars.col('SensorType') == key)['SensorID'].unique().to_list()
-#     if test:            
-#         readings[key]['sensor_ids'] = readings[key]['sensor_ids'][0:10]
-
-# # current status to the format that historical data is in.
-        
-# # extract data from the repsonse in the format to match the database. database format is:
-# #  - one file per reading type at self.data_path/readingtype.parquet
-# #  - columns: UTC, Reading, SensorID
-
-# # polars iterator uses tuples so we need numeric indices of columns.
-# def val(row, x): 
-#     if x not in current_status.columns:
-#         raise ValueError(f'Column {x} not in response columns.')
-#     colidx = list(numpy.where(numpy.array(current_status.columns) == x)[0])
-#     return row[ colidx[0] ]
-
-# for row in current_status.iter_rows():
-#     sensortype = val(row, 'SensorType')
-#     if sensortype in readings:
-#         readings[ val(row, 'SensorType') ]['data'].append({
-#             'UTC': val(row, 'SensorReadingUTC'), 
-#             'Reading': val(row, 'SensorReading'), 
-#             'SensorID': val(row, 'SensorID')
-#         })
-
-# # concatenate data and save it.
-# for key in readings:
-#     if len(readings[key]['data']) > 0:                
-#         os.makedirs(f'{data_path}/new-readings/', exist_ok = True)
-#         filename = f'{data_path}/new-readings/{key}-{current_utc}.parquet'
-#         readings[key]['data'] = polars.DataFrame(readings[key]['data'])
-#         readings[key]['data'].write_parquet(filename)
-        
-        
-        
-
-# # get historical readings.
-
-# current_utc = int(time.time())
-# days_back = 90
-# start_utc = current_utc - days_back * 24 * 60 * 60
-
-# pbar = tqdm(total = len(sensor_ids['Temperature']) + len(sensor_ids['Humidity']), desc="Gather historical readings")
-# readings = {'Temperature': [], 'Humidity': []}
-# for sensor_id in sensor_ids['Temperature']:
-#     url = '&'.join([
-#         f'https://cats.corismonitoring.com/api/sensor/historical/?ApiKey={apikey}',
-#         f'SensorID={sensor_id}',
-#         f'ReadingType=SensorReadingF',
-#         f'StartUTC={start_utc}',
-#         f'EndUTC={current_utc}',
-#         f'MinReadingSpacing=600', # every 10 minutes.
-#         f'RequestedOutputFormat=raw'
-#     ])
-#     response = requests.get(url)
-#     if not response.ok:
-#         raise Exception(response.json())
-#     data = polars.read_csv(response.content, has_header = False)
-#     data.columns = ['UTC', 'Reading']
-#     data = data.with_columns(polars.lit(sensor_id).alias('SensorID'))
-#     data = data.with_columns(polars.col("Reading").cast(polars.Float32))
-#     readings['Temperature'].append(data.drop_nulls())
-#     pbar.update(1)
-
-# for sensor_id in sensor_ids['Humidity']:
-#     url = '&'.join([
-#         f'https://cats.corismonitoring.com/api/sensor/historical/?ApiKey={apikey}',
-#         f'SensorID={sensor_id}',
-#         f'ReadingType=SensorReadingRh',
-#         f'StartUTC={start_utc}',
-#         f'EndUTC={current_utc}',
-#         f'MinReadingSpacing=600', # every 10 minutes.
-#         f'RequestedOutputFormat=raw'
-#     ])
-#     response = requests.get(url)
-#     if not response.ok:
-#         raise Exception(response.json())
-#     data = polars.read_csv(response.content, has_header = False)
-#     data.columns = ['UTC', 'Reading']
-#     data = data.with_columns(polars.lit(sensor_id).alias('SensorID'))
-#     data = data.with_columns(polars.col("Reading").cast(polars.Float32))
-#     readings['Humidity'].append(data.drop_nulls())    
-#     pbar.update(1)
-
-# pbar.close()
-
-# for key in readings:             
-#     readings[key] = polars.concat(readings[key])
-
-# # append 
+dt.group_by('SensorID').with_columns((
+    polars.col('SensorReadingUTC') - polars.col('SensorReadingUTC').shift(1)
+).alias('SensorReadingUTC_SecondsFromPrior'))
