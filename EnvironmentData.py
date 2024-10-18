@@ -224,6 +224,7 @@ class EnvironmentData():
         self.logger.info('get_sensors')
         url = f'https://cats.corismonitoring.com/api/cats/user/?ApiKey={self.apikeys["CORIS"]}&CatsUserID={self.CatsUserID}'
         self.logger.info(f'API call: https://cats.corismonitoring.com/api/cats/user/?ApiKey=XXXX&CatsUserID=XXXX') # log a duplicate of the url for logging purposes, which doesn't include sensitive information.
+        current_utc = self.get_current_utc()
         response = requests.get(url)
         
         # Check for errors and raise an exception if there is one.
@@ -237,6 +238,9 @@ class EnvironmentData():
 
         # There are multiple sensors, so rename the ID to indicate the data source.
         sensors = sensors.rename({'SensorID': 'SensorID_Coris', 'DeviceDevID': 'DeviceID_Coris'})
+
+        # Attach the query UTC.
+        sensors = sensors.with_columns(polars.lit(current_utc).alias('QueryUTC'))
 
         # Clean and validate the data.
         sensors = self.clean_validate_sensors(sensors = sensors, step = 'get_sensors')
@@ -313,8 +317,7 @@ class EnvironmentData():
         dt = polars.concat([historical, dt], how = 'diagonal')
 
         # Move the most important columns to the front. 
-        first_cols = ['SensorID_Coris', 'SensorReadingUTC', 'DeviceID_Coris'] + list(self.acceptable_range.keys())
-        dt = dt.select(first_cols + [x for x in dt.columns if x not in first_cols])
+        dt = self.relocate(dt, ['SensorID_Coris', 'QueryUTC', 'SensorReadingUTC', 'DeviceID_Coris', 'SensorReadingUTC_SecondsFromPrior'] + list(self.acceptable_range.keys()))
 
         # Write the file. 
         dt.write_parquet(f'{self.data_path}/sensor_readings.parquet')
