@@ -65,6 +65,13 @@ class EnvironmentData():
         fh = logging.FileHandler(f'{data_path}/EnvironmentData-Errors.log')
         fh.setFormatter(formatter)
         self.logger_err.addHandler(fh)
+
+        # Read cron status, or initialize the status file.
+        if os.path.exists(f'{data_path}/cron_status.txt'):
+            with open(f'{data_path}/cron_status.txt') as f:
+                self.cron_status = f.read()
+        else:
+            self.update_cron_status('not-initialized')
         
         # Get the API key.
         # cron can't read environment variables so we need read the key in from the .env file.
@@ -82,6 +89,22 @@ class EnvironmentData():
 
         # Initialize the database by creating a parquet file for each reading type and populate it with historical data.
         self.initialize_database(days_back = days_back)
+
+    # function to update cron status.
+    def update_cron_status(self, status: str):
+            
+            """
+            Update the status of the cron job.
+    
+            Parameters
+            ----------
+            status: str
+                Status of the cron job.
+            """
+    
+            self.cron_status = status
+            with open(f'{self.data_path}/cron_status.txt', 'w') as f:
+                f.write(status)
 
     def close(self):
 
@@ -133,7 +156,7 @@ class EnvironmentData():
         """
 
         # If the data already exists, initialization is not necessary.
-        if os.path.exists(f'{self.data_path}/EnvironmentData.log'):
+        if self.cron_status != 'not-initialized':
             return
 
         # Make a log entry and gather current and starting UTC.
@@ -213,6 +236,8 @@ class EnvironmentData():
         # Write the database file. 
         dt.write_parquet(f'{self.data_path}/sensor_readings.parquet')
 
+        self.update_cron_status('initialized')
+
     def get_sensors(self) -> polars.DataFrame:
 
         """
@@ -276,6 +301,9 @@ class EnvironmentData():
         This function will save data as separate files to facilitate easy tracking of new data vs consolidated data.
         A batch process will clean, validate, and consolidate readings later.
         """
+
+        if self.cron_status == 'not-initialized':
+            return
         
         # Make a log entry and gather the current UTC.
         current_utc = self.get_current_utc()
@@ -299,6 +327,9 @@ class EnvironmentData():
         Combine new and historical readings into one database.
         This function will run as a daily batch process for better performance.
         """
+
+        if self.cron_status == 'not-initialized':
+            return
 
         # Make a log entry.
         self.logger.info('consolidate_readings')
