@@ -2,11 +2,17 @@
 import sys
 sys.path.append('/src/')
 
+def read_env_variable(var_name):
+    with open('.env') as f:
+        for line in f:
+            if line.startswith(var_name):
+                return line.split('=', 1)[1].strip()
+
 # use EnvironmentData to initialize the database.
 from EnvironmentData import EnvironmentData
-api = EnvironmentData(EnvironmentData(
+api = EnvironmentData(
     CatsUserID = 2496, 
-    days_back = int(365 * 2),
     out_of_scope = ['-80', 'Cryo tank', 'Water'], 
-    testing = False
-))
+    days_back = int(read_env_variable('DAYS_BACK')),
+    testing = read_env_variable('TESTING') == 'True'
+)
