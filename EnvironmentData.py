@@ -307,8 +307,15 @@ class EnvironmentData():
         # Read new readings from the parquet files saved by calls to get_current_readings.
         # These are deleted after each consolidation, so these files will always be the un-consolidated files. 
         files = os.listdir(f'{self.data_path}/new-readings/')
+        files_read = []
         for file in files:
-            new_readings.append(polars.read_parquet(f'{self.data_path}/new-readings/{file}'))
+
+            # use try catch since there might be partial files being written by get_current_readings.
+            try:
+                new_readings.append(polars.read_parquet(f'{self.data_path}/new-readings/{file}'))
+                files_read.append(file)
+            except:
+                pass
 
         # Combine the readings into a single polars DataFrame.
         dt = polars.concat(new_readings)
@@ -341,7 +348,7 @@ class EnvironmentData():
         self.logger.info(f'{dt.shape[0]} total readings.')
 
         # If all this was successful, remove the new-readings files to prepare for the next consolidation.
-        for file in files:
+        for file in files_read:
             os.remove(f'{self.data_path}/new-readings/{file}')
 
         # Refresh the devices table. 
