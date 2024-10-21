@@ -4,4 +4,9 @@ sys.path.append('/src/')
 
 # use EnvironmentData to consolidate new and historical readings into one database.
 from EnvironmentData import EnvironmentData
-EnvironmentData(CatsUserID = 2496, out_of_scope = ['-80', 'Cryo tank', 'Water'], testing = True).consolidate_readings()
+EnvironmentData(
+    CatsUserID = 2496, 
+    days_back = int(365 * 2),
+    out_of_scope = ['-80', 'Cryo tank', 'Water'], 
+    testing = False
+).consolidate_readings()
