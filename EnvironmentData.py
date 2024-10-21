@@ -133,7 +133,7 @@ class EnvironmentData():
         """
 
         # If the data already exists, initialization is not necessary.
-        if os.path.exists(f'{self.data_path}/sensor_readings.parquet'):
+        if os.path.exists(f'{self.data_path}/EnvironmentData.log'):
             return
 
         # Make a log entry and gather current and starting UTC.
