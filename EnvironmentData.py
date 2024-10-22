@@ -577,7 +577,7 @@ class EnvironmentData():
             self.logger.info(f'{step} validation: no duplicated SensorReadingUTC per SensorID_Coris.')
             dup_count = sensors[['SensorID_Coris', 'SensorReadingUTC']].is_duplicated().sum()
             if dup_count > 0:
-                errs.append(f'Count of duplicated SensorReadingUTC: {dup_count}.', raise_exception = False)
+                errs.append(f'Count of duplicated SensorReadingUTC: {dup_count}.')
 
         # Do any sensors have multiple names (indicating a change in name)?
         self.logger.info(f'{step} validation: one SensorName per SensorID_Coris.')
