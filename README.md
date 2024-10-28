@@ -1,24 +1,24 @@
 # Environmental Sensor Proof-of-Concept
 
+## Python Setup
 
-## Local Setup
+You may want to first get the project running in Python, in order to better understand it.
 
-If you just want to run Docker, you don't need to set up Python, and vice-versa. 
+Virtual environment are used to prevent conflicts with other Python projects. 
 
-**Python Setup**
+_Commands should be run from the project root, possibly by using the terminal after opening the project root in VS Code.__
 
-Virtual environment are used to prevent conflicts with other Python projects. It is assumed that the user has Python 3.8 or later installed. Commands should be run from the project root, possibly by using the terminal after opening the project root in VS Code.
-
-* To initialize the virtual environment, run `python -m venv .venv`, wait until it finishes, and then `.venv/Scripts/activate` (on Windows).
+* Install Python 3.8 or later.
+* Initialize the virtual environment by running `python -m venv .venv`, wait until it finishes, and then `.venv/Scripts/activate` (on Windows).
 * Install the necessary packages into the environment with `pip install -r requirements.txt`.
 * Request the .env file from the developer and place it in the project root.
-* Run `jupyter notebook` in a terminal start Jupyter Notebook and use `example.ipynb` to run code.
+* You can now run code. To view examples, run `jupyter notebook` to start Jupyter Notebook and open `examples-cron.ipynb` and `examples-analysis.ipynb`.
 
-Python files can then be run in Python using your preferred IDE. See example.ipynb, scratch/scratch.py, etc. Make sure to select the python.exe interpreter at .venv/Scripts/python.exe.
+## Docker Setup
 
-**Docker Setup**
+To use Docker, you'll need to use Docker Desktop to build the image and start a container. 
 
-Commands should be run from the project root, possibly by using the terminal after opening the project root in VS Code.
+_Commands should be run from the project root, possibly by using the terminal after opening the project root in VS Code._
 
 * Install Docker Desktop from https://docs.docker.com/engine/install/. 
 * Run Docker Desktop to start the docker daemon running in the background. 
@@ -32,6 +32,18 @@ Commands should be run from the project root, possibly by using the terminal aft
     - Open the container in Docker Desktop and navigate to Files > src to view the project files like `sensor_readings.parquet` and `device_readings.parquet`.
 * When you are done, remove any running containers by clicking the trash button on Docker Desktop. You can also do it with the CLI: `docker stop $(docker ps -a -q)` and then `docker rm $(docker ps -a -q)`.
 * Docker has been set up with `testing = False` and `days_back = int(365 * 2)` (2 years). If you want to change this for testing purposes, modify the settings at .env, rebuild the image, and re-run the container. 
+
+To modify the behavior of the container:
+
+* .env contains variables that can be used for testing or to modify settings:
+  - DAYS_BACK: How many days of historical data to pull during initialization
+  - TESTING: Use =True to run a test that only pulls data for 6 sensors.
+
+* jobs/cronjobs defines how frequently the pull and consolidate operations run. Use https://crontab.guru/ to get new cron expressions.
+
+## Other Commands
+
+* To update documentation at html/EnvironmentData.html, run `pdoc --html EnvironmentData.py --force`
 
 ## APIs
 
@@ -48,6 +60,8 @@ The project reads `SensorType` = "Temperature", "Humidity" from the Coris API. N
 
 Other APIs can be implemented to replace or supplement Coris by expanding `EnvironmentData.initialize_database()` and `EnvironmentData.get_current_readings()` to read sensors from the new API.
 
+Take note of the IDs SensorID_Coris and DeviceID_Coris. You'll need to rename these to be more general, or add new ID columns for each new API.
+
 
 ## Design Notes
 
@@ -61,3 +75,8 @@ Other APIs can be implemented to replace or supplement Coris by expanding `Envir
 **polars vs pandas**
 
 Polars was selected as our data framework because it is faster and more memory efficient, and will therefore help the project scale better.
+
+**EnvironmentData Documentation**
+
+See ./html/EnvironmentData.html for the EnvironmentData class documentation.
+

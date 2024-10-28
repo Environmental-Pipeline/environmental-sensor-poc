@@ -12,26 +12,29 @@ class EnvironmentData():
         ):
 
         """
-        Initialize resources for managing the environmental readings. 
+        Initialize resources for managing the environmental readings.
 
         Parameters
         ----------
-        CatsUserID: int
-            Cats User ID from Coris. Necessary for querying the API.
+        CatsUserID : int
+            Cats User ID from Coris. Necessary for querying the Coris API.
 
-        data_path: str
-            Data is stored using parquet files. Indicate the path to store the data. Default is './data/'.
+        data_path : str, default='./data/'
+            Path to store the parquet files which make up the database.
         
-        days_back: int
-            Number of days of historical data to pull when initializing the database. Default is 90.
+        days_back : int, default=int(365 * 2)
+            Number of days of historical data to pull when initializing the database.
 
-        out_of_scope: list
-            List of strings that indicate sensors that are out of scope and should be removed. 
-            SensorName will be check and sensors ignored if it starts with one of these values. 
-            Default is an empty list.
+        out_of_scope : list[str], default=[]
+            List of strings indicating sensors that are out of scope and should be ignored. 
+            If a SensorName starts with any of the strings in the list, that Sensor will be ignored. 
         
-        testing: bool
-            If True, only a few sensors will be used so tests run quickly and use fewer API calls. Default is False.
+        testing : bool, default=False
+            Create a class in "testing mode". Only a few sensors will be included so that tests can run quickly and use fewer API calls.
+
+        Returns
+        -------
+        EnvironmentData: EnvironmentData object.
         """
         
         # Save inputs to the class instance.
@@ -94,12 +97,14 @@ class EnvironmentData():
     def update_cron_status(self, status: str):
             
             """
-            Update the status of the cron job.
+            cron_status is used to prevent new cron-triggered API queries during initialization while the historical data is being pulled. Update the status of the cron job. 
+            There are only two statuses: "not-initialized" and "initialized".
+            This function updates the status by writing to "cron_status.txt" and setting the class instance variable self.cron_status.
     
             Parameters
             ----------
-            status: str
-                Status of the cron job.
+            status : str {"not-initialized", "initialized"} 
+                New status of the cron job.
             """
     
             self.cron_status = status
@@ -109,7 +114,8 @@ class EnvironmentData():
     def close(self):
 
         """
-        The class uses a logger to track status and errors. This function closes the logger when the class is done.
+        Close the class. 
+        Disconnects the connection to the log files so they can be deleted, etc.
         """
 
         for handler in self.logger.handlers:
@@ -125,15 +131,16 @@ class EnvironmentData():
     def error(self, msg, raise_exception = False):
 
         """
-        Log an error message to the error log file and regular log file and raise an exception.
+        Helper function for errors. 
+        Logs an error message to the both log files (error regular) and raises an exception if you choose.
 
         Parameters
         ----------
-        msg: str
+        msg : str
             Error message.
 
-        raise_exception: bool
-            If True, raise an exception and halt processing. If False, log the error and continue processing.
+        raise_exception : bool, default=False
+            If True, log the error and raise an exception, which will halt processing. If False, log the error, generate a warning, and continue processing.
         """
 
         self.logger_err.error(msg)
@@ -147,12 +154,12 @@ class EnvironmentData():
     def initialize_database(self, days_back: int):
 
         """
-        Create a parquet file for each reading type and populate it with historical data.
+        Get and save historical data for each sensor. 
 
         Parameters
         ----------
-        days_back: int
-            Number of days of historical data to pull when initializing the database.
+        days_back : int
+            Number of days of historical data to pull.
         """
 
         # If the data already exists, initialization is not necessary.
@@ -241,12 +248,11 @@ class EnvironmentData():
     def get_sensors(self) -> polars.DataFrame:
 
         """
-        Get data from the sensors.
+        Get the list of all sensors, along with data sent by the Coris API.
 
         Returns
         -------
-        sensor: polars.DataFrame
-            DataFrame containing the sensors returned by the API. Contains SensorID, Device, readings, and more. 
+        polars.DataFrame : sensor data returned by the API. Contains SensorID_Coris, Device information, readings, and more.
         """
 
         # Build the URL and call the API.
@@ -284,12 +290,11 @@ class EnvironmentData():
     def get_current_utc(self) -> int:
             
         """
-        Get the current UTC timestamp, rounded to seconds.
+        Get the current UTC timestamp in seconds.
 
         Returns
         -------
-        current_utc: int
-            Current UTC timestamp.
+        int : Current UTC timestamp.
         """
 
         return int(datetime.datetime.now(datetime.timezone.utc).timestamp())
@@ -297,7 +302,8 @@ class EnvironmentData():
     def get_current_readings(self) -> dict:
 
         """
-        Get current readings from the API and save them to a file. 
+        Get current readings from the API. Validate the data. Send alerts.
+        Save the readings to a file in the new-readings folder.
         This function will save data as separate files to facilitate easy tracking of new data vs consolidated data.
         A batch process will clean, validate, and consolidate readings later.
         """
@@ -324,8 +330,9 @@ class EnvironmentData():
     def consolidate_readings(self):
 
         """
-        Combine new and historical readings into one database.
-        This function will run as a daily batch process for better performance.
+        Combine new and historical readings into one database. Build (or re-build) the analytical tables. 
+        If successful, remove the new-readings files that have been processed into the database.
+        Meant to run as a daily batch process to consolidate readings made throughout the day.
         """
 
         if self.cron_status == 'not-initialized':
@@ -394,20 +401,20 @@ class EnvironmentData():
     def match_types(self, data: polars.DataFrame, match: polars.DataFrame) -> polars.DataFrame:
             
             """
-            Match the data types of two DataFrames. 
+            Modify the column data types of one DataFrame to match another.
+            Useful to prevent errors during concatenation.
     
             Parameters
             ----------
-            data: polars.DataFrame
-                DataFrame to match.
+            data : polars.DataFrame
+                DataFrame to match (data types may get changed).
             
-            match: polars.DataFrame
-                DataFrame to match to.
+            match : polars.DataFrame
+                DataFrame to match column data types to.
     
             Returns
             -------
-            data: polars.DataFrame
-                DataFrame with matching data types.
+            polars.DataFrame: Same data as the "data" DataFrame, but with types that match the "match" DataFrame.
             """
     
             for col in match.columns:
@@ -419,18 +426,19 @@ class EnvironmentData():
     def build_devices(self, data: polars.DataFrame) -> polars.DataFrame:
 
         """
-        Build a devices table from the sensor data.
-        This requires pulling unique devices and joining sensor data.
+        Reformat the sensor data to create a DataFrame of devices.
+        Each Device can have multiple sensors.
+        In some cases it is easier to work with data indexed by Device with multiple types of readings (Temperature, Humidity) 
+        in the same row instead of Sensors which only have one type of reading per row.
 
         Parameters
         ----------
-        data: polars.DataFrame
+        data : polars.DataFrame
             DataFrame containing the sensor data.
 
         Returns
         -------
-        devices: polars.DataFrame
-            DataFrame containing the devices data.
+        polars.DataFrame: DataFrame containing the devices data.
         """
 
         # Get the data for each of the selected sensors.
@@ -473,17 +481,18 @@ class EnvironmentData():
     def clean_validate_sensors(self, sensors: polars.DataFrame, historical: polars.DataFrame = polars.DataFrame(), step: str = '') -> polars.DataFrame:
 
         """
-        Clean sensor reading data. Data gets cleaned during consolidation.
+        Clean the sensor readings data.
+        Currently, this only sets efficient data types. It can be expanded to include more cleaning steps.
+        Then, validate the data because these two operations typically occur together.
 
         Parameters
         ----------
-        sensors: polars.DataFrame
-            Sensors API response DataFrame to clean.
+        sensors : polars.DataFrame
+            Sensors API response.
 
         Returns
         -------
-        data: polars.DataFrame
-            Cleaned DataFrame.
+        polars.DataFrame : Cleaned DataFrame.
         """
 
         # Set data types.
@@ -509,20 +518,19 @@ class EnvironmentData():
     def relocate(self, data: polars.DataFrame, columns: list) -> polars.DataFrame:
 
         """
-        Relocate columns to the front of a DataFrame.
+        Helper function for relocating columns to the front of a DataFrame.
 
         Parameters
         ----------
-        data: polars.DataFrame
+        data : polars.DataFrame
             DataFrame to relocate columns in.
 
-        columns: list[str]
+        columns : list[str]
             Columns to move to the front.
 
         Returns
         -------
-        data: polars.DataFrame
-            DataFrame with columns relocated.
+        polars.DataFrame : DataFrame with columns relocated.
         """
 
         columns = [x for x in columns if x in data.columns]
@@ -532,12 +540,17 @@ class EnvironmentData():
     def validate_sensors(self, sensors: polars.DataFrame, historical: polars.DataFrame = polars.DataFrame(), utc: int = None, step: str = ''):
 
         """
-        Validate sensor reading data.
+        Validate Sensor reading data: column data types, missing values, SensorReadingUTC close to QueryUTC, 
+            no duplicated SensorReadingUTC, one SensorName per SensorID_Coris, 
+            SensorReadingUTC_SecondsFromPrior less than 15 minutes, 
+            all SensorID_Coris in historical data, no multiple names for SensorID_Coris.
+        Can be expanded to add more validation steps. 
+        Failed validations are printed as errors to the log files, and surfaced as warnings.
 
         Parameters
         ----------
         sensors: polars.DataFrame
-            DataFrame to validate.
+            Sensor readings DataFrame to validate.
         """
 
         errs = []
@@ -610,12 +623,13 @@ class EnvironmentData():
     def validate_devices(self, devices: polars.DataFrame):
 
         """
-        Validate device data.
+        Validate Device data: column data types, missing values.
+        Can be expanded to add more validation steps.
 
         Parameters
         ----------
         devices: polars.DataFrame
-            DataFrame to validate.
+            Device readings DataFrame to validate.
         """
 
         errs = []
@@ -638,11 +652,16 @@ class EnvironmentData():
 
         """
         Send alerts based on the sensor data.
+        Currently, this function saves alerts to "alerts.txt" in the data folder.
+        Later, this can be connected to an messaging system like Twilio.
 
         Parameters
         ----------
         sensors: polars.DataFrame
-            DataFrame containing the sensor data.
+            Sensor readings DataFrame.
+        
+        utc: int
+            Current UTC timestamp. Passed from another function to keep alerts aligned with QueryUTC.
         """
 
         alerts = []
@@ -666,7 +685,7 @@ class EnvironmentData():
     def update_lookups(self):
 
         """
-        Update the lookup tables used for analytical queries. 
+        Build (or re-build) the lookup tables used for analytical queries using the consolidated parquet files: sensors, devices, and utcs.
         """
 
         # We need some manual fixes to reformat invalid names. 
@@ -806,7 +825,9 @@ class EnvironmentData():
     def update_cubes(self):
 
         """
-        Update the cubed tables used for faster analytical queries. 
+        Build (or re-build) the cubed tables using the consolidated parquet files.
+        Cubes contain aggregated measures by day and device/sensor to facilitate faster queries on smaller files. 
+        In the future, cubes can be modified to include different aggregation levels and dimensions.
         """
 
         sumcols = list(self.acceptable_range.keys())
