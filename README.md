@@ -80,3 +80,7 @@ Polars was selected as our data framework because it is faster and more memory e
 
 See ./html/EnvironmentData.html for the EnvironmentData class documentation.
 
+**Automated Testing**
+
+Tests are saved in ./test and can by run with `python test/run.py`.
+
