@@ -30,7 +30,7 @@ class TestInitialization(unittest.TestCase):
         self.assertTrue(os.path.exists(f'test/data/sensor_readings.parquet'))
         dt = polars.read_parquet(f'test/data/sensor_readings.parquet')
         self.assertTrue(dt.shape[0] > 0)
-        self.assertTrue(dt.columns == ['SensorID', 'SensorReadingUTC', 'SensorReadingF', 'SensorReadingRh'])
+        self.assertTrue(dt.columns == ['SensorID', 'SensorReadingUTC', 'SensorReadingF', 'SensorReadingRh'], msg = f"Column names: {dt.columns}")
 
     # Does the log exist? 
     def logs_exist(self):
@@ -65,7 +65,7 @@ class TestGetReading(unittest.TestCase):
 
         # we should also have device data now. 
         dt = polars.read_parquet(f'test/data/device_readings.parquet')
-        self.assertTrue(dt.columns == ['DeviceID_Coris', 'DeviceName', 'SensorReadingUTC', 'SensorReadingF', 'SensorReadingRh'])
+        self.assertTrue(dt.columns == ['DeviceID_Coris', 'DeviceName', 'SensorReadingUTC', 'QueryUTC', 'SensorReadingF', 'SensorReadingRh'], msg = f"Column names: {dt.columns}")
 
 def tearDownModule():
 
