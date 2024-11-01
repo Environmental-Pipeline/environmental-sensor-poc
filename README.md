@@ -14,6 +14,7 @@ _Commands should be run from the project root, possibly by using the terminal af
 * Request the .env file from the developer and place it in the project root.
 * You can now run code. To view examples, run `jupyter notebook` to start Jupyter Notebook and open `examples-cron.ipynb` and `examples-analysis.ipynb`.
 
+
 ## Docker Setup
 
 To use Docker, you'll need to use Docker Desktop to build the image and start a container. 
