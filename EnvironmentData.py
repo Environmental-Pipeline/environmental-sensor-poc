@@ -178,97 +178,179 @@ class EnvironmentData():
         else:
             warnings.warn(msg)
 
-    def initialize_database(self, days_back: int):
-
+    def initialize_coris_database(self, start_utc: int, current_utc: int) -> list:
         """
-        Get and save historical data for each sensor. 
+        Initialize the database with historical data from CORIS API.
 
         Parameters
         ----------
-        days_back : int
-            Number of days of historical data to pull.
+        start_utc : int
+            Start timestamp in UTC seconds
+        current_utc : int
+            End timestamp in UTC seconds
+
+        Returns
+        -------
+        list[polars.DataFrame]
+            List of DataFrames containing sensor readings
         """
-
-        # If the data already exists, initialization is not necessary.
-        if self.cron_status != 'not-initialized':
-            return
-
-        # Make a log entry and gather current and starting UTC.
-        self.logger.info('initialize_database')
-        sensor_ids = []
-        current_utc = self.get_current_utc()
-        start_utc = current_utc - days_back * 24 * 60 * 60
+        self.logger.info('Initializing CORIS database')
+        readings = []
         sensors = self.get_sensors()
 
-        # Use the API to get historical data for each sensor type.
-        readings = []
+        # Use the API to get historical data for each sensor type
         for reading in self.acceptable_range:
-
             sensor_ids = sensors.filter(polars.col(reading).is_nan().not_())['SensorID_Coris'].unique().to_list()
             if self.testing:           
                 sensor_ids = sensor_ids[0:3]
 
-            # Query the API for each sensor and save the data as a polars DataFrame with optimal data types.
-            pbar = tqdm.tqdm(total = len(sensor_ids), desc=f'Gather readings: {reading}')
+            # Query the API for each sensor
+            pbar = tqdm.tqdm(total=len(sensor_ids), desc=f'Gather CORIS readings: {reading}')
             for sensor_id in sensor_ids:
-
                 if self.testing:
                     self.testing_sensor_ids.append(sensor_id)
 
-                # it is possible to pull everything by leaving out StartUTC and EndUTC. 
-                # leaving it in for now though, in case we do want to limit it.
                 url = '&'.join([
                     f'https://cats.corismonitoring.com/api/sensor/historical/?ApiKey={self.apikeys["CORIS"]}',
                     f'SensorID={sensor_id}',
                     f'ReadingType={reading}',
                     f'StartUTC={start_utc}',
                     f'EndUTC={current_utc}',
-                    f'MinReadingSpacing=600', # every 10 minutes.
+                    f'MinReadingSpacing=600',
                     f'RequestedOutputFormat=raw'
                 ])
 
-                # create a duplicate of the url for logging purposes, which doesn't include sensitive information.
+                # Create a duplicate of the url for logging purposes, without sensitive information
                 logurl = '&'.join([
                     f'https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX',
                     f'SensorID={sensor_id}',
                     f'ReadingType={reading}',
                     f'StartUTC={start_utc}',
                     f'EndUTC={current_utc}',
-                    f'MinReadingSpacing=600', # every 10 minutes.
+                    f'MinReadingSpacing=600',
                     f'RequestedOutputFormat=raw'
                 ])
                 self.logger.info(f'API call: {logurl}')
                 response = requests.get(url)
 
-                # Check for errors.
+                # Check for errors
                 if not response.ok:
-                    self.logger.error(f'Error getting historical {reading} for {sensor_id}: {response.json()}', raise_exception = True)
+                    self.error(f'Error getting historical {reading} for {sensor_id}: {response.json()}', raise_exception=True)
                 
-                # Data comes in as comma separated values with no header. Convert this to a polars DataFrame.
-                data = polars.read_csv(response.content, has_header = False)
+                # Convert response to DataFrame
+                data = polars.read_csv(response.content, has_header=False)
                 data.columns = ['SensorReadingUTC', reading]
 
-                # Add data from the sensors dataset. 
+                # Add metadata
                 data = data.with_columns(polars.lit(sensor_id).alias('SensorID_Coris'))
                 sensor_data = sensors.filter(polars.col('SensorID_Coris') == sensor_id)
                 for col in ['SensorName', 'DeviceName', 'DeviceID_Coris', 'SensorType']:
                     data = data.with_columns(polars.lit(sensor_data[col].to_list()[0]).alias(col))
 
-                # Clean and validate the data. 
-                data = self.clean_validate_sensors(sensors = data, step = 'initialize_database')
-                
-                # Append the data to the list of DataFrame for this sensor type.
+                # Clean and validate
+                data = self.clean_validate_sensors(sensors=data, step='initialize_coris_database')
                 readings.append(data)
 
                 pbar.update(1)
-
             pbar.close()
 
-        # Combine the readings into a single polars DataFrame.
-        dt = polars.concat(readings, how = 'diagonal')
-        
-        # Write the database file. 
-        dt.write_parquet(f'{self.data_path}/sensor_readings.parquet')
+        return readings
+
+    def initialize_hobolink_database(self, start_utc: int, current_utc: int) -> list:
+        """
+        Initialize the database with historical data from HOBOlink API.
+
+        Parameters
+        ----------
+        start_utc : int
+            Start timestamp in UTC seconds
+        current_utc : int
+            End timestamp in UTC seconds
+
+        Returns
+        -------
+        list[polars.DataFrame]
+            List of DataFrames containing sensor readings
+        """
+        if not self.HOBOlinkUserID or not self.HOBOlinkLoggers:
+            self.logger.warning('HOBOlink credentials or loggers not configured, skipping initialization')
+            return []
+
+        self.logger.info('Initializing HOBOlink database')
+        readings = []
+
+        # Convert UTC timestamps to HOBOlink format
+        start_date = datetime.datetime.fromtimestamp(start_utc, tz=datetime.timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+        end_date = datetime.datetime.fromtimestamp(current_utc, tz=datetime.timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+
+        # Query each logger
+        pbar = tqdm.tqdm(total=len(self.HOBOlinkLoggers), desc='Gather HOBOlink readings')
+        for logger_id in self.HOBOlinkLoggers:
+            try:
+                logger_readings = self.get_historical_readings_hobolink(
+                    logger_id=logger_id,
+                    start_date=start_date,
+                    end_date=end_date
+                )
+                readings.extend(logger_readings)
+            except Exception as e:
+                self.logger.error(f'Error fetching data for HOBOlink logger {logger_id}: {str(e)}')
+                # Continue with other loggers even if one fails
+                continue
+            finally:
+                pbar.update(1)
+        pbar.close()
+
+        return readings
+
+    def initialize_database(self, days_back: int):
+        """
+        Get and save historical data from all configured API sources.
+
+        Parameters
+        ----------
+        days_back : int
+            Number of days of historical data to pull.
+        """
+        # If the data already exists, initialization is not necessary
+        if self.cron_status != 'not-initialized':
+            return
+
+        # Make a log entry and gather current and starting UTC
+        self.logger.info('Initializing database from all configured sources')
+        current_utc = self.get_current_utc()
+        start_utc = current_utc - days_back * 24 * 60 * 60
+
+        all_readings = []
+
+        # Get CORIS data if configured
+        if 'CORIS' in self.api_sources:
+            try:
+                coris_readings = self.initialize_coris_database(start_utc, current_utc)
+                all_readings.extend(coris_readings)
+                self.logger.info(f'Successfully retrieved {len(coris_readings)} CORIS readings')
+            except Exception as e:
+                self.error(f'Error initializing CORIS database: {str(e)}', raise_exception=False)
+
+        # Get HOBOlink data if configured
+        if 'HOBOLINK' in self.api_sources:
+            try:
+                hobolink_readings = self.initialize_hobolink_database(start_utc, current_utc)
+                all_readings.extend(hobolink_readings)
+                self.logger.info(f'Successfully retrieved {len(hobolink_readings)} HOBOlink readings')
+            except Exception as e:
+                self.error(f'Error initializing HOBOlink database: {str(e)}', raise_exception=False)
+
+        if not all_readings:
+            self.error('No readings retrieved from any source', raise_exception=True)
+
+        # Combine all readings and write to parquet file
+        try:
+            dt = polars.concat(all_readings, how='diagonal')
+            dt.write_parquet(f'{self.data_path}/sensor_readings.parquet')
+            self.logger.info(f'Successfully wrote {dt.shape[0]} total readings to database')
+        except Exception as e:
+            self.error(f'Error writing combined readings to database: {str(e)}', raise_exception=True)
 
         self.update_cron_status('initialized')
 
