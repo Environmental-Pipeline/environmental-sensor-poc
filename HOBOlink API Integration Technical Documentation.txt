@@ -1,0 +1,662 @@
+﻿HOBOlink API Integration Technical Documentation
+1. HOBOlink API Overview
+The HOBOlink API allows programmatic access to data from Onset HOBO data loggers. Unlike the CORIS API, HOBOlink uses OAuth2 authentication and has a different data structure. The API provides endpoints for fetching historical environmental sensor data from specific loggers over defined time periods.
+2. Authentication Process
+OAuth2 Client Credentials Flow
+HOBOlink uses the OAuth2 client credentials flow, which requires:
+
+
+* client_id: Identifies your application to HOBOlink
+* client_secret: Proves your application's identity
+* User ID: Required for data access
+
+
+Authentication steps:
+
+
+1. Make a POST request to https://webservice.hobolink.com/ws/auth/token
+2. Include credentials in the request body as form data
+3. Receive an access token valid for a limited time period
+4. Use this token for subsequent data requests
+Code Implementation
+def get_hobolink_token(self) -> str:
+
+
+    # Check if cached token is still valid
+
+
+    current_utc = self.get_current_utc()
+
+
+    if ('HOBOLINK' in self.api_tokens and 
+
+
+        'HOBOLINK' in self.token_expiry and 
+
+
+        current_utc < self.token_expiry['HOBOLINK']):
+
+
+        return self.api_tokens['HOBOLINK']
+
+
+    # Request a new token
+
+
+    token_url = 'https://webservice.hobolink.com/ws/auth/token'
+
+
+    headers = {
+
+
+        'Content-Type': 'application/x-www-form-urlencoded',
+
+
+        'Accept': 'application/json'
+
+
+    }
+
+
+    data = {
+
+
+        'grant_type': 'client_credentials',
+
+
+        'client_id': self.apikeys['HOBOLINK']['client_id'],
+
+
+        'client_secret': self.apikeys['HOBOLINK']['client_secret']
+
+
+    }
+
+
+    # Make the token request
+
+
+    response = requests.post(token_url, headers=headers, data=data)
+
+
+    
+
+
+    # Parse and store the token
+
+
+    token_data = response.json()
+
+
+    self.api_tokens['HOBOLINK'] = token_data['access_token']
+
+
+    self.token_expiry['HOBOLINK'] = current_utc + token_data['expires_in'] - 60
+
+
+    
+
+
+    return self.api_tokens['HOBOLINK']
+3. Data Retrieval Process
+Historical Data Endpoint
+To retrieve historical data, use the /ws/data/file/JSON/user/{user_id} endpoint:
+
+
+* Method: GET
+* Base URL: https://webservice.hobolink.com/ws/data/file/JSON/user/{user_id}
+* Authorization: Bearer token in the header
+* Parameters:
+   * loggers: Logger serial number (e.g., "20284065")
+   * start_date_time: Start date in 'YYYY-MM-DD HH:MM:SS' format
+   * end_date_time: End date in 'YYYY-MM-DD HH:MM:SS' format
+Sample Request
+GET https://webservice.hobolink.com/ws/data/file/JSON/user/123456
+
+
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+
+Accept: application/json
+
+
+Parameters:
+
+
+  loggers: 20284065
+
+
+  start_date_time: 2025-01-07 00:00:00
+
+
+  end_date_time: 2025-02-26 15:30:00
+Code Implementation
+def get_historical_readings_hobolink(self, logger_id: str, start_date: str, end_date: str) -> list:
+
+
+    # Get OAuth token
+
+
+    token = self.get_hobolink_token()
+
+
+    # Prepare API request
+
+
+    url = f'https://webservice.hobolink.com/ws/data/file/JSON/user/{self.HOBOlinkUserID}'
+
+
+    headers = {
+
+
+        'Authorization': f'Bearer {token}',
+
+
+        'Accept': 'application/json'
+
+
+    }
+
+
+    params = {
+
+
+        'loggers': logger_id,
+
+
+        'start_date_time': start_date,
+
+
+        'end_date_time': end_date
+
+
+    }
+
+
+    # Make the request
+
+
+    response = requests.get(url, headers=headers, params=params)
+
+
+    
+
+
+    # Process the response...
+4. Raw Data Format
+Response Structure
+The HOBOlink API returns JSON data with the following structure:
+
+
+{
+
+
+  "observation_list": [
+
+
+    {
+
+
+      "logger_sn": "20284065",
+
+
+      "sensor_sn": "20284065-1",
+
+
+      "timestamp": "2025-01-07 00:00:00Z",
+
+
+      "data_type_id": "1",
+
+
+      "si_value": 21.604418715577637,
+
+
+      "si_unit": "°C",
+
+
+      "us_value": 70.88795368803974,
+
+
+      "us_unit": "°F",
+
+
+      "scaled_value": 0.0,
+
+
+      "scaled_unit": null,
+
+
+      "sensor_key": 2867315,
+
+
+      "sensor_measurement_type": "Temperature"
+
+
+    },
+
+
+    {
+
+
+      "logger_sn": "20284065",
+
+
+      "sensor_sn": "20284065-2",
+
+
+      "timestamp": "2025-01-07 00:00:00Z",
+
+
+      "data_type_id": "1",
+
+
+      "si_value": 31.935542940853324,
+
+
+      "si_unit": "%",
+
+
+      "us_value": 31.935542940853324,
+
+
+      "us_unit": "%",
+
+
+      "scaled_value": 0.0,
+
+
+      "scaled_unit": null,
+
+
+      "sensor_key": 2867316,
+
+
+      "sensor_measurement_type": "RH"
+
+
+    },
+
+
+    // More observations...
+
+
+  ]
+
+
+}
+Key Fields Explained
+* logger_sn: Serial number of the data logger device
+* sensor_sn: Individual sensor identifier, typically {logger_sn}-{sensor_index}
+* timestamp: Time of the reading in ISO format with 'Z' indicating UTC
+* si_value: Measurement in SI units (e.g., Celsius for temperature)
+* si_unit: SI unit of measurement (e.g., "°C" or "%")
+* us_value: Measurement in US units (e.g., Fahrenheit for temperature)
+* us_unit: US unit of measurement (e.g., "°F" or "%")
+* sensor_measurement_type: Type of measurement (e.g., "Temperature" or "RH" for relative humidity)
+Important Data Characteristics
+1. Each observation represents a single reading from a specific sensor at a specific time
+2. A logger typically has multiple sensors (e.g., temperature and humidity)
+3. Timestamps are in UTC, marked with 'Z' suffix
+4. Temperature is provided in both Celsius (SI) and Fahrenheit (US)
+5. Humidity (RH) uses the same value for both SI and US
+6. The API may include other measurement types like "Battery" or "Dew Point" that may need filtering
+5. Data Processing and Transformation
+To integrate HOBOlink data with the existing system, we need significant transformation:
+Transformation Steps
+1. Parse timestamps: Convert ISO timestamps to Unix timestamps (seconds since epoch)
+2. Organize by sensor and reading type: Group readings by sensor ID and measurement type
+3. Map to standard format: Convert to the standard schema that matches CORIS data format
+4. Type conversion: Cast values to appropriate types (Float32 is critical to prevent type mismatches)
+5. Add metadata: Add source identifiers and naming conventions
+Data Extraction Example
+readings_by_sensor = {}
+
+
+for obs in observations:
+
+
+    # Convert timestamp to UTC
+
+
+    timestamp_str = obs['timestamp'].rstrip('Z')
+
+
+    timestamp = datetime.datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
+
+
+    timestamp = timestamp.replace(tzinfo=datetime.timezone.utc)
+
+
+    timestamp_utc = int(timestamp.timestamp())
+
+
+    # Determine reading type and value
+
+
+    sensor_id = f"{logger_id}_{obs['sensor_sn']}"
+
+
+    measurement_type = obs['sensor_measurement_type'].lower()
+
+
+    
+
+
+    if 'temperature' in measurement_type:
+
+
+        reading_type = 'SensorReadingF'
+
+
+        reading_value = float(obs['us_value'])  # Use Fahrenheit
+
+
+    elif 'rh' in measurement_type:
+
+
+        reading_type = 'SensorReadingRh'
+
+
+        reading_value = float(obs['si_value'])
+
+
+    else:
+
+
+        continue  # Skip other sensor types
+
+
+        
+
+
+    # Organize readings by sensor and reading type
+
+
+    key = (sensor_id, reading_type)
+
+
+    if key not in readings_by_sensor:
+
+
+        readings_by_sensor[key] = {
+
+
+            'SensorID': [],
+
+
+            'SensorReadingUTC': [],
+
+
+            reading_type: [],
+
+
+            'QueryUTC': [],
+
+
+            'DeviceName': [],
+
+
+            'SensorName': [],
+
+
+            'SensorType': []
+
+
+        }
+
+
+        
+
+
+    # Add data points
+
+
+    readings_by_sensor[key]['SensorID'].append(sensor_id)
+
+
+    readings_by_sensor[key]['SensorReadingUTC'].append(timestamp_utc)
+
+
+    readings_by_sensor[key][reading_type].append(reading_value)
+
+
+    # Add additional metadata...
+6. Data Type Considerations
+A critical issue is the default data type used by HOBOlink API responses. The numeric values from the API are parsed as Float64 by default, but the existing system expects Float32:
+
+
+# Create DataFrame from readings
+
+
+df = polars.DataFrame(readings)
+
+
+# IMPORTANT: Cast float values to Float32 to prevent type mismatch
+
+
+if reading_type in df.columns:
+
+
+    df = df.with_columns(polars.col(reading_type).cast(polars.Float32))
+
+
+Failure to perform this casting will result in errors like:
+
+
+Error writing combined readings to database: type Float64 is incompatible with expected type Float32
+7. Key Differences from CORIS API
+Feature
+	CORIS API
+	HOBOlink API
+	Authentication
+	API Key
+	OAuth2 token
+	Data structure
+	Single endpoint for all sensors
+	Logger-specific data
+	Temperature unit
+	Fahrenheit
+	Both Celsius and Fahrenheit
+	ID structure
+	Uses SensorID_Coris
+	Uses logger_sn/sensor_sn combination
+	Timestamps
+	Unix timestamps
+	ISO format timestamps
+	Multiple sensors
+	One API call per sensor
+	One API call returns multiple sensors
+	8. Implementation Requirements
+To successfully integrate HOBOlink data:
+
+
+1. Environment variables required:
+
+
+   * HOBOLINK_CLIENT_ID: OAuth client ID
+   * HOBOLINK_CLIENT_SECRET: OAuth client secret
+   * HOBOLINK_USER_ID: User ID number
+   * HOBOLINK_LOGGERS: Comma-separated list of logger serial numbers
+
+
+2. Class initialization parameters:
+
+
+   * Set api_sources to include 'HOBOLINK'
+   * Provide HOBOlinkUserID and HOBOlinkLoggers
+
+
+3. Data type handling:
+
+
+   * Ensure explicit casting of float values to Float32
+   * Apply casting at all data processing stages
+
+
+4. ID mapping:
+
+
+   * Add HOBOlink-specific identifiers
+   * Include empty placeholders for CORIS IDs for compatibility
+9. Example Logger Configuration
+The system supports multiple loggers with the following format:
+
+
+logger_info = [
+
+
+    {"id": "20284065", "name": "C134"},
+
+
+    {"id": "20447203", "name": "LML Cold Room"},
+
+
+    {"id": "22040302", "name": "MX TRH 3"},
+
+
+    # Additional loggers...
+
+
+]
+
+
+This mapping helps provide human-readable names for the sensor data.
+Summary
+The HOBOlink API integration provides a second data source that complements the CORIS API. By following the authentication, data retrieval, and processing steps outlined above, you can successfully retrieve environmental sensor data from HOBOlink loggers. The key challenges include OAuth2 authentication, timestamp parsing, data type conversion, and aligning the HOBOlink data structure with the existing CORIS-based system.
+
+
+HOBOlink Loggers Used in the Project
+Based on the code implementation and log output in the environmental sensor project, the following HOBOlink loggers have been configured and used:
+Primary Logger in Use
+Logger Serial
+	Location/Name
+	Sensors
+	Notes
+	20284065
+	C134
+	Temperature (20284065-1), Humidity (20284065-2)
+	This is the main logger showing up in the data processing logs
+	Additional Configured Loggers
+These loggers are configured in the system but may not be actively returning data in the current time window:
+
+
+Logger Serial
+	Location/Name
+	Purpose
+	22202142
+	RX Station 1
+	Environmental monitoring
+	22202141
+	RX Station 2
+	Environmental monitoring
+	10740550
+	C149 X-Ray
+	Monitoring X-Ray area conditions
+	10889153
+	C145 Structural
+	Structural analysis area
+	10889154
+	C107 Enviro Chamber
+	Environmental chamber monitoring
+	20284064
+	C137 Raman
+	Raman spectroscopy area
+	20447203
+	LML Cold Room
+	Low-temperature storage monitoring
+	22040302
+	MX TRH 3
+	General temperature and humidity
+	22040303
+	MX TRH 1
+	General temperature and humidity
+	22040304
+	MX TRH 2
+	General temperature and humidity
+	22040305
+	MX TRH 4
+	General temperature and humidity
+	22194277
+	Temp RH Light 1
+	Combined temperature, humidity, and light
+	22194278
+	Temp RH Light 2
+	Combined temperature, humidity, and light
+	Observed Data Patterns
+In the data processing logs, we can see that sensor readings are being successfully retrieved from logger 20284065, which has two sensors:
+
+
+1. Sensor 20284065-1: Temperature sensor providing readings in both Celsius (si_value) and Fahrenheit (us_value)
+2. Sensor 20284065-2: Relative Humidity sensor providing percentage readings
+
+
+The system successfully processed these readings with log messages like:
+
+
+2025-03-19 18:54:46,050 - EnvironmentData - INFO - Successfully processed 2 sensor readings for logger 20284065
+
+
+2025-03-19 18:54:46,052 - EnvironmentData - INFO - Successfully retrieved 8 HOBOlink readings
+Logger Configuration in Code
+The logger-to-name mapping is hardcoded in the application as shown in this excerpt:
+
+
+logger_name = next((l['name'] for l in [
+
+
+    {"id": "22202142", "name": "RX Station 1"},
+
+
+    {"id": "22202141", "name": "RX Station 2"},
+
+
+    {"id": "10740550", "name": "C149 X-Ray"},
+
+
+    {"id": "10889153", "name": "C145 Structural"},
+
+
+    {"id": "10889154", "name": "C107 Enviro Chamber"},
+
+
+    {"id": "20284064", "name": "C137 Raman"},
+
+
+    {"id": "20284065", "name": "C134"},
+
+
+    {"id": "20447203", "name": "LML Cold Room"},
+
+
+    {"id": "22040302", "name": "MX TRH 3"},
+
+
+    {"id": "22040303", "name": "MX TRH 1"},
+
+
+    {"id": "22040304", "name": "MX TRH 2"},
+
+
+    {"id": "22040305", "name": "MX TRH 4"},
+
+
+    {"id": "22194277", "name": "Temp RH Light 1"},
+
+
+    {"id": "22194278", "name": "Temp RH Light 2"}
+
+
+] if l['id'] == logger_id), f"HOBOlink Logger {logger_id}")
+
+
+The actual loggers queried by the application would be determined by the HOBOLINK_LOGGERS environment variable, which should contain a comma-separated list of these serial numbers.
+
+
+Based on the implementation and logs, the system is primarily working with logger 20284065 (C134), but is configured to support all the loggers listed above if they are included in the environment configuration.
+
+
+# HOBOlink API Configuration
+HOBOLINK_CLIENT_ID=IPCH_WS
+HOBOLINK_CLIENT_SECRET=9c9a16dbbffa3cce9f71c5f96b26f59a1362e8e7
+HOBOLINK_USER_ID=30347
