@@ -11,6 +11,7 @@ class EnvironmentData():
             out_of_scope: list = [],
             testing: bool = False
         ):
+        
 
         """
         Initialize resources for managing the environmental readings.
