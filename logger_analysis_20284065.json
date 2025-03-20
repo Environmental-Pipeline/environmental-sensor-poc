@@ -1,0 +1,46 @@
+{
+  "logger_id": "20284065",
+  "periods": [
+    {
+      "period_name": "Last 24 hours",
+      "observations_count": 0,
+      "sensors": {},
+      "latest_timestamp": null
+    },
+    {
+      "period_name": "Last 7 days",
+      "observations_count": 0,
+      "sensors": {},
+      "latest_timestamp": null
+    },
+    {
+      "period_name": "Last 30 days",
+      "observations_count": 208,
+      "sensors": {
+        "20284065-1": 104,
+        "20284065-2": 104
+      },
+      "latest_timestamp": "2025-02-26 18:00:00Z"
+    },
+    {
+      "period_name": "Last 90 days",
+      "observations_count": 2066,
+      "sensors": {
+        "20284065-1": 1033,
+        "20284065-2": 1033
+      },
+      "latest_timestamp": "2025-02-26 18:00:00Z"
+    },
+    {
+      "period_name": "Last year",
+      "observations_count": 41343,
+      "sensors": {
+        "20284065-1": 14238,
+        "20284065-2": 14238,
+        "20284065-4": 12867
+      },
+      "latest_timestamp": "2025-02-26 18:00:00Z"
+    }
+  ],
+  "logger_name": "C134"
+}

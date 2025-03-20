@@ -1,0 +1,44 @@
+{
+  "logger_id": "10740550",
+  "periods": [
+    {
+      "period_name": "Last 24 hours",
+      "observations_count": 0,
+      "sensors": {},
+      "latest_timestamp": null
+    },
+    {
+      "period_name": "Last 7 days",
+      "observations_count": 0,
+      "sensors": {},
+      "latest_timestamp": null
+    },
+    {
+      "period_name": "Last 30 days",
+      "observations_count": 0,
+      "sensors": {},
+      "latest_timestamp": null
+    },
+    {
+      "period_name": "Last 90 days",
+      "observations_count": 3308,
+      "sensors": {
+        "10740550-1": 1217,
+        "10740550-2": 1217,
+        "10740550-4": 874
+      },
+      "latest_timestamp": "2025-01-14 21:00:00Z"
+    },
+    {
+      "period_name": "Last year",
+      "observations_count": 100000,
+      "sensors": {
+        "10740550-1": 33334,
+        "10740550-2": 33333,
+        "10740550-4": 33333
+      },
+      "latest_timestamp": "2024-10-11 12:56:56Z"
+    }
+  ],
+  "logger_name": "C149 X-Ray"
+}

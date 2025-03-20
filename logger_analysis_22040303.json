@@ -1,0 +1,47 @@
+{
+  "logger_id": "22040303",
+  "periods": [
+    {
+      "period_name": "Last 24 hours",
+      "observations_count": 0,
+      "sensors": {},
+      "latest_timestamp": null
+    },
+    {
+      "period_name": "Last 7 days",
+      "observations_count": 0,
+      "sensors": {},
+      "latest_timestamp": null
+    },
+    {
+      "period_name": "Last 30 days",
+      "observations_count": 2160,
+      "sensors": {
+        "22040303-1": 1080,
+        "22040303-2": 1080
+      },
+      "latest_timestamp": "2025-02-26 18:00:00Z"
+    },
+    {
+      "period_name": "Last 90 days",
+      "observations_count": 5522,
+      "sensors": {
+        "22040303-1": 2734,
+        "22040303-2": 2734,
+        "22040303-4": 54
+      },
+      "latest_timestamp": "2025-02-26 18:00:00Z"
+    },
+    {
+      "period_name": "Last year",
+      "observations_count": 5522,
+      "sensors": {
+        "22040303-1": 2734,
+        "22040303-2": 2734,
+        "22040303-4": 54
+      },
+      "latest_timestamp": "2025-02-26 18:00:00Z"
+    }
+  ],
+  "logger_name": "MX TRH 1"
+}

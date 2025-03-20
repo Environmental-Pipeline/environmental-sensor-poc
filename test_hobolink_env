@@ -1,0 +1,14 @@
+# Original env variables (keep these if testing both APIs together)
+CORIS_API_KEY=OWUxYjk2ZWM4MmRi
+DAYS_BACK=7
+TESTING=True
+
+# HOBOlink API credentials
+HOBOLINK_CLIENT_ID=IPCH_WS
+HOBOLINK_CLIENT_SECRET=9c9a16dbbffa3cce9f71c5f96b26f59a1362e8e7
+HOBOLINK_USER_ID=30347
+HOBOLINK_LOGGERS=20284065,20447203,22040302
+
+# Set this to comma-separated list of logger IDs
+# Primary logger: 20284065 (C134)
+# See documentation for full list of available loggers 

@@ -1,0 +1,47 @@
+{
+  "logger_id": "20447203",
+  "periods": [
+    {
+      "period_name": "Last 24 hours",
+      "observations_count": 0,
+      "sensors": {},
+      "latest_timestamp": null
+    },
+    {
+      "period_name": "Last 7 days",
+      "observations_count": 0,
+      "sensors": {},
+      "latest_timestamp": null
+    },
+    {
+      "period_name": "Last 30 days",
+      "observations_count": 774,
+      "sensors": {
+        "20447203-1": 387,
+        "20447203-2": 387
+      },
+      "latest_timestamp": "2025-02-26 18:00:00Z"
+    },
+    {
+      "period_name": "Last 90 days",
+      "observations_count": 4496,
+      "sensors": {
+        "20447203-1": 1641,
+        "20447203-2": 1641,
+        "20447203-4": 1214
+      },
+      "latest_timestamp": "2025-02-26 18:00:00Z"
+    },
+    {
+      "period_name": "Last year",
+      "observations_count": 28406,
+      "sensors": {
+        "20447203-1": 9611,
+        "20447203-2": 9611,
+        "20447203-4": 9184
+      },
+      "latest_timestamp": "2025-02-26 18:00:00Z"
+    }
+  ],
+  "logger_name": "LML Cold Room"
+}

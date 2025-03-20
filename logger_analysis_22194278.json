@@ -1,0 +1,46 @@
+{
+  "logger_id": "22194278",
+  "periods": [
+    {
+      "period_name": "Last 24 hours",
+      "observations_count": 0,
+      "sensors": {},
+      "latest_timestamp": null
+    },
+    {
+      "period_name": "Last 7 days",
+      "observations_count": 0,
+      "sensors": {},
+      "latest_timestamp": null
+    },
+    {
+      "period_name": "Last 30 days",
+      "observations_count": 0,
+      "sensors": {},
+      "latest_timestamp": null
+    },
+    {
+      "period_name": "Last 90 days",
+      "observations_count": 6009,
+      "sensors": {
+        "22194278-2": 1984,
+        "22194278-3": 1984,
+        "22194278-4": 1984,
+        "22194278-6": 57
+      },
+      "latest_timestamp": "2025-01-27 13:20:00Z"
+    },
+    {
+      "period_name": "Last year",
+      "observations_count": 6009,
+      "sensors": {
+        "22194278-2": 1984,
+        "22194278-3": 1984,
+        "22194278-4": 1984,
+        "22194278-6": 57
+      },
+      "latest_timestamp": "2025-01-27 13:20:00Z"
+    }
+  ],
+  "logger_name": "Temp RH Light 2"
+}

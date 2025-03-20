@@ -1,0 +1,47 @@
+{
+  "logger_id": "10889153",
+  "periods": [
+    {
+      "period_name": "Last 24 hours",
+      "observations_count": 0,
+      "sensors": {},
+      "latest_timestamp": null
+    },
+    {
+      "period_name": "Last 7 days",
+      "observations_count": 0,
+      "sensors": {},
+      "latest_timestamp": null
+    },
+    {
+      "period_name": "Last 30 days",
+      "observations_count": 232,
+      "sensors": {
+        "10889153-1": 116,
+        "10889153-2": 116
+      },
+      "latest_timestamp": "2025-02-24 14:30:00Z"
+    },
+    {
+      "period_name": "Last 90 days",
+      "observations_count": 5369,
+      "sensors": {
+        "10889153-1": 2237,
+        "10889153-2": 2237,
+        "10889153-4": 895
+      },
+      "latest_timestamp": "2025-02-24 14:30:00Z"
+    },
+    {
+      "period_name": "Last year",
+      "observations_count": 41439,
+      "sensors": {
+        "10889153-1": 14373,
+        "10889153-2": 14373,
+        "10889153-4": 12693
+      },
+      "latest_timestamp": "2025-02-24 14:30:00Z"
+    }
+  ],
+  "logger_name": "C145 Structural"
+}

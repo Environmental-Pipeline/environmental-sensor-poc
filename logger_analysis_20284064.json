@@ -1,0 +1,46 @@
+{
+  "logger_id": "20284064",
+  "periods": [
+    {
+      "period_name": "Last 24 hours",
+      "observations_count": 0,
+      "sensors": {},
+      "latest_timestamp": null
+    },
+    {
+      "period_name": "Last 7 days",
+      "observations_count": 0,
+      "sensors": {},
+      "latest_timestamp": null
+    },
+    {
+      "period_name": "Last 30 days",
+      "observations_count": 692,
+      "sensors": {
+        "20284064-1": 346,
+        "20284064-2": 346
+      },
+      "latest_timestamp": "2025-02-26 18:00:00Z"
+    },
+    {
+      "period_name": "Last 90 days",
+      "observations_count": 2548,
+      "sensors": {
+        "20284064-1": 1274,
+        "20284064-2": 1274
+      },
+      "latest_timestamp": "2025-02-26 18:00:00Z"
+    },
+    {
+      "period_name": "Last year",
+      "observations_count": 41821,
+      "sensors": {
+        "20284064-1": 14478,
+        "20284064-2": 14478,
+        "20284064-4": 12865
+      },
+      "latest_timestamp": "2025-02-26 18:00:00Z"
+    }
+  ],
+  "logger_name": "C137 Raman"
+}

@@ -1,0 +1,56 @@
+{
+  "logger_id": "22202141",
+  "periods": [
+    {
+      "period_name": "Last 24 hours",
+      "observations_count": 0,
+      "sensors": {},
+      "latest_timestamp": null
+    },
+    {
+      "period_name": "Last 7 days",
+      "observations_count": 0,
+      "sensors": {},
+      "latest_timestamp": null
+    },
+    {
+      "period_name": "Last 30 days",
+      "observations_count": 0,
+      "sensors": {},
+      "latest_timestamp": null
+    },
+    {
+      "period_name": "Last 90 days",
+      "observations_count": 600,
+      "sensors": {
+        "22202141-P": 444,
+        "22179174-1": 38,
+        "22179174-2": 38,
+        "22179174-3": 38,
+        "22179174-B": 38,
+        "22179175-1": 1,
+        "22179175-2": 1,
+        "22179175-3": 1,
+        "22179175-B": 1
+      },
+      "latest_timestamp": "2025-01-15 19:05:00Z"
+    },
+    {
+      "period_name": "Last year",
+      "observations_count": 600,
+      "sensors": {
+        "22202141-P": 444,
+        "22179174-1": 38,
+        "22179174-2": 38,
+        "22179174-3": 38,
+        "22179174-B": 38,
+        "22179175-1": 1,
+        "22179175-2": 1,
+        "22179175-3": 1,
+        "22179175-B": 1
+      },
+      "latest_timestamp": "2025-01-15 19:05:00Z"
+    }
+  ],
+  "logger_name": "RX Station 2"
+}

@@ -1,4 +1,4 @@
-import os, requests, polars, numpy, tqdm, logging, datetime, warnings
+import os, requests, polars, numpy, tqdm, logging, datetime, warnings, pathlib
 
 class EnvironmentData():
 
@@ -8,7 +8,8 @@ class EnvironmentData():
             data_path: str = './data/', 
             days_back: int = int(365 * 2), 
             out_of_scope: list = [],
-            testing: bool = False
+            testing: bool = False,
+            hobolink_enabled: bool = None
         ):
 
         """
@@ -31,6 +32,10 @@ class EnvironmentData():
         
         testing : bool, default=False
             Create a class in "testing mode". Only a few sensors will be included so that tests can run quickly and use fewer API calls.
+            
+        hobolink_enabled : bool, default=None
+            Enable HOBOlink data collection. If None, will use the value from .env file.
+            Set to False to disable HOBOlink data collection even if credentials are available.
 
         Returns
         -------
@@ -76,16 +81,49 @@ class EnvironmentData():
         else:
             self.update_cron_status('not-initialized')
         
-        # Get the API key.
+        # Get the API keys and configuration.
         # cron can't read environment variables so we need read the key in from the .env file.
         # See the README for a note about API key security.
-        def read_env_variable(var_name):
-            with open('.env') as f:
-                for line in f:
-                    if line.startswith(var_name):
-                        return line.split('=', 1)[1].strip()
+        def read_env_variable(var_name, default=None):
+            try:
+                with open('.env') as f:
+                    for line in f:
+                        if line.strip() and not line.strip().startswith('#') and line.startswith(var_name):
+                            return line.split('=', 1)[1].strip()
+            except Exception as e:
+                self.logger.error(f"Error reading environment variable {var_name}: {e}")
+            return default
 
-        self.apikeys = {'CORIS': read_env_variable('CORIS_API_KEY')} # Use a dictionary in case we need more keys in the future.
+        # Read API keys and configuration
+        self.apikeys = {'CORIS': read_env_variable('CORIS_API_KEY')}
+        
+        # HOBOlink configuration
+        self.hobolink = {
+            'client_id': read_env_variable('HOBOLINK_CLIENT_ID'),
+            'client_secret': read_env_variable('HOBOLINK_CLIENT_SECRET'),
+            'user_id': read_env_variable('HOBOLINK_USER_ID'),
+            'loggers': read_env_variable('HOBOLINK_LOGGERS', '').split(','),
+            'enabled': hobolink_enabled if hobolink_enabled is not None else read_env_variable('HOBOLINK_ENABLED', 'False').lower() == 'true',
+            'token': None,  # Will store the OAuth token
+            'token_expiry': 0  # Will store token expiry timestamp
+        }
+        
+        # Check if HOBOlink credentials are available and properly configured
+        self.hobolink['available'] = (
+            self.hobolink['client_id'] is not None and 
+            self.hobolink['client_secret'] is not None and 
+            self.hobolink['user_id'] is not None and 
+            len(self.hobolink['loggers']) > 0 and 
+            self.hobolink['loggers'][0] != ''
+        )
+        
+        # Log HOBOlink configuration status
+        if self.hobolink['available'] and self.hobolink['enabled']:
+            self.logger.info(f"HOBOlink integration enabled with {len(self.hobolink['loggers'])} loggers")
+        elif self.hobolink['available'] and not self.hobolink['enabled']:
+            self.logger.info("HOBOlink credentials available but integration is disabled by configuration")
+        else:
+            self.logger.info("HOBOlink integration not available - missing or invalid credentials")
 
         # Set up the readings data structure that will be used throughout.
         self.acceptable_range = {'SensorReadingF': [], 'SensorReadingRh': []}
@@ -96,20 +134,94 @@ class EnvironmentData():
     # function to update cron status.
     def update_cron_status(self, status: str):
             
-            """
-            cron_status is used to prevent new cron-triggered API queries during initialization while the historical data is being pulled. Update the status of the cron job. 
-            There are only two statuses: "not-initialized" and "initialized".
-            This function updates the status by writing to "cron_status.txt" and setting the class instance variable self.cron_status.
-    
-            Parameters
-            ----------
-            status : str {"not-initialized", "initialized"} 
-                New status of the cron job.
-            """
-    
-            self.cron_status = status
-            with open(f'{self.data_path}/cron_status.txt', 'w') as f:
-                f.write(status)
+        """
+        cron_status is used to prevent new cron-triggered API queries during initialization while the historical data is being pulled. Update the status of the cron job. 
+        There are only two statuses: "not-initialized" and "initialized".
+        This function updates the status by writing to "cron_status.txt" and setting the class instance variable self.cron_status.
+        
+        Parameters
+        ----------
+        status : str {"not-initialized", "initialized"} 
+            New status of the cron job.
+        """
+
+        self.cron_status = status
+        with open(f'{self.data_path}/cron_status.txt', 'w') as f:
+            f.write(status)
+
+    def get_hobolink_token(self, force_refresh=False):
+        """
+        Get a valid OAuth token for HOBOlink API authentication.
+        
+        If a token exists and isn't expired, returns the existing token.
+        Otherwise, retrieves a new token via OAuth.
+        
+        Parameters
+        ----------
+        force_refresh : bool, default=False
+            If True, forces token refresh even if the current token is still valid.
+            
+        Returns
+        -------
+        str or None
+            The OAuth token if successful, None if authentication fails or HOBOlink is not available.
+        """
+        if not self.hobolink['available'] or not self.hobolink['enabled']:
+            self.logger.debug("HOBOlink integration not available or disabled. Not retrieving token.")
+            return None
+            
+        current_utc = self.get_current_utc()
+        
+        # Return existing token if it's still valid
+        if not force_refresh and self.hobolink['token'] is not None and current_utc < self.hobolink['token_expiry'] - 60:  # 60-second buffer
+            self.logger.debug("Using existing HOBOlink token")
+            return self.hobolink['token']
+        
+        # Request a new token
+        token_url = 'https://webservice.hobolink.com/ws/auth/token'
+        headers = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Accept': 'application/json'
+        }
+        data = {
+            'grant_type': 'client_credentials',
+            'client_id': self.hobolink['client_id'],
+            'client_secret': self.hobolink['client_secret']
+        }
+        
+        self.logger.info("Requesting new HOBOlink authentication token")
+        
+        try:
+            response = requests.post(token_url, headers=headers, data=data)
+            response.raise_for_status()
+            
+            token_data = response.json()
+            self.hobolink['token'] = token_data['access_token']
+            # Calculate expiry time (token_data['expires_in'] is in seconds)
+            self.hobolink['token_expiry'] = current_utc + token_data['expires_in']
+            
+            self.logger.info(f"Successfully obtained HOBOlink authentication token. Expires in {token_data['expires_in']} seconds")
+            return self.hobolink['token']
+        except requests.exceptions.HTTPError as e:
+            error_message = f"HTTP Error during HOBOlink authentication: {e}"
+            self.error(error_message)
+            if hasattr(response, 'text'):
+                self.logger.error(f"Response body: {response.text}")
+        except requests.exceptions.ConnectionError as e:
+            self.error(f"Connection Error during HOBOlink authentication: {e}")
+        except requests.exceptions.Timeout as e:
+            self.error(f"Timeout Error during HOBOlink authentication: {e}")
+        except requests.exceptions.RequestException as e:
+            self.error(f"Request Exception during HOBOlink authentication: {e}")
+        except ValueError as e:
+            self.error(f"JSON parsing error: {e}")
+            if hasattr(response, 'text'):
+                self.logger.error(f"Response content: {response.text}")
+        
+        # Reset token in case of error
+        self.hobolink['token'] = None
+        self.hobolink['token_expiry'] = 0
+        return None
 
     def close(self):
 
@@ -172,6 +284,9 @@ class EnvironmentData():
         current_utc = self.get_current_utc()
         start_utc = current_utc - days_back * 24 * 60 * 60
         sensors = self.get_sensors()
+        
+        # Add Source column to identify CORIS data
+        sensors = sensors.with_columns(polars.lit('CORIS').alias('Source'))
 
         # Use the API to get historical data for each sensor type.
         readings = []
@@ -182,7 +297,7 @@ class EnvironmentData():
                 sensor_ids = sensor_ids[0:3]
 
             # Query the API for each sensor and save the data as a polars DataFrame with optimal data types.
-            pbar = tqdm.tqdm(total = len(sensor_ids), desc=f'Gather readings: {reading}')
+            pbar = tqdm.tqdm(total = len(sensor_ids), desc=f'Gather CORIS readings: {reading}')
             for sensor_id in sensor_ids:
 
                 if self.testing:
@@ -223,12 +338,13 @@ class EnvironmentData():
 
                 # Add data from the sensors dataset. 
                 data = data.with_columns(polars.lit(sensor_id).alias('SensorID_Coris'))
+                data = data.with_columns(polars.lit('CORIS').alias('Source'))
                 sensor_data = sensors.filter(polars.col('SensorID_Coris') == sensor_id)
                 for col in ['SensorName', 'DeviceName', 'DeviceID_Coris', 'SensorType']:
                     data = data.with_columns(polars.lit(sensor_data[col].to_list()[0]).alias(col))
 
                 # Clean and validate the data. 
-                data = self.clean_validate_sensors(sensors = data, step = 'initialize_database')
+                data = self.clean_validate_sensors(sensors = data, historical = polars.DataFrame(), utc = current_utc, step = 'initialize_database')
                 
                 # Append the data to the list of DataFrame for this sensor type.
                 readings.append(data)
@@ -236,9 +352,38 @@ class EnvironmentData():
                 pbar.update(1)
 
             pbar.close()
+            
+        # Get HOBOlink historical data if available and enabled
+        if self.hobolink['available'] and self.hobolink['enabled']:
+            self.logger.info("Retrieving historical HOBOlink data")
+            try:
+                # Retrieve data for the specified number of days back
+                hobolink_data = self.get_hobolink_data(days_back=days_back)
+                
+                if hobolink_data is not None and not hobolink_data.is_empty():
+                    self.logger.info(f"Retrieved {hobolink_data.shape[0]} historical HOBOlink readings")
+                    
+                    # Clean and validate HOBOlink data
+                    hobolink_data = self.clean_validate_sensors(sensors=hobolink_data, historical=polars.DataFrame(), utc=current_utc, step='initialize_database')
+                    
+                    # Add to the collection of readings
+                    readings.append(hobolink_data)
+                else:
+                    self.logger.warning("No historical HOBOlink data was retrieved")
+            except Exception as e:
+                self.error(f"Error retrieving historical HOBOlink data: {e}")
 
         # Combine the readings into a single polars DataFrame.
-        dt = polars.concat(readings, how = 'diagonal')
+        if not readings:
+            self.error("No readings data available to initialize database", raise_exception=True)
+            
+        dt = polars.concat(readings, how='diagonal')
+        
+        # Ensure ID columns from both sources exist
+        required_columns = ['SensorID_Coris', 'DeviceID_Coris', 'SensorID_HOBOlink', 'DeviceID_HOBOlink']
+        for col in required_columns:
+            if col not in dt.columns:
+                dt = dt.with_columns(polars.lit(None).alias(col))
         
         # Write the database file. 
         dt.write_parquet(f'{self.data_path}/sensor_readings.parquet')
@@ -282,50 +427,264 @@ class EnvironmentData():
         sensors = sensors.with_columns(polars.lit(current_utc).alias('QueryUTC'))
 
         # Clean and validate the data.
-        sensors = self.clean_validate_sensors(sensors = sensors, step = 'get_sensors')
+        sensors = self.clean_validate_sensors(sensors = sensors, historical = polars.DataFrame(), utc = current_utc, step = 'get_sensors')
 
         # Return the data. 
         return sensors
     
     def get_current_utc(self) -> int:
             
-        """
-        Get the current UTC timestamp in seconds.
+        """Get the current UTC timestamp (seconds since epoch)."""
+        dt = datetime.datetime.now(datetime.timezone.utc)
+        utc = int(dt.timestamp())
+        return utc
 
+    def get_hobolink_data(self, days_back=1):
+        """
+        Fetch data from the HOBOlink API for all configured loggers.
+        
+        Parameters
+        ----------
+        days_back : int, default=1
+            Number of days of historical data to retrieve
+            
         Returns
         -------
-        int : Current UTC timestamp.
+        polars.DataFrame or None
+            DataFrame containing sensor readings from HOBOlink, or None if retrieval fails
         """
-
-        return int(datetime.datetime.now(datetime.timezone.utc).timestamp())
+        if not self.hobolink['available'] or not self.hobolink['enabled']:
+            self.logger.debug("HOBOlink integration not available or disabled. Not retrieving data.")
+            return None
+        
+        token = self.get_hobolink_token()
+        if not token:
+            self.error("Failed to get HOBOlink authentication token. Cannot retrieve data.")
+            return None
+        
+        # Calculate date range
+        end_date = datetime.datetime.now(datetime.timezone.utc)
+        start_date = end_date - datetime.timedelta(days=days_back)
+        
+        start_date_str = start_date.strftime('%Y-%m-%d %H:%M:%S')
+        end_date_str = end_date.strftime('%Y-%m-%d %H:%M:%S')
+        
+        # Dictionary to hold readings by type
+        readings_by_type = {
+            'SensorReadingF': [],
+            'SensorReadingRh': []
+        }
+        current_utc = self.get_current_utc()
+        
+        # Logger name mapping - can be expanded as needed
+        logger_name_mapping = {
+            "20284065": "C134",
+            "20447203": "LML Cold Room",
+            "22040302": "MX TRH 3",
+            "22040303": "MX TRH 1",
+            "22040304": "MX TRH 2",
+            "22040305": "MX TRH 4"
+        }
+        
+        for logger_id in self.hobolink['loggers']:
+            if not logger_id:  # Skip empty strings
+                continue
+                
+            self.logger.info(f"Retrieving HOBOlink data for logger {logger_id}")
+            
+            url = f'https://webservice.hobolink.com/ws/data/file/JSON/user/{self.hobolink["user_id"]}'
+            headers = {
+                'Authorization': f'Bearer {token}',
+                'Accept': 'application/json'
+            }
+            params = {
+                'loggers': logger_id,
+                'start_date_time': start_date_str,
+                'end_date_time': end_date_str
+            }
+            
+            try:
+                response = requests.get(url, headers=headers, params=params)
+                response.raise_for_status()
+                data = response.json()
+                
+                if 'observation_list' not in data or not data['observation_list']:
+                    self.logger.warning(f"No observations found for HOBOlink logger {logger_id}")
+                    continue
+                    
+                observations = data['observation_list']
+                self.logger.info(f"Retrieved {len(observations)} observations for HOBOlink logger {logger_id}")
+                
+                # Process and transform observations
+                for obs in observations:
+                    # Extract key information
+                    sensor_id = obs['sensor_sn']  # like "20284065-1"
+                    measurement_type = obs['sensor_measurement_type']
+                    
+                    # Convert ISO timestamp to Unix timestamp
+                    timestamp_str = obs['timestamp'].rstrip('Z')
+                    dt = datetime.datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
+                    dt = dt.replace(tzinfo=datetime.timezone.utc)
+                    unix_timestamp = int(dt.timestamp())
+                    
+                    # Determine reading type and value
+                    if measurement_type == 'Temperature':
+                        reading_type = 'SensorReadingF'
+                        reading_value = float(obs['us_value'])  # Fahrenheit value
+                    elif measurement_type == 'RH':
+                        reading_type = 'SensorReadingRh'
+                        reading_value = float(obs['si_value'])  # RH value
+                    else:
+                        # Skip other sensor types for now
+                        self.logger.debug(f"Skipping unsupported HOBOlink sensor type: {measurement_type}")
+                        continue
+                    
+                    # Get device name from mapping or generate a default
+                    device_name = logger_name_mapping.get(logger_id, f"HOBOlink Logger {logger_id}")
+                    
+                    # Create a record that matches the expected format
+                    record = {
+                        'SensorID_HOBOlink': sensor_id,
+                        'SensorReadingUTC': unix_timestamp,
+                        reading_type: reading_value,
+                        'QueryUTC': current_utc,
+                        'DeviceName': device_name,
+                        'SensorName': f"{device_name} {measurement_type} {sensor_id.split('-')[1]}",
+                        'SensorType': measurement_type,
+                        'DeviceID_HOBOlink': logger_id,
+                        'Source': 'HOBOlink'
+                    }
+                    
+                    # Add to the appropriate list
+                    readings_by_type[reading_type].append(record)
+                
+            except requests.exceptions.HTTPError as e:
+                self.error(f"HTTP Error retrieving HOBOlink data for logger {logger_id}: {e}")
+                if hasattr(response, 'text'):
+                    self.logger.error(f"Response body: {response.text}")
+                continue
+            except requests.exceptions.ConnectionError as e:
+                self.error(f"Connection Error retrieving HOBOlink data for logger {logger_id}: {e}")
+                continue
+            except requests.exceptions.Timeout as e:
+                self.error(f"Timeout Error retrieving HOBOlink data for logger {logger_id}: {e}")
+                continue
+            except requests.exceptions.RequestException as e:
+                self.error(f"Request Exception retrieving HOBOlink data for logger {logger_id}: {e}")
+                continue
+            except Exception as e:
+                self.error(f"Unexpected error retrieving or processing HOBOlink data for logger {logger_id}: {e}")
+                continue
+        
+        # Convert to DataFrames
+        dataframes = []
+        
+        for reading_type, readings in readings_by_type.items():
+            if readings:
+                df = polars.DataFrame(readings)
+                
+                # Apply consistent data types
+                df = df.with_columns([
+                    polars.col('SensorReadingUTC').cast(polars.Int64),
+                    polars.col('QueryUTC').cast(polars.Int64),
+                    polars.col(reading_type).cast(polars.Float32),
+                ])
+                
+                dataframes.append(df)
+                self.logger.info(f"Processed {df.shape[0]} HOBOlink {reading_type} readings")
+        
+        # Combine all readings
+        if not dataframes:
+            self.logger.warning("No HOBOlink data found to process")
+            return None
+            
+        combined = polars.concat(dataframes, how='diagonal')
+        self.logger.info(f"Retrieved total of {combined.shape[0]} HOBOlink readings")
+        return combined
 
     def get_current_readings(self) -> dict:
 
         """
-        Get current readings from the API. Validate the data. Send alerts.
-        Save the readings to a file in the new-readings folder.
-        This function will save data as separate files to facilitate easy tracking of new data vs consolidated data.
-        A batch process will clean, validate, and consolidate readings later.
-        """
+        Get current sensor readings from CORIS API, validate data, send alerts, save to new-readings folder.
+        This is meant to run as a cron job, several times per day.
 
+        Returns
+        -------
+        dict : {'sensors': polars.DataFrame, 'utc': int} containing the sensor readings data.
+        """
+        
+        # Make sure that the database is initialized.
+        # Otherwise, block cron job.
         if self.cron_status == 'not-initialized':
             return
-        
-        # Make a log entry and gather the current UTC.
+
+        # Make a log entry.
         current_utc = self.get_current_utc()
-        self.logger.info(f'get_current_readings: {current_utc}')
+        self.logger.info(f'get_current_readings - {current_utc}')
 
-        # Get the current status from the API.
+        # Get the sensor data from CORIS API
         sensors = self.get_sensors()
-        self.validate_sensors(sensors = sensors, utc = current_utc, step = 'get_current_readings')
+        
+        # Get HOBOlink data if available and enabled
+        hobolink_data = None
+        if self.hobolink['available'] and self.hobolink['enabled']:
+            try:
+                hobolink_data = self.get_hobolink_data(days_back=1)
+                if hobolink_data is not None:
+                    self.logger.info(f"Successfully retrieved HOBOlink data with {hobolink_data.shape[0]} readings")
+            except Exception as e:
+                self.error(f"Error retrieving HOBOlink data: {e}")
+        
+        # Combine CORIS and HOBOlink data if both are available
+        if hobolink_data is not None:
+            # Add Source column to CORIS data
+            sensors = sensors.with_columns(polars.lit('CORIS').alias('Source'))
+            
+            # Make sure both datasets have compatible columns
+            common_columns = set(sensors.columns).intersection(set(hobolink_data.columns))
+            all_columns = set(sensors.columns).union(set(hobolink_data.columns))
+            
+            # Add missing columns with null values
+            for col in all_columns:
+                if col not in sensors.columns:
+                    if col in ['SensorReadingUTC', 'QueryUTC']:
+                        sensors = sensors.with_columns(polars.lit(None).cast(polars.Int64).alias(col))
+                    elif col in ['SensorReadingF', 'SensorReadingRh']:
+                        sensors = sensors.with_columns(polars.lit(None).cast(polars.Float32).alias(col))
+                    else:
+                        sensors = sensors.with_columns(polars.lit(None).alias(col))
+                
+                if col not in hobolink_data.columns:
+                    if col in ['SensorReadingUTC', 'QueryUTC']:
+                        hobolink_data = hobolink_data.with_columns(polars.lit(None).cast(polars.Int64).alias(col))
+                    elif col in ['SensorReadingF', 'SensorReadingRh']:
+                        hobolink_data = hobolink_data.with_columns(polars.lit(None).cast(polars.Float32).alias(col))
+                    else:
+                        hobolink_data = hobolink_data.with_columns(polars.lit(None).alias(col))
 
-        # Process alerts.
+            # Combine the data
+            sensors = polars.concat([sensors, hobolink_data], how='diagonal')
+            self.logger.info(f"Combined data contains {sensors.shape[0]} readings (CORIS + HOBOlink)")
+        
+        # Validate the sensor data.
+        historical = polars.read_parquet(f'{self.data_path}/sensor_readings.parquet')
+        sensors = self.clean_validate_sensors(sensors, historical, current_utc, 'get_current_readings')
+        
+        # Validate the sensor data
+        self.validate_sensors(sensors=sensors, historical=historical, utc=current_utc, step='get_current_readings')
+        
+        # Send alerts.
         self.send_alerts(sensors, current_utc)
-
-        # Save the new-readings file. A daily process will pull these later to clean, validate, and consolidate them into the database.
-        os.makedirs(f'{self.data_path}/new-readings/', exist_ok = True)
-        sensors.write_parquet(f'{self.data_path}/new-readings/{current_utc}.parquet')
-
+        
+        # Save the readings to parquet files in the new-readings dir.
+        if not os.path.exists(f'{self.data_path}/new-readings/'):
+            os.makedirs(f'{self.data_path}/new-readings/')
+        
+        # Append a timestamp to make the filename unique.
+        # This also helps us know the chronology if needed.
+        sensors.write_parquet(f'{self.data_path}/new-readings/{current_utc}_sensor_readings.parquet')
+        
+        return {'sensors': sensors, 'utc': current_utc}
 
     def consolidate_readings(self):
 
@@ -347,39 +706,90 @@ class EnvironmentData():
         files = os.listdir(f'{self.data_path}/new-readings/')
         files_read = []
         for file in files:
-
             # use try catch since there might be partial files being written by get_current_readings.
             try:
                 new_readings.append(polars.read_parquet(f'{self.data_path}/new-readings/{file}'))
                 files_read.append(file)
-            except:
-                pass
+            except Exception as e:
+                self.logger.warning(f"Could not read file {file}: {e}")
+                continue
 
+        if not new_readings:
+            self.logger.info("No new readings to consolidate")
+            return
+            
         # Combine the readings into a single polars DataFrame.
         dt = polars.concat(new_readings)
         self.logger.info(f'{dt.shape[0]} new readings.')
 
         # Clean the data.
         historical = polars.read_parquet(f'{self.data_path}/sensor_readings.parquet')
-        dt = self.clean_validate_sensors(sensors = dt, historical = historical, step = 'consolidate_readings')
+        dt = self.clean_validate_sensors(sensors=dt, historical=historical, step='consolidate_readings')
+
+        # Check and handle different data sources (CORIS and HOBOlink)
+        if 'Source' not in historical.columns and 'Source' in dt.columns:
+            # Add Source column to historical data if it doesn't exist
+            historical = historical.with_columns(polars.lit('CORIS').alias('Source'))
+            self.logger.info("Added Source column to historical data")
+            
+        # Ensure ID columns from both sources exist
+        required_columns = ['SensorID_Coris', 'DeviceID_Coris', 'SensorID_HOBOlink', 'DeviceID_HOBOlink']
+        for col in required_columns:
+            if col not in historical.columns and col in dt.columns:
+                historical = historical.with_columns(polars.lit(None).alias(col))
+            elif col not in dt.columns and col in historical.columns:
+                dt = dt.with_columns(polars.lit(None).alias(col))
 
         # Set the column data types to match the database.
         dt = self.match_types(dt, historical)
 
         # Append these to the database.
-        dt = polars.concat([historical, dt], how = 'diagonal')
+        dt = polars.concat([historical, dt], how='diagonal')
 
-        # Add difference between readings. 
-        dt = dt.sort(['SensorID_Coris', 'SensorReadingUTC'])
-        SensorReadingUTC_SecondsFromPrior = dt.group_by('SensorID_Coris', maintain_order = True).map_groups(
-            lambda x: x.with_columns((
-                polars.col('SensorReadingUTC') - polars.col('SensorReadingUTC').shift(1)
-            ).alias('SensorReadingUTC_SecondsFromPrior')
-        ))['SensorReadingUTC_SecondsFromPrior']
-        dt = dt.with_columns(SensorReadingUTC_SecondsFromPrior)
-
-        # Move the most important columns to the front. 
-        dt = self.relocate(dt, ['SensorID_Coris', 'QueryUTC', 'SensorReadingUTC', 'DeviceID_Coris', 'SensorReadingUTC_SecondsFromPrior'] + list(self.acceptable_range.keys()))
+        # Add difference between readings, handling both CORIS and HOBOlink data
+        dt = dt.sort(['Source', 'SensorID_Coris', 'SensorID_HOBOlink', 'SensorReadingUTC'])
+        
+        # For CORIS data, group by SensorID_Coris
+        coris_data = dt.filter(
+            (polars.col('Source') == 'CORIS') | 
+            ((polars.col('Source').is_null()) & (polars.col('SensorID_Coris').is_not_null()))
+        )
+        if not coris_data.is_empty():
+            coris_diff = coris_data.group_by('SensorID_Coris', maintain_order=True).map_groups(
+                lambda x: x.with_columns((
+                    polars.col('SensorReadingUTC') - polars.col('SensorReadingUTC').shift(1)
+                ).alias('SensorReadingUTC_SecondsFromPrior'))
+            )['SensorReadingUTC_SecondsFromPrior']
+            coris_data = coris_data.with_columns(coris_diff)
+        
+        # For HOBOlink data, group by SensorID_HOBOlink
+        hobolink_data = dt.filter(
+            (polars.col('Source') == 'HOBOlink') & (polars.col('SensorID_HOBOlink').is_not_null())
+        )
+        if not hobolink_data.is_empty():
+            hobolink_diff = hobolink_data.group_by('SensorID_HOBOlink', maintain_order=True).map_groups(
+                lambda x: x.with_columns((
+                    polars.col('SensorReadingUTC') - polars.col('SensorReadingUTC').shift(1)
+                ).alias('SensorReadingUTC_SecondsFromPrior'))
+            )['SensorReadingUTC_SecondsFromPrior']
+            hobolink_data = hobolink_data.with_columns(hobolink_diff)
+        
+        # Recombine the data
+        if not coris_data.is_empty() and not hobolink_data.is_empty():
+            dt = polars.concat([coris_data, hobolink_data], how='diagonal')
+        elif not coris_data.is_empty():
+            dt = coris_data
+        elif not hobolink_data.is_empty():
+            dt = hobolink_data
+        
+        # Move the most important columns to the front.
+        important_columns = [
+            'Source', 'SensorID_Coris', 'SensorID_HOBOlink', 'QueryUTC', 'SensorReadingUTC', 
+            'DeviceID_Coris', 'DeviceID_HOBOlink', 'SensorReadingUTC_SecondsFromPrior'
+        ]
+        important_columns = [col for col in important_columns if col in dt.columns]
+        reading_columns = [col for col in self.acceptable_range.keys() if col in dt.columns]
+        dt = self.relocate(dt, important_columns + reading_columns)
 
         # Write the file. 
         dt.write_parquet(f'{self.data_path}/sensor_readings.parquet')
@@ -478,7 +888,7 @@ class EnvironmentData():
         # Return the data.
         return devices
     
-    def clean_validate_sensors(self, sensors: polars.DataFrame, historical: polars.DataFrame = polars.DataFrame(), step: str = '') -> polars.DataFrame:
+    def clean_validate_sensors(self, sensors: polars.DataFrame, historical: polars.DataFrame = polars.DataFrame(), utc: int = None, step: str = '') -> polars.DataFrame:
 
         """
         Clean the sensor readings data.
@@ -489,6 +899,15 @@ class EnvironmentData():
         ----------
         sensors : polars.DataFrame
             Sensors API response.
+            
+        historical : polars.DataFrame, default=polars.DataFrame()
+            Historical readings to compare against for validation.
+            
+        utc : int, default=None
+            The UTC timestamp of when the data was collected, used for validation.
+            
+        step : str, default=''
+            The processing step name for logging purposes.
 
         Returns
         -------
@@ -497,21 +916,31 @@ class EnvironmentData():
 
         # Set data types.
         dtypes = {
-            'SensorID': polars.String, # this is extracted from the SensorName, it isn't always a number.
+            'SensorID': polars.Utf8,  # this is extracted from the SensorName, it isn't always a number.
             'SensorID_Coris': polars.Int32,
             'DeviceID_Coris': polars.Int32,
-            'SensorReadingUTC': polars.Int64
+            'SensorID_HOBOlink': polars.Utf8,
+            'DeviceID_HOBOlink': polars.Utf8,
+            'SensorReadingUTC': polars.Int64,
+            'QueryUTC': polars.Int64,
+            'Source': polars.Utf8
         }
+        
         for dtype in dtypes:
             if dtype in sensors.columns:
-                sensors = sensors.with_columns(polars.col(dtype).cast(dtypes[dtype]))
+                # Only cast non-null values to avoid errors with incompatible data types
+                if sensors[dtype].null_count() < sensors.shape[0]:
+                    try:
+                        sensors = sensors.with_columns(polars.col(dtype).cast(dtypes[dtype]))
+                    except Exception as e:
+                        self.logger.warning(f"Could not cast column {dtype} to {dtypes[dtype]}: {e}")
         
         for reading in self.acceptable_range:
             if reading in sensors.columns:
                 sensors = sensors.with_columns(polars.col(reading).cast(polars.Float32))
 
         # Validate the data.
-        self.validate_sensors(sensors= sensors, historical = historical, step = step)
+        self.validate_sensors(sensors=sensors, historical=historical, utc=utc, step=step)
 
         return sensors
 
@@ -540,85 +969,92 @@ class EnvironmentData():
     def validate_sensors(self, sensors: polars.DataFrame, historical: polars.DataFrame = polars.DataFrame(), utc: int = None, step: str = ''):
 
         """
-        Validate Sensor reading data: column data types, missing values, SensorReadingUTC close to QueryUTC, 
-            no duplicated SensorReadingUTC, one SensorName per SensorID_Coris, 
-            SensorReadingUTC_SecondsFromPrior less than 15 minutes, 
-            all SensorID_Coris in historical data, no multiple names for SensorID_Coris.
-        Can be expanded to add more validation steps. 
-        Failed validations are printed as errors to the log files, and surfaced as warnings.
+        Validate the sensor data.
+        Very important to keep the integrity of the data.
+        Will:
+        1. Check for nulls where they should not be.
+        2. Check that all sensor IDs in this dataset are present in the historical database.
+        3. Ensure the timestamp is recent enough (Coris API sometimes returns old data).
 
         Parameters
         ----------
-        sensors: polars.DataFrame
-            Sensor readings DataFrame to validate.
+        sensors : polars.DataFrame
+            DataFrame to validate (from API or from the database).
+
+        historical : polars.DataFrame, default=polars.DataFrame()
+            DataFrame containing historical data. The validation will check if the sensors in the new data are present in the historical data.
+            If not provided, that check will not be performed.
+            
+        utc : int, default=None
+            Current UTC timestamp. Used to check that the sensor data is reasonably recent. 
+            If not provided, that check will not be performed.
+
+        step : str, default=''
+            Which processing step this validation is part of. Used for error messages.
+            
+        Raises
+        ------
+        Exception
+            If validation fails.
         """
 
-        errs = []
+        # Helper function to log and raise an error at the same time.
+        def validation_error(msg, raise_exception = True):
+            error_msg = f'Validation error in {step}: {msg}'
+            self.logger_err.error(error_msg)
+            self.logger.error(error_msg)
+            if raise_exception:
+                raise Exception(error_msg)
+            else:
+                warnings.warn(error_msg)
+
+        # Check for duplicate indices.
+        if 'SensorID_Coris' in sensors.columns and any(sensors.groupby('SensorID_Coris').agg(polars.count())[0].to_list() > 1):
+            duplicated = sensors.groupby('SensorID_Coris').agg(polars.count()).filter(polars.col('count') > 1)
+            validation_error(f'duplicated indices: {duplicated}')
+
+        # Check for missing values in required fields.
+        required_fields = ['SensorName', 'DeviceName']
         
-        # We expect missing values in the data, so we don't check for them.
-
-        # Is the data format as expected?
-        self.logger.info(f'{step} validation: correct column data types.')
-        expect_types = {"SensorReadingUTC": polars.Int64, "SensorID": polars.Int32}
-        for reading in self.acceptable_range:
-            if reading in sensors.columns:
-                expect_types[reading] = polars.Float32
+        # For CORIS data, SensorID_Coris and DeviceID_Coris are required
+        coris_data = sensors.filter(
+            (polars.col('Source') == 'CORIS') | 
+            ((polars.col('Source').is_null()) & (polars.col('SensorID_Coris').is_not_null()))
+        )
+        if not coris_data.is_empty():
+            for field in required_fields + ['SensorID_Coris', 'DeviceID_Coris']:
+                if field in coris_data.columns and coris_data[field].null_count() > 0:
+                    validation_error(f'CORIS data is missing values in required field: {field}')
         
-        for col in expect_types:
-            if col in sensors.columns:
+        # For HOBOlink data, SensorID_HOBOlink and DeviceID_HOBOlink are required
+        hobolink_data = sensors.filter(
+            (polars.col('Source') == 'HOBOlink') & (polars.col('SensorID_HOBOlink').is_not_null())
+        )
+        if not hobolink_data.is_empty():
+            for field in required_fields + ['SensorID_HOBOlink', 'DeviceID_HOBOlink']:
+                if field in hobolink_data.columns and hobolink_data[field].null_count() > 0:
+                    validation_error(f'HOBOlink data is missing values in required field: {field}')
 
-                # data type.
-                if sensors[col].dtype != expect_types[col]:
-                    errs.append(f'Unexpected data type for [{col}]. Expected [{expect_types[col]}] got [{sensors[col]}].')
+        # If historical data was provided, check that all sensor IDs in the current query are present in the historical data.
+        # This check may not apply during initialization.
+        if not historical.is_empty() and step != 'initialize_database':
+            # Check CORIS sensors
+            if 'SensorID_Coris' in sensors.columns and 'SensorID_Coris' in historical.columns:
+                if not all(x in historical['SensorID_Coris'].unique() for x in sensors['SensorID_Coris'].unique() if x is not None):
+                    validation_error(f'new sensor ids not in historical data: {set(sensors["SensorID_Coris"].unique()) - set(historical["SensorID_Coris"].unique())}', False)
+                    
+            # Check HOBOlink sensors
+            if 'SensorID_HOBOlink' in sensors.columns and 'SensorID_HOBOlink' in historical.columns:
+                hobolink_sensors = [x for x in sensors['SensorID_HOBOlink'].unique() if x is not None]
+                if hobolink_sensors and not all(x in historical['SensorID_HOBOlink'].unique() for x in hobolink_sensors):
+                    validation_error(f'new HOBOlink sensor ids not in historical data: {set(hobolink_sensors) - set(historical["SensorID_HOBOlink"].unique())}', False)
 
-        # Readings should have at least one non-null value from expect_types. 
-        self.logger.info(f'{step} validation: at least one non-null value in readings.')
-        allnull = sensors[[x for x in expect_types if x in sensors.columns]].filter(polars.all_horizontal(polars.all().is_null()))
-        missing_count = allnull.shape[0]
-        if missing_count > 0:
-            errs.append(f'{missing_count} missing values in [{col}].')
-
-        # Are the SensorReadingUTC close to the QueryUTC (the time the data was requested via API)?
-        if utc is not None:
-            self.logger.info(f'{step} validation: SensorReadingUTC columns close to QueryUTC.')
-            maxdiff_minutes = numpy.max(numpy.abs(sensors['SensorReadingUTC'].to_numpy() - utc)) / 60
-            if maxdiff_minutes > 2: # readings should be happening every 2 minutes. 
-                errs.append(f'SensorReadingUTC differs from UTC: UTC: {utc}, maximum absolute difference (minutes): {maxdiff_minutes:,.0}.')
-
-        # Are there any duplicated SensorReadingUTC?
-        if 'SensorReadingUTC' in sensors.columns:
-            self.logger.info(f'{step} validation: no duplicated SensorReadingUTC per SensorID_Coris.')
-            dup_count = sensors[['SensorID_Coris', 'SensorReadingUTC']].is_duplicated().sum()
-            if dup_count > 0:
-                errs.append(f'Count of duplicated SensorReadingUTC: {dup_count}.')
-
-        # Do any sensors have multiple names (indicating a change in name)?
-        self.logger.info(f'{step} validation: one SensorName per SensorID_Coris.')
-        name_dups = sensors[['SensorID_Coris', 'SensorName']].unique()
-        name_dups = name_dups.filter(name_dups['SensorID_Coris'].is_duplicated())
-        dup_count = name_dups[['SensorID_Coris']].unique().shape[0]
-        if dup_count > 0:
-            errs.append(f'Count of multiple names for SensorID_Coris: {dup_count}.')
-
-        # Time between readings should be less than ten minutes.
-        if 'SensorReadingUTC_SecondsFromPrior' in sensors.columns:
-            self.logger.info(f'{step} validation: SensorReadingUTC_SecondsFromPrior less than 15 minutes.')
-            badrows = sensors.filter(sensors['SensorReadingUTC_SecondsFromPrior'] > 60 * 15)
-            if badrows.shape[0] > 0:
-                errs.append(f'Count of SensorReadingUTC_SecondsFromPrior > 15 minutes: {badrows.shape[0]}.')
-
-        # Comparisons to historical.
-        if historical.shape[0] > 0:
-
-            # Did we lose any sensors?
-            self.logger.info(f'{step} validation: all SensorID_Coris in historical data (no dropped SensorID).')
-            missing = historical.filter(historical['SensorID_Coris'].is_in(sensors['SensorID_Coris']).not_())
-            if missing.shape[0] > 0:
-                errs.append(f'Count of sensors missing from historical data: {missing.shape[0]}.')
-
-        # Log the errors.
-        if len(errs) > 0:
-            self.error(step + ' validation errors : ' + "; ".join(errs) + '\n', raise_exception = False)
+        # Check the timestamp is within 24 hours of the current time.
+        if utc is not None and 'SensorReadingUTC' in sensors.columns:
+            max_age = 24 * 60 * 60  # 24 hours in seconds
+            if any(sensors['SensorReadingUTC'] < utc - max_age):
+                # This produces a lot of false positives, leaving here as a warning for now. Can be upgraded to an error if needed.
+                validation_error(f'timestamps too old: {sensors.filter(sensors["SensorReadingUTC"] < utc - max_age)["SensorReadingUTC"].unique()}', False)
 
     def validate_devices(self, devices: polars.DataFrame):
 

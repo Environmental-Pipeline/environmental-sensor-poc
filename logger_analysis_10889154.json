@@ -1,0 +1,47 @@
+{
+  "logger_id": "10889154",
+  "periods": [
+    {
+      "period_name": "Last 24 hours",
+      "observations_count": 0,
+      "sensors": {},
+      "latest_timestamp": null
+    },
+    {
+      "period_name": "Last 7 days",
+      "observations_count": 0,
+      "sensors": {},
+      "latest_timestamp": null
+    },
+    {
+      "period_name": "Last 30 days",
+      "observations_count": 774,
+      "sensors": {
+        "10889154-1": 387,
+        "10889154-2": 387
+      },
+      "latest_timestamp": "2025-02-26 18:00:00Z"
+    },
+    {
+      "period_name": "Last 90 days",
+      "observations_count": 4497,
+      "sensors": {
+        "10889154-1": 1641,
+        "10889154-2": 1641,
+        "10889154-4": 1215
+      },
+      "latest_timestamp": "2025-02-26 18:00:00Z"
+    },
+    {
+      "period_name": "Last year",
+      "observations_count": 30990,
+      "sensors": {
+        "10889154-1": 10472,
+        "10889154-2": 10472,
+        "10889154-4": 10046
+      },
+      "latest_timestamp": "2025-02-26 18:00:00Z"
+    }
+  ],
+  "logger_name": "C107 Enviro Chamber"
+}
