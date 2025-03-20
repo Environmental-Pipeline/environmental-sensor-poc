@@ -14,6 +14,7 @@ class EnvironmentData():
             HOBOlinkLoggers: str | list = None,
             api_sources: list = ['CORIS']
         ):
+        
 
         """
         Initialize resources for managing the environmental readings.
