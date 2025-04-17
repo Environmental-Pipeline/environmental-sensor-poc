@@ -10,8 +10,8 @@ _Commands should be run from the project root, possibly by using the terminal af
 
 * Install Python 3.8 or later.
 * Initialize the virtual environment by running `python -m venv .venv`, wait until it finishes, and then `.venv/Scripts/activate` (on Windows).
-* Install the necessary packages into the environment with `pip install -r requirements.txt`.
-* Request the .env file from the developer and place it in the project root.
+* Install the necessary packages (including for Coris API and weather enrichment) into the environment with `pip install -r requirements.txt`.
+* Request the `.env` file from the developer (or create one based on the requirements below) and place it in the project root.
 * You can now run code. To view examples, run `jupyter notebook` to start Jupyter Notebook and open `examples-cron.ipynb` and `examples-analysis.ipynb`.
 
 
@@ -21,26 +21,37 @@ To use Docker, you'll need to use Docker Desktop to build the image and start a 
 
 _Commands should be run from the project root, possibly by using the terminal after opening the project root in VS Code._
 
-* Install Docker Desktop from https://docs.docker.com/engine/install/. 
+* Install Docker Desktop from https://docs.docker.com/engine/install/.
 * Run Docker Desktop to start the docker daemon running in the background. 
-* Request the .env file from the developer and place it in the project root.
+* Ensure you have a `.env` file in the project root containing the necessary variables (see below).
 * Build the Docker image by running `docker build . -t environment`. This will read the Dockerfile and use it to build an image, which we'll use to initiate a container later on.
 * Initiate the container with `docker run --name environment-run -p 8888:8888 environment`.
 * Once it is running, there are a few ways you can interact with it:
-    - Logs will print to terminal. At the start of every minute, you'll see it run `get_current_readings`. Every ten minutes, it'll run `consolidate_readings`.
-    - The terminal will print a Jupyter URL you can access, starting with http://127.0.0.1:8888. Ctrl + click it to open an interactive Jupyter Notebook. You can then open examples.ipynb and execute code. The data may look the same, but it's actually reading from data populated by cron!
-    - You can open an interactive session in a new terminal with `docker exec -it environment-run /bin/bash` and watch the logs with `tail -f data/EnvironmentData.log`, or run any other Linux command in the container. 
-    - Open the container in Docker Desktop and navigate to Files > src to view the project files like `sensor_readings.parquet` and `device_readings.parquet`.
-* When you are done, remove any running containers by clicking the trash button on Docker Desktop. You can also do it with the CLI: `docker stop $(docker ps -a -q)` and then `docker rm $(docker ps -a -q)`.
-* Docker has been set up with `testing = False` and `days_back = int(365 * 2)` (2 years). If you want to change this for testing purposes, modify the settings at .env, rebuild the image, and re-run the container. 
+    - **Logs:** Container logs will print to the terminal where you ran `docker run`. At the start of every minute, you'll see it run `get_current_readings`. Every ten minutes, it'll run `consolidate_readings`. Daily at 1:00 AM (server time), it will run the weather enrichment process.
+    - **Jupyter:** The terminal will print a Jupyter URL you can access, starting with http://127.0.0.1:8888. Ctrl + click it to open an interactive Jupyter Notebook. You can then open `examples-analysis.ipynb` and execute code using the latest data.
+    - **Shell:** You can open an interactive session in a new terminal with `docker exec -it environment-run /bin/bash`.
+    - **Files:** Use the shell or Docker Desktop's file browser to view the project files inside the container (under `/src/`). Key data files include `data/sensor_readings.parquet`, `data/device_readings.parquet`, `data/sensors.parquet`, `data/devices.parquet`, `data/utcs.parquet`, and the enriched `data/sensor_readings_with_weather.parquet`.
+* When you are done, remove any running containers by clicking the trash button on Docker Desktop or using the CLI: `docker stop environment-run` and then `docker rm environment-run`.
+* The initial run of the container will perform a potentially lengthy historical data fetch from the Coris API based on `DAYS_BACK` in `.env`. Subsequent runs will start much faster.
 
-To modify the behavior of the container:
+## Configuration (`.env` File)
 
-* .env contains variables that can be used for testing or to modify settings:
-  - DAYS_BACK: How many days of historical data to pull during initialization
-  - TESTING: Use =True to run a test that only pulls data for 6 sensors.
+An untracked `.env` file in the project root is used for configuration and secrets:
 
-* jobs/cronjobs defines how frequently the pull and consolidate operations run. Use https://crontab.guru/ to get new cron expressions.
+*   **`CORIS_API_KEY` (Required):** Your API key for the Coris Monitoring service.
+*   **`CATS_USER_ID` (Required):** Your User ID for the Coris Monitoring service.
+*   `DAYS_BACK` (Optional, Default: 730): How many days of historical Coris data to pull during the initial database setup.
+*   `TESTING` (Optional, Default: False): Use `True` to run initialization and tests with a smaller subset of sensors (faster, fewer API calls).
+
+## Weather Data Enrichment
+
+This project includes a process to enrich the collected sensor data with historical weather information obtained from the free [Open-Meteo API](https://open-meteo.com/).
+
+*   **Process:** A daily cron job (`jobs/3-enrich.py`) runs inside the Docker container.
+*   **Data Fetched:** It fetches hourly historical weather data (temperature, humidity, weather code) corresponding to the timestamps of the sensor readings.
+*   **Location:** Currently, weather data is fetched for a fixed location representing the Yale Peabody Museum (approx. lat 41.3157, lon -72.9211).
+*   **Matching:** Weather data is merged with sensor data by finding the closest hourly weather reading within a 30-minute tolerance window of each sensor reading timestamp.
+*   **Output:** The enriched data is saved to `data/sensor_readings_with_weather.parquet`.
 
 ## Other Commands
 
@@ -68,14 +79,18 @@ Take note of the IDs SensorID_Coris and DeviceID_Coris. You'll need to rename th
 
 **cron and API key security**
 
-* The typical method of giving keys to containers is through environment variables. cron jobs do not have access to environment variables, so there is no fully secure way to run a cron job that uses key-based authentication. 
-* The method I selected is to copy an untracked .env file into the container. This prevents the key from being saved in the GitHub repo. But anyone who gains access to the container itself would have access to the key. The odds of this happening are low, and the risk is also low if the key only allows reading data, not editing it. 
-* Security can be enhanced by only allowing the key to be used from white-listed IP addresses. 
-* Best practice would be to use a cloud service to schedule jobs instead of cron because cloud jobs can be set up using environment variables. 
+* The typical method of giving keys to containers is through environment variables. The standard `cron` daemon does not easily inherit the container's environment variables. 
+* The method selected here is to copy an untracked `.env` file into the container during the build process. The Python scripts run by cron then load this file using `python-dotenv`. This prevents the key from being saved in the GitHub repo. However, anyone who gains access to the running container filesystem would have access to the key. The risk is mitigated if the key only allows reading data.
+* Security can be enhanced by only allowing the key to be used from white-listed IP addresses (if supported by the API provider).
+* Best practice for cloud deployments would often involve using managed secret stores and cloud-native job scheduling services that handle environment variables securely.
 
 **polars vs pandas**
 
 Polars was selected as our data framework because it is faster and more memory efficient, and will therefore help the project scale better.
+
+**SSL Verification Workaround**
+
+*   API calls to the Coris Monitoring service (`cats.corismonitoring.com`) currently have SSL certificate verification disabled (`verify=False` in `requests.get`). This is a workaround for potential issues with local/container SSL certificate stores. In a production environment, it's recommended to resolve the underlying certificate issue rather than disabling verification.
 
 **EnvironmentData Documentation**
 

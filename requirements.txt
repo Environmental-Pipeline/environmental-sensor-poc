@@ -10,3 +10,8 @@ pdoc3
 notebook
 duckdb 
 seaborn
+
+# For OpenWeatherMap integration
+aiohttp
+python-dotenv
+pytz # For timezone handling in weather_api

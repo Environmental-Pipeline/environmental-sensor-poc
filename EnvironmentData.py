@@ -1,6 +1,31 @@
 import os, requests, polars, numpy, tqdm, logging, datetime, warnings
+import asyncio # Added for weather enrichment
+import pytz # Added for weather enrichment
+from pathlib import Path # Added for weather enrichment
+
+# Added for weather enrichment:
+# Assumes weather_api.py is in the same directory or accessible in python path
+try:
+    from weather_api import get_historical_weather
+except ImportError:
+    # Log error or raise exception if weather_api is critical
+    logging.error("Failed to import get_historical_weather from weather_api.py")
+    # Optionally, define a placeholder function or raise an error:
+    async def get_historical_weather(*args, **kwargs): 
+        logging.error("weather_api.py not found, weather enrichment unavailable.")
+        return None
 
 class EnvironmentData():
+
+    # --- Constants Added for Weather Enrichment ---
+    # Coordinates for Yale Peabody Museum (approximate)
+    MUSEUM_LATITUDE = 41.3157
+    MUSEUM_LONGITUDE = -72.9211
+    # Max time difference (seconds) to match weather data to sensor reading
+    WEATHER_MATCH_TOLERANCE_SECONDS = 1800 # 30 minutes
+    # Max concurrent weather API calls
+    MAX_CONCURRENT_WEATHER_CALLS = 15
+    # --------------------------------------------
 
     def __init__(
             self, 
@@ -39,7 +64,7 @@ class EnvironmentData():
         
         # Save inputs to the class instance.
         self.CatsUserID = CatsUserID
-        self.data_path = data_path
+        self.data_path = Path(data_path) # Use Path object
         self.testing = testing
         self.testing_sensor_ids = []
         self.out_of_scope = out_of_scope
@@ -211,7 +236,8 @@ class EnvironmentData():
                     f'RequestedOutputFormat=raw'
                 ])
                 self.logger.info(f'API call: {logurl}')
-                response = requests.get(url)
+                # Add verify=False to handle potential SSL certificate verification issues
+                response = requests.get(url, verify=False)
 
                 # Check for errors.
                 if not response.ok:
@@ -260,7 +286,8 @@ class EnvironmentData():
         url = f'https://cats.corismonitoring.com/api/cats/user/?ApiKey={self.apikeys["CORIS"]}&CatsUserID={self.CatsUserID}'
         self.logger.info(f'API call: https://cats.corismonitoring.com/api/cats/user/?ApiKey=XXXX&CatsUserID=XXXX') # log a duplicate of the url for logging purposes, which doesn't include sensitive information.
         current_utc = self.get_current_utc()
-        response = requests.get(url)
+        # Add verify=False to handle potential SSL certificate verification issues
+        response = requests.get(url, verify=False)
         
         # Check for errors and raise an exception if there is one.
         if not response.ok:
@@ -858,4 +885,138 @@ class EnvironmentData():
         ]).sort(['date', 'DeviceID_Coris'])
 
         device_readings_daily.write_parquet(f'{self.data_path}/device_readings_daily.parquet')
+            
+    # <<< NEW METHOD FOR WEATHER ENRICHMENT >>>
+    async def enrich_readings_with_weather(self):
+        """Enriches the main sensor readings parquet file with weather data.
+
+        Loads 'sensor_readings.parquet', fetches corresponding historical weather data
+        from Open-Meteo using the predefined coordinates, merges the data based on
+        the closest timestamp (within tolerance), and saves the result to
+        'sensor_readings_with_weather.parquet'.
+        """
+        self.logger.info("Starting weather enrichment process...")
+
+        sensor_file = self.data_path / "sensor_readings.parquet"
+        enriched_file = self.data_path / "sensor_readings_with_weather.parquet"
+
+        # 1. Load sensor data
+        try:
+            self.logger.info(f"Loading sensor data from {sensor_file}...")
+            df_sensor = polars.read_parquet(sensor_file)
+            if df_sensor.is_empty():
+                self.logger.warning("Sensor data file is empty. Skipping enrichment.")
+                return
+            self.logger.info(f"Loaded {len(df_sensor)} sensor readings.")
+
+            # --- Basic Validation ---
+            if "SensorReadingUTC" not in df_sensor.columns:
+                 self.error(f"Missing required column 'SensorReadingUTC' in {sensor_file}. Cannot enrich.", raise_exception=False)
+                 return
+            if not df_sensor["SensorReadingUTC"].dtype == polars.Int64:
+                try:
+                    df_sensor = df_sensor.with_columns(polars.col("SensorReadingUTC").cast(polars.Int64))
+                    self.logger.warning("Converted 'SensorReadingUTC' column to Int64 for enrichment.")
+                except Exception as e:
+                    self.error(f"Failed to cast 'SensorReadingUTC' to Int64 in {sensor_file}: {e}. Cannot enrich.", raise_exception=False)
+                    return
+
+        except FileNotFoundError:
+            self.error(f"Sensor data file not found at {sensor_file}. Cannot enrich.", raise_exception=False)
+            return
+        except Exception as e:
+            self.error(f"Error loading sensor data from {sensor_file}: {e}", raise_exception=False)
+            return
+
+        # 2. Identify unique timestamps and fetch weather data
+        try:
+            unique_timestamps = df_sensor["SensorReadingUTC"].unique().to_list()
+            self.logger.info(f"Found {len(unique_timestamps)} unique sensor timestamps for weather lookup.")
+
+            # --- Limit Concurrency --- 
+            semaphore = asyncio.Semaphore(self.MAX_CONCURRENT_WEATHER_CALLS)
+            weather_tasks = []
+
+            async def fetch_with_semaphore(ts):
+                async with semaphore:
+                    return await get_historical_weather(
+                        self.MUSEUM_LATITUDE, self.MUSEUM_LONGITUDE, ts
+                    )
+
+            for ts in unique_timestamps:
+                task = fetch_with_semaphore(ts)
+                weather_tasks.append(task)
+            # --------------------------
+            
+            self.logger.info(f"Fetching weather data for {len(weather_tasks)} timestamps (concurrency: {self.MAX_CONCURRENT_WEATHER_CALLS})...")
+            # Use asyncio.gather with return_exceptions=True to handle potential API errors gracefully
+            weather_results_list = await asyncio.gather(*weather_tasks, return_exceptions=True)
+            self.logger.info("Finished fetching weather data.")
+
+            # Process results, filtering out None values and exceptions
+            weather_lookup = {}
+            successful_fetches = 0
+            failed_fetches = 0
+            for i, result in enumerate(weather_results_list):
+                if isinstance(result, Exception):
+                    self.logger.warning(f"Weather API call failed for timestamp {unique_timestamps[i]}: {result}")
+                    failed_fetches += 1
+                elif result:
+                    # Key by the weather data point's timestamp for asof join
+                    weather_lookup[result['weather_timestamp_utc']] = result
+                    successful_fetches += 1
+                else:
+                     # Result was None (API returned no data or error handled internally)
+                     failed_fetches += 1
+            
+            self.logger.info(f"Successfully fetched weather data for {successful_fetches} timestamps. Failed/No data for {failed_fetches}.")
+
+            if not weather_lookup:
+                self.error("No weather data could be successfully fetched. Aborting enrichment.", raise_exception=False)
+                return
+
+            # Convert lookup to DataFrame
+            df_weather = polars.DataFrame(list(weather_lookup.values()))
+
+        except Exception as e:
+            self.error(f"Error during weather data fetching/processing: {e}", raise_exception=False)
+            return
+
+        # 3. Merge weather data with sensor data using join_asof
+        try:
+            self.logger.info("Merging weather data with sensor data using join_asof...")
+            df_sensor_sorted = df_sensor.sort("SensorReadingUTC")
+            df_weather_sorted = df_weather.sort("weather_timestamp_utc")
+
+            df_enriched = df_sensor_sorted.join_asof(
+                df_weather_sorted,
+                left_on="SensorReadingUTC",
+                right_on="weather_timestamp_utc",
+                # Use integer tolerance for Int64 join keys
+                tolerance=self.WEATHER_MATCH_TOLERANCE_SECONDS, 
+                strategy="nearest"
+            )
+            self.logger.info("Finished merging data.")
+            self.logger.info(f"Enriched data has {len(df_enriched)} rows.")
+
+        except Exception as e:
+            self.error(f"Error during data merging (join_asof): {e}", raise_exception=False)
+            return
+
+        # 4. Save the enriched data
+        try:
+            self.logger.info(f"Saving enriched data to {enriched_file}...")
+            df_enriched.write_parquet(enriched_file)
+            self.logger.info("Successfully saved enriched data.")
+        except Exception as e:
+            self.error(f"Failed to save enriched data to {enriched_file}: {e}", raise_exception=False)
+
+    # <<< END OF NEW METHOD >>>
+
+# --- Test Block Removed --- 
+# The following block was for manual testing and should not be included 
+# in the code run by the Docker container's cron jobs or main process.
+# if __name__ == "__main__":
+#    ... (rest of test block commented out or deleted) ...
+# --- End of Removed Test Block ---
             
