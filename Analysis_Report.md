@@ -26,8 +26,6 @@ Data was collected using Coris sensors, processed using Polars, and enriched usi
 
 The following plots compare the indoor temperature readings from the sensors against the outdoor temperature obtained from the weather API over the available time period.
 
-**(Note: Plots should be placed in the same directory as this report or paths updated.)**
-
 **Figure 1: Indoor vs. Outdoor Temperature (Sampled)**
 ![Indoor vs. Outdoor Temperature (Sampled)](temp_vs_outdoor_sampled.png)
 
@@ -44,8 +42,6 @@ The following plots compare the indoor temperature readings from the sensors aga
 
 This plot compares the average hourly indoor relative humidity from sensors with the outdoor relative humidity from the weather API.
 
-**(Note: Plot should be placed in the same directory as this report or path updated.)**
-
 **Figure 3: Average Hourly Indoor vs. Outdoor Humidity**
 ![Average Hourly Indoor vs. Outdoor Humidity](humidity_vs_outdoor_hourly_avg.png)
 
@@ -58,8 +54,6 @@ This plot compares the average hourly indoor relative humidity from sensors with
 ### 3.3. Indoor Conditions vs. Outdoor Weather Type
 
 These plots show the distribution of indoor temperature and humidity based on the classified outdoor weather condition reported by the Open-Meteo API.
-
-**(Note: Plots should be placed in the same directory as this report or paths updated.)**
 
 **Figure 4: Indoor Temperature Distribution by Outdoor Weather Condition**
 ![Indoor Temperature Distribution by Outdoor Weather Condition](temp_by_weather.png)
