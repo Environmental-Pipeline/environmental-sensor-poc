@@ -1,7 +1,6 @@
 # Environmental Sensor Data Analysis Report: Weather Enrichment Findings
 
 **Date:** April 17, 2025
-**Author:** Anthony (Prepared with AI Assistant)
 
 ## 1. Introduction
 
