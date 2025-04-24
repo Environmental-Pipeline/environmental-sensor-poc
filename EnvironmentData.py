@@ -6,12 +6,15 @@ from pathlib import Path # Added for weather enrichment
 # Added for weather enrichment:
 # Assumes weather_api.py is in the same directory or accessible in python path
 try:
-    from weather_api import get_historical_weather
+    from weather_api import get_historical_weather, get_daily_hourly_weather
 except ImportError:
     # Log error or raise exception if weather_api is critical
-    logging.error("Failed to import get_historical_weather from weather_api.py")
-    # Optionally, define a placeholder function or raise an error:
-    async def get_historical_weather(*args, **kwargs): 
+    logging.error("Failed to import functions from weather_api.py")
+    # Optionally, define placeholder functions or raise an error:
+    async def get_historical_weather(*args, **kwargs):
+        logging.error("weather_api.py not found, weather enrichment unavailable.")
+        return None
+    async def get_daily_hourly_weather(*args, **kwargs):
         logging.error("weather_api.py not found, weather enrichment unavailable.")
         return None
 
@@ -888,128 +891,248 @@ class EnvironmentData():
             
     # <<< NEW METHOD FOR WEATHER ENRICHMENT >>>
     async def enrich_readings_with_weather(self):
-        """Enriches the main sensor readings parquet file with weather data.
+        """Enriches sensor readings incrementally with weather data using state tracking.
 
-        Loads 'sensor_readings.parquet', fetches corresponding historical weather data
-        from Open-Meteo using the predefined coordinates, merges the data based on
-        the closest timestamp (within tolerance), and saves the result to
-        'sensor_readings_with_weather.parquet'.
+        Loads sensor data from 'sensor_readings.parquet', identifies readings newer
+        than the last processed timestamp (stored in 'enrichment_last_processed_ts.txt'),
+        fetches weather data only for the dates covered by these new readings,
+        merges the new weather data, combines it with previously enriched data,
+        saves the full result to 'sensor_readings_with_weather.parquet',
+        and updates the last processed timestamp state file.
         """
-        self.logger.info("Starting weather enrichment process...")
+        self.logger.info("Starting INCREMENTAL weather enrichment process (state tracking)...")
 
+        # Define file paths
         sensor_file = self.data_path / "sensor_readings.parquet"
         enriched_file = self.data_path / "sensor_readings_with_weather.parquet"
+        state_file = self.data_path / "enrichment_last_processed_ts.txt"
+        last_processed_ts = 0
+        new_max_ts = 0 # Initialize timestamp to save back to state file
 
-        # 1. Load sensor data
+        # --- 1. Read Last Processed Timestamp --- 
+        try:
+            if state_file.exists():
+                with open(state_file, 'r') as f:
+                    content = f.read().strip()
+                    if content:
+                        last_processed_ts = int(content)
+                        self.logger.info(f"Read last processed timestamp: {last_processed_ts} ({datetime.datetime.fromtimestamp(last_processed_ts, tz=pytz.utc)})")
+                    else:
+                        self.logger.warning(f"State file {state_file} is empty. Processing all data.")
+            else:
+                self.logger.info(f"State file {state_file} not found. Processing all data.")
+        except ValueError:
+            self.error(f"Invalid content in state file {state_file}. Expected integer timestamp. Processing all data.", raise_exception=False)
+            last_processed_ts = 0 # Reset on error
+        except Exception as e:
+            self.error(f"Error reading state file {state_file}: {e}. Processing all data.", raise_exception=False)
+            last_processed_ts = 0 # Reset on error
+
+        # --- 2. Load Main Sensor Data ---
         try:
             self.logger.info(f"Loading sensor data from {sensor_file}...")
+            if not sensor_file.exists():
+                 self.error(f"Input sensor file not found at {sensor_file}. Cannot enrich.", raise_exception=False)
+                 return
             df_sensor = polars.read_parquet(sensor_file)
             if df_sensor.is_empty():
-                self.logger.warning("Sensor data file is empty. Skipping enrichment.")
+                self.logger.warning(f"Sensor data file {sensor_file} is empty. Skipping enrichment.")
                 return
-            self.logger.info(f"Loaded {len(df_sensor)} sensor readings.")
-
-            # --- Basic Validation ---
-            if "SensorReadingUTC" not in df_sensor.columns:
-                 self.error(f"Missing required column 'SensorReadingUTC' in {sensor_file}. Cannot enrich.", raise_exception=False)
-                 return
-            if not df_sensor["SensorReadingUTC"].dtype == polars.Int64:
-                try:
-                    df_sensor = df_sensor.with_columns(polars.col("SensorReadingUTC").cast(polars.Int64))
-                    self.logger.warning("Converted 'SensorReadingUTC' column to Int64 for enrichment.")
-                except Exception as e:
-                    self.error(f"Failed to cast 'SensorReadingUTC' to Int64 in {sensor_file}: {e}. Cannot enrich.", raise_exception=False)
-                    return
-
-        except FileNotFoundError:
-            self.error(f"Sensor data file not found at {sensor_file}. Cannot enrich.", raise_exception=False)
-            return
+            self.logger.info(f"Loaded {df_sensor.height} total sensor readings.")
         except Exception as e:
             self.error(f"Error loading sensor data from {sensor_file}: {e}", raise_exception=False)
             return
 
-        # 2. Identify unique timestamps and fetch weather data
+        # --- 3. Filter New Data & Basic Validation ---
         try:
-            unique_timestamps = df_sensor["SensorReadingUTC"].unique().to_list()
-            self.logger.info(f"Found {len(unique_timestamps)} unique sensor timestamps for weather lookup.")
+            if "SensorReadingUTC" not in df_sensor.columns:
+                 self.error(f"Missing required column 'SensorReadingUTC' in {sensor_file}. Cannot enrich.", raise_exception=False)
+                 return
+             # Ensure it's Int64 for timestamp operations & filtering
+            if not df_sensor["SensorReadingUTC"].dtype == polars.Int64:
+                try:
+                    df_sensor = df_sensor.with_columns(polars.col("SensorReadingUTC").cast(polars.Int64))
+                    self.logger.warning(f"Converted 'SensorReadingUTC' column in {sensor_file} to Int64.")
+                except Exception as e:
+                    self.error(f"Failed to cast 'SensorReadingUTC' to Int64 in {sensor_file}: {e}. Cannot enrich.", raise_exception=False)
+                    return
 
-            # --- Limit Concurrency --- 
-            semaphore = asyncio.Semaphore(self.MAX_CONCURRENT_WEATHER_CALLS)
-            weather_tasks = []
+            # Filter for readings newer than the last processed timestamp
+            df_new_sensor = df_sensor.filter(polars.col("SensorReadingUTC") > last_processed_ts)
 
-            async def fetch_with_semaphore(ts):
-                async with semaphore:
-                    return await get_historical_weather(
-                        self.MUSEUM_LATITUDE, self.MUSEUM_LONGITUDE, ts
-                    )
-
-            for ts in unique_timestamps:
-                task = fetch_with_semaphore(ts)
-                weather_tasks.append(task)
-            # --------------------------
+            if df_new_sensor.is_empty():
+                self.logger.info(f"No new sensor readings found since last processed timestamp ({last_processed_ts}). Enrichment complete.")
+                return # Nothing new to process
             
-            self.logger.info(f"Fetching weather data for {len(weather_tasks)} timestamps (concurrency: {self.MAX_CONCURRENT_WEATHER_CALLS})...")
-            # Use asyncio.gather with return_exceptions=True to handle potential API errors gracefully
-            weather_results_list = await asyncio.gather(*weather_tasks, return_exceptions=True)
-            self.logger.info("Finished fetching weather data.")
-
-            # Process results, filtering out None values and exceptions
-            weather_lookup = {}
-            successful_fetches = 0
-            failed_fetches = 0
-            for i, result in enumerate(weather_results_list):
-                if isinstance(result, Exception):
-                    self.logger.warning(f"Weather API call failed for timestamp {unique_timestamps[i]}: {result}")
-                    failed_fetches += 1
-                elif result:
-                    # Key by the weather data point's timestamp for asof join
-                    weather_lookup[result['weather_timestamp_utc']] = result
-                    successful_fetches += 1
-                else:
-                     # Result was None (API returned no data or error handled internally)
-                     failed_fetches += 1
+            self.logger.info(f"Found {df_new_sensor.height} new sensor readings to process.")
             
-            self.logger.info(f"Successfully fetched weather data for {successful_fetches} timestamps. Failed/No data for {failed_fetches}.")
-
-            if not weather_lookup:
-                self.error("No weather data could be successfully fetched. Aborting enrichment.", raise_exception=False)
-                return
-
-            # Convert lookup to DataFrame
-            df_weather = polars.DataFrame(list(weather_lookup.values()))
-
+            # Find the maximum timestamp in the *new* data to save later
+            new_max_ts = df_new_sensor["SensorReadingUTC"].max()
+            if new_max_ts is None: # Should not happen if df is not empty, but good practice
+                self.error("Could not determine maximum timestamp from new data. Aborting.", raise_exception=True)
+                return 
+            
         except Exception as e:
-            self.error(f"Error during weather data fetching/processing: {e}", raise_exception=False)
+            self.error(f"Error during data filtering or validation: {e}", raise_exception=False)
             return
 
-        # 3. Merge weather data with sensor data using join_asof
+        # --- 4. Identify Unique Dates (from new data) and Fetch Weather Data ---
+        df_weather = None # Initialize
         try:
-            self.logger.info("Merging weather data with sensor data using join_asof...")
-            df_sensor_sorted = df_sensor.sort("SensorReadingUTC")
-            df_weather_sorted = df_weather.sort("weather_timestamp_utc")
-
-            df_enriched = df_sensor_sorted.join_asof(
-                df_weather_sorted,
-                left_on="SensorReadingUTC",
-                right_on="weather_timestamp_utc",
-                # Use integer tolerance for Int64 join keys
-                tolerance=self.WEATHER_MATCH_TOLERANCE_SECONDS, 
-                strategy="nearest"
+            self.logger.info("Identifying unique dates from NEW sensor data...")
+            # Use only the new sensor data subset
+            unique_dates = (
+                df_new_sensor 
+                .select(
+                    polars.from_epoch("SensorReadingUTC", time_unit="s").dt.strftime('%Y-%m-%d')
+                )
+                .unique()
+                .to_series()
+                .to_list()
             )
-            self.logger.info("Finished merging data.")
-            self.logger.info(f"Enriched data has {len(df_enriched)} rows.")
+            self.logger.info(f"Found {len(unique_dates)} unique dates spanning NEW sensor readings.")
+
+            if not unique_dates:
+                self.logger.warning("No unique dates found in new sensor data. Skipping weather fetch.")
+                # If there are no dates, we still need to merge the new sensor data (without weather) later
+                all_hourly_weather = [] 
+            else:
+                # --- Limit Concurrency & Fetch ---
+                semaphore = asyncio.Semaphore(self.MAX_CONCURRENT_WEATHER_CALLS)
+                weather_tasks = []
+                async def fetch_daily_with_semaphore(date_str):
+                    async with semaphore:
+                        return await get_daily_hourly_weather(self.MUSEUM_LATITUDE, self.MUSEUM_LONGITUDE, date_str)
+
+                for date_str in unique_dates:
+                    weather_tasks.append(fetch_daily_with_semaphore(date_str))
+                
+                self.logger.info(f"Fetching hourly weather data for {len(weather_tasks)} unique dates (concurrency: {self.MAX_CONCURRENT_WEATHER_CALLS})...")
+                daily_weather_results = await asyncio.gather(*weather_tasks, return_exceptions=True)
+                self.logger.info("Finished fetching weather data for new dates.")
+
+                # --- Process and Consolidate Results ---
+                all_hourly_weather = []
+                successful_dates = 0
+                failed_dates = 0
+                for i, result in enumerate(daily_weather_results):
+                    if isinstance(result, Exception):
+                        self.logger.warning(f"Weather API call failed for date {unique_dates[i]}: {result}")
+                        failed_dates += 1
+                    elif result: 
+                        all_hourly_weather.extend(result)
+                        successful_dates += 1
+                    else:
+                        self.logger.warning(f"No weather data returned for date {unique_dates[i]}.")
+                        failed_dates += 1
+                self.logger.info(f"Successfully fetched weather data for {successful_dates} dates. Failed/No data for {failed_dates} dates.")
+
+            # --- Create Weather DataFrame (if data exists) ---
+            if all_hourly_weather:
+                self.logger.info(f"Consolidated {len(all_hourly_weather)} total hourly weather data points for new dates.")
+                df_weather = polars.DataFrame(all_hourly_weather)
+                # Ensure the timestamp column is Int64
+                if "weather_timestamp_utc" not in df_weather.columns:
+                     self.error("Weather data missing 'weather_timestamp_utc' column. Aborting.", raise_exception=False)
+                     return # Cannot proceed without timestamp
+                if not df_weather["weather_timestamp_utc"].dtype == polars.Int64:
+                    try:
+                        df_weather = df_weather.with_columns(polars.col("weather_timestamp_utc").cast(polars.Int64))
+                    except Exception as e:
+                         self.error(f"Failed to cast 'weather_timestamp_utc' to Int64: {e}. Aborting.", raise_exception=False)
+                         return # Cannot proceed without correct timestamp type
+            else:
+                 self.logger.info("No new weather data points fetched or available.")
+                 df_weather = None # Ensure it's None if no data
 
         except Exception as e:
-            self.error(f"Error during data merging (join_asof): {e}", raise_exception=False)
+            self.error(f"Error during weather data fetching/processing for new data: {e}", raise_exception=False)
             return
 
-        # 4. Save the enriched data
+        # --- 5. Merge Weather Data with NEW Sensor Data using join_asof ---
+        df_new_enriched = None
         try:
-            self.logger.info(f"Saving enriched data to {enriched_file}...")
-            df_enriched.write_parquet(enriched_file)
-            self.logger.info("Successfully saved enriched data.")
+            self.logger.info("Sorting new sensor data...")
+            df_new_sensor_sorted = df_new_sensor.sort("SensorReadingUTC")
+
+            if df_weather is not None and not df_weather.is_empty():
+                self.logger.info("Merging fetched weather data with new sensor data...")
+                df_weather_sorted = df_weather.sort("weather_timestamp_utc")
+                df_new_enriched = df_new_sensor_sorted.join_asof(
+                    df_weather_sorted,
+                    left_on="SensorReadingUTC",
+                    right_on="weather_timestamp_utc",
+                    tolerance=self.WEATHER_MATCH_TOLERANCE_SECONDS,
+                    strategy="nearest"
+                )
+                # Optional: Log how many new rows got weather data
+                null_weather_count = df_new_enriched["weather_timestamp_utc"].is_null().sum()
+                self.logger.info(f"{null_weather_count} new sensor readings did not find a weather match.")
+            else:
+                # If no weather data, the "new enriched" data is just the new sensor data
+                # Need to add null columns for weather to match schema for concatenation
+                self.logger.info("No new weather data to merge. Preparing new sensor data for concatenation.")
+                weather_cols_to_add = {
+                    'outdoor_temperature_f': polars.lit(None, dtype=polars.Float64),
+                    'outdoor_humidity': polars.lit(None, dtype=polars.Int64),
+                    'weather_condition_code': polars.lit(None, dtype=polars.Int64),
+                    'weather_timestamp_utc': polars.lit(None, dtype=polars.Int64)
+                }
+                df_new_enriched = df_new_sensor_sorted.with_columns(**weather_cols_to_add)
+
+            self.logger.info("Finished processing new data.")
+            self.logger.info(f"Newly processed data has {df_new_enriched.height} rows.")
+
         except Exception as e:
-            self.error(f"Failed to save enriched data to {enriched_file}: {e}", raise_exception=False)
+            self.error(f"Error during merging new data (join_asof): {e}", raise_exception=False)
+            return
+
+        # --- 6. Combine with Existing Enriched Data & Save ---
+        save_successful = False
+        try:
+            df_combined_enriched = None
+            if enriched_file.exists():
+                self.logger.info(f"Loading existing enriched data from {enriched_file}...")
+                try:
+                    df_old_enriched = polars.read_parquet(enriched_file)
+                    self.logger.info(f"Combining {df_old_enriched.height} old rows with {df_new_enriched.height} new rows.")
+                    # Ensure schemas match before concatenating - select common columns or cast
+                    # For simplicity, assuming new enrichment adds needed columns (might need refinement)
+                    df_combined_enriched = polars.concat([df_old_enriched, df_new_enriched], how="diagonal")
+                except Exception as e:
+                    self.error(f"Error loading or combining with existing enriched data from {enriched_file}: {e}. Will overwrite with new data only.", raise_exception=False)
+                    df_combined_enriched = df_new_enriched # Fallback to new data if old is corrupted/uncombinable
+            else:
+                self.logger.info("No existing enriched file found. Saving new data only.")
+                df_combined_enriched = df_new_enriched
+
+            if df_combined_enriched is not None and not df_combined_enriched.is_empty():
+                self.logger.info(f"Saving combined enriched data ({df_combined_enriched.height} rows) to {enriched_file}...")
+                enriched_file.parent.mkdir(parents=True, exist_ok=True)
+                df_combined_enriched.write_parquet(enriched_file)
+                self.logger.info(f"Successfully saved combined enriched data to {enriched_file}.")
+                save_successful = True
+            else:
+                self.logger.warning("Combined enriched data is empty or None. Nothing to save.")
+                # Consider if state should be updated if only new data existed but merging failed
+                # For now, only update state if save was attempted and successful
+
+        except Exception as e:
+            self.error(f"Failed to save combined enriched data to {enriched_file}: {e}", raise_exception=False)
+            # Do not update state file if saving failed
+
+        # --- 7. Update State File (ONLY if save was successful) ---
+        if save_successful:
+            try:
+                self.logger.info(f"Updating state file {state_file} with timestamp: {new_max_ts} ({datetime.datetime.fromtimestamp(new_max_ts, tz=pytz.utc)})")
+                with open(state_file, 'w') as f:
+                    f.write(str(new_max_ts))
+                self.logger.info("State file updated successfully.")
+            except Exception as e:
+                # Log error but don't raise - main process succeeded, state update is secondary
+                self.error(f"CRITICAL WARNING: Failed to update state file {state_file} after successful enrichment: {e}. Next run will reprocess data since {last_processed_ts}.", raise_exception=False)
+        else:
+             self.logger.warning("Enriched data saving failed or was skipped. State file will NOT be updated.")
 
     # <<< END OF NEW METHOD >>>
 

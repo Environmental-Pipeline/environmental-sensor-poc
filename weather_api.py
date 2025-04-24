@@ -151,6 +151,119 @@ async def get_historical_weather(latitude: float, longitude: float, timestamp_un
     logging.error(f"Exhausted all attempts for {latitude},{longitude} on {target_date_str} without success or explicit failure.")
     return None
 
+# <<< NEW FUNCTION FOR DAILY BULK FETCH >>>
+async def get_daily_hourly_weather(latitude: float, longitude: float, date_str: str) -> list[dict] | None:
+    """Fetches all hourly weather data points for a specific location and *date*.
+
+    Args:
+        latitude: Latitude of the location.
+        longitude: Longitude of the location.
+        date_str: The target date in 'YYYY-MM-DD' format.
+
+    Returns:
+        A list of dictionaries, each containing hourly weather data
+        (temp, humidity, weather code, timestamp) for the requested date,
+        or None if the API call fails.
+    """
+    params = {
+        'latitude': latitude,
+        'longitude': longitude,
+        'start_date': date_str,
+        'end_date': date_str,
+        'hourly': 'temperature_2m,relativehumidity_2m,weathercode',
+        'temperature_unit': 'fahrenheit',
+        'timezone': 'UTC'
+    }
+
+    timeout = aiohttp.ClientTimeout(total=DEFAULT_TIMEOUT_SECONDS)
+
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(HISTORICAL_API_URL, params=params) as response:
+                    if response.status == 429:
+                        if attempt < MAX_RETRIES:
+                            delay = INITIAL_BACKOFF_DELAY * (BACKOFF_FACTOR ** attempt)
+                            jitter = random.uniform(0, delay * 0.1)
+                            wait_time = delay + jitter
+                            logging.warning(f"[Daily Fetch] Rate limited (429) on attempt {attempt + 1}/{MAX_RETRIES + 1} for {latitude},{longitude} on {date_str}. Retrying in {wait_time:.2f} seconds...")
+                            await asyncio.sleep(wait_time)
+                            continue
+                        else:
+                            logging.error(f"[Daily Fetch] Rate limited (429) on final attempt {attempt + 1}/{MAX_RETRIES + 1} for {latitude},{longitude} on {date_str}. Giving up.")
+                            return None
+
+                    response.raise_for_status()
+                    data = await response.json()
+                    logging.info(f"[Daily Fetch] Successfully fetched Open-Meteo data for {latitude},{longitude} on {date_str}")
+
+                    if not data or 'hourly' not in data or not all(k in data['hourly'] for k in ['time', 'temperature_2m', 'relativehumidity_2m', 'weathercode']):
+                        logging.warning(f"[Daily Fetch] Incomplete or missing hourly data in Open-Meteo response for {latitude},{longitude} on {date_str}")
+                        return None
+
+                    hourly_data = data['hourly']
+                    times = hourly_data['time']
+                    temps = hourly_data['temperature_2m']
+                    humidity = hourly_data['relativehumidity_2m']
+                    weather_codes = hourly_data['weathercode']
+
+                    # Package all hourly data points
+                    daily_results = []
+                    for i, time_str in enumerate(times):
+                        # Only include if all data points for the hour are valid
+                        if temps[i] is not None and humidity[i] is not None and weather_codes[i] is not None:
+                            # Parse the ISO 8601 timestamp string and convert to Unix timestamp (seconds)
+                            # Ensure it's timezone-aware (UTC) before getting timestamp
+                            dt_point_utc = datetime.fromisoformat(time_str).replace(tzinfo=pytz.utc)
+                            daily_results.append({
+                                'outdoor_temperature_f': temps[i],
+                                'outdoor_humidity': humidity[i],
+                                'weather_condition_code': weather_codes[i],
+                                'weather_timestamp_utc': int(dt_point_utc.timestamp()) # Store as Unix timestamp (seconds)
+                            })
+                        else:
+                             logging.warning(f"[Daily Fetch] Found null weather data point at {time_str} for {latitude},{longitude} on {date_str}. Skipping this hour.")
+
+                    return daily_results # Return list of all valid hourly points
+
+        except aiohttp.ClientResponseError as e:
+            logging.error(f"[Daily Fetch] HTTP error (non-429) fetching Open-Meteo data for {latitude},{longitude} on {date_str}: {e.status} - {e.message}")
+            if e.status == 400:
+                 logging.error("[Daily Fetch] Bad Request (400): Check date range or coordinates.")
+            return None # Exit on non-429 ClientResponseError
+        except aiohttp.ClientError as e:
+            # Handle other client errors (timeouts, connection issues)
+            logging.error(f"[Daily Fetch] Client error fetching Open-Meteo data for {latitude},{longitude} on {date_str}: {e}")
+            if attempt < MAX_RETRIES:
+                 delay = INITIAL_BACKOFF_DELAY * (BACKOFF_FACTOR ** attempt)
+                 jitter = random.uniform(0, delay * 0.1)
+                 wait_time = delay + jitter
+                 logging.warning(f"[Daily Fetch] Client error on attempt {attempt + 1}/{MAX_RETRIES + 1}. Retrying in {wait_time:.2f} seconds...")
+                 await asyncio.sleep(wait_time)
+                 continue
+            else:
+                logging.error(f"[Daily Fetch] Client error on final attempt {attempt + 1}/{MAX_RETRIES + 1}. Giving up.")
+                return None # Exit on final ClientError
+        except Exception as e:
+            # Catch-all for unexpected errors
+            logging.error(f"[Daily Fetch] An unexpected error occurred on attempt {attempt + 1} fetching Open-Meteo data for {latitude},{longitude} on {date_str}: {e}")
+            # Retry logic for unexpected errors (same as ClientError for simplicity)
+            if attempt < MAX_RETRIES:
+                delay = INITIAL_BACKOFF_DELAY * (BACKOFF_FACTOR ** attempt)
+                jitter = random.uniform(0, delay * 0.1)
+                wait_time = delay + jitter
+                logging.warning(f"[Daily Fetch] Unexpected error on attempt {attempt + 1}/{MAX_RETRIES + 1}. Retrying in {wait_time:.2f} seconds...")
+                await asyncio.sleep(wait_time)
+                continue
+            else:
+                logging.error(f"[Daily Fetch] Unexpected error on final attempt {attempt + 1}/{MAX_RETRIES + 1}. Giving up.")
+                return None # Exit on final unexpected error
+
+    # Fallback if loop finishes unexpectedly
+    logging.error(f"[Daily Fetch] Exhausted all attempts for {latitude},{longitude} on {date_str} without success.")
+    return None
+# <<< END NEW FUNCTION >>>
+
 # Example usage (for testing)
 async def main():
     # Example coordinates (New York City)
