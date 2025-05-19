@@ -16,7 +16,7 @@ RUN crontab /etc/cron.d/cronjobs
 # Expose Jupyter port
 EXPOSE 8888
 
-# Start init script first, then Jupyter in background, then cron in foreground
-CMD python3 jobs/0-init.py && \
-    jupyter notebook --ip 0.0.0.0 --port 8888 --no-browser --allow-root & \
+# Start Jupyter notebook first, then run init script, then cron in foreground
+CMD jupyter notebook --ip 0.0.0.0 --port 8888 --no-browser --allow-root & \
+    python3 jobs/0-init.py && \
     cron -f

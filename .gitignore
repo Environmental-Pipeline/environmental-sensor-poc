@@ -8,3 +8,5 @@ todo
 .vscode
 not-tracked
 out/
+.cursor
+docs
