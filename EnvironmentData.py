@@ -397,7 +397,11 @@ class EnvironmentData():
             # Convert string time to UTC timestamp if needed
             if df['Time'].dtype == polars.Utf8:
                 df = df.with_columns(
-                    polars.col('Time').str.strptime(polars.Datetime, "%Y-%m-%d %H:%M:%S%.f").dt.timestamp('s').alias('SensorReadingUTC')
+                    polars.col('Time').str.strptime(polars.Datetime, "%Y-%m-%d %H:%M:%S%.f")
+                                    .dt.cast_time_unit('ms')
+                                    .dt.timestamp()
+                                    .floordiv(1000)
+                                    .alias('SensorReadingUTC')
                 ).drop('Time')
             else:
                 df = df.rename({'Time': 'SensorReadingUTC'})
@@ -557,6 +561,11 @@ class EnvironmentData():
                 files_read.append(file)
             except:
                 pass
+        if len(new_readings) == 0:
+            self.logger.info(
+                'consolidate_readings: no new-reading parquet files found; skipping.'
+            )
+            return
 
         # Combine the readings into a single polars DataFrame.
         dt = polars.concat(new_readings)
@@ -954,62 +963,65 @@ class EnvironmentData():
             if sensorname in name_overrides:
                 sensorname = name_overrides[sensorname]
             
-            if 'floator' in sensorname.lower():
-                info = sensorname.strip().split('_')
-            else:
-                info = sensorname.strip().split(' ')
-                info = info[0:-1] + info[-1].split('_') 
-            
+            try:
+                if 'floator' in sensorname.lower():
+                    info = sensorname.strip().split('_')
+                else:
+                    info = sensorname.strip().split(' ')
+                    info = info[0:-1] + info[-1].split('_') 
             # If the cardinal direction is included, there will be 4 pieces of info.
-            if len(info) == 5:
+                if len(info) == 5:   
+                    sensors.append({
+                        'SensorName': sensorname, 
+                    #   'SensorType_fromName': info[0],
+                        'DeviceID': info[4],
+                        'SensorType': sensor['SensorType'],
+                        'SensorID_Coris': sensor['SensorID_Coris'],
+                        'DeviceID_Coris': sensor['DeviceID_Coris'],
+                        'BuildingID': info[1],
+                        'Building': building_name_map[info[1]] if info[1] in building_name_map else '',
+                        'Room': info[2].replace('_', ''),
+                        'CardinalDirection': info[3]
+                    })
+
+                elif len(info) == 4:
                 
-                sensors.append({
-                    'SensorName': sensorname, 
-                    #'SensorType_fromName': info[0],
-                    'DeviceID': info[4],
-                    'SensorType': sensor['SensorType'],
-                    'SensorID_Coris': sensor['SensorID_Coris'],
-                    'DeviceID_Coris': sensor['DeviceID_Coris'],
-                    'BuildingID': info[1],
-                    'Building': building_name_map[info[1]] if info[1] in building_name_map else '',
-                    'Room': info[2].replace('_', ''),
-                    'CardinalDirection': info[3]
-                })
-                
-            elif len(info) == 4:
-                
-                sensors.append({
-                    'SensorName': sensorname, 
-                    #'SensorType_fromName': info[0],
-                    'DeviceID': info[3],
-                    'SensorType': sensor['SensorType'],
-                    'SensorID_Coris': sensor['SensorID_Coris'],
-                    'DeviceID_Coris': sensor['DeviceID_Coris'],
-                    'BuildingID': info[1],
-                    'Building': building_name_map[info[1]] if info[1] in building_name_map else '',
-                    'Room': info[2].replace('_', ''),
-                    'CardinalDirection': 'Not Indicated'
-                })
+                    sensors.append({
+                        'SensorName': sensorname, 
+                        #'SensorType_fromName': info[0],
+                        'DeviceID': info[3],
+                        'SensorType': sensor['SensorType'],
+                        'SensorID_Coris': sensor['SensorID_Coris'],
+                        'DeviceID_Coris': sensor['DeviceID_Coris'],
+                        'BuildingID': info[1],
+                        'Building': building_name_map[info[1]] if info[1] in building_name_map else '',
+                        'Room': info[2].replace('_', ''),
+                        'CardinalDirection': 'Not Indicated'
+                    })
                 
             # Floaters are len 3.
-            elif len(info) == 3:
+                elif len(info) == 3:
                 
-                sensors.append({
-                    'SensorName': sensorname, 
-                    #'SensorType_fromName': info[0],
-                    'DeviceID': info[2],
-                    'SensorType': sensor['SensorType'],
-                    'SensorID_Coris': sensor['SensorID_Coris'],
-                    'DeviceID_Coris': sensor['DeviceID_Coris'],
-                    'BuildingID': 'FLOATER',
-                    'Building': building_name_map[info[1]] if info[1] in building_name_map else '',
-                    'Room': 'FLOATER',
-                    'CardinalDirection': None
-                })
-            
-            else:
+                    sensors.append({
+                        'SensorName': sensorname, 
+                        #'SensorType_fromName': info[0],
+                        'DeviceID': info[2],
+                        'SensorType': sensor['SensorType'],
+                        'SensorID_Coris': sensor['SensorID_Coris'],
+                        'DeviceID_Coris': sensor['DeviceID_Coris'],
+                        'BuildingID': 'FLOATER',
+                        'Building': building_name_map[info[1]] if info[1] in building_name_map else '',
+                        'Room': 'FLOATER',
+                        'CardinalDirection': None
+                    })
+                else:
+                    raise ValueError("unrecognised pattern")
                 
-                raise Exception(f'Unexpected SensorName format: {sensorname}.')
+            except Exception as e:
+                self.logger.warning(
+                    f"update_lookups skipped unrecognised SensorName {sensorname!r}: {e}"
+                )
+                continue
                 
         # Write the table to a file.
         sensors = polars.DataFrame(sensors).unique()
@@ -1025,8 +1037,8 @@ class EnvironmentData():
         if bad_values.shape[0] > 0:
             # If there is a bad mapping, log it and remove the duplicates so we can use the data that is properly mapped.
             # For invalid mappings, Building, Room, and CardinalDirection will be null.
-            self.error(f'DeviceID_Coris to Building, Room, CardinalDirection is not a 1-1 mapping. Invalid mappings will be excluded: \n{bad_values}', raise_exception = True)
-            device_info_from_sensors = device_info_from_sensors.filter(polars.col('DeviceID_Coris').is_duplicated().not_())
+            self.logger.warning("update_lookups dropping %s ambiguous DeviceID_Coris rows:\n%s",bad_values.height,bad_values)
+            device_info_from_sensors = device_info_from_sensors.join(bad_values.select("DeviceID_Coris"), on="DeviceID_Coris", how="anti")
 
         # Device Info.
         devices = polars.read_parquet(f'{self.data_path}/sensor_readings.parquet', columns = ['DeviceID_Coris', 'DeviceName']).unique()

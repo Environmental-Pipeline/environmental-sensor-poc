@@ -120,9 +120,10 @@ class ConservAPIClient:
             raise ValueError(f"Export window of {window_days} days exceeds maximum of {self.max_window_days} days")
         
         payload = {
-            "start_time": start_time.isoformat(),
-            "end_time": end_time.isoformat()
+            "start": start_time.isoformat(),
+            "end": end_time.isoformat()
         }
+
         
         response = self._make_request("POST", "/v1/sensors/export", api_key, json=payload)
         result = response.json()
@@ -243,8 +244,8 @@ class ConservAPIClient:
             elif status == "failed":
                 self.logger.error(f"Export {uuid} failed")
                 return status
-            elif status == "pending":
-                self.logger.info(f"Export {uuid} still pending, waiting {self.poll_interval_seconds}s...")
+            elif status in ("pending", "processing", "queued"):
+                self.logger.info(f"Export {uuid} still {status}, waiting {self.poll_interval_seconds}s...")
                 time.sleep(self.poll_interval_seconds)
             else:
                 raise ValueError(f"Unknown export status: {status}")
