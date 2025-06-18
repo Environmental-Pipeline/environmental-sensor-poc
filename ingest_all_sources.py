@@ -65,17 +65,44 @@ def main():
         # ============ READ CONFIGURATION ============
         logger.info("Reading configuration...")
         
+        # Debug environment access
+        logger.info("Environment debugging:")
+        logger.info(f"  Current working directory: {os.getcwd()}")
+        logger.info(f"  .env file exists: {os.path.exists('.env')}")
+        if os.path.exists('.env'):
+            with open('.env') as f:
+                env_lines = f.readlines()
+                logger.info(f"  .env file has {len(env_lines)} lines")
+                # Log non-sensitive config lines
+                for line in env_lines[:5]:  # Only first 5 lines to avoid API keys
+                    if not any(key in line for key in ['API_KEY', 'KEY']):
+                        logger.info(f"    {line.strip()}")
+        
         # Required configuration
         cats_user_id = int(read_env_variable('CATS_USER_ID'))
         conserv_enabled = read_env_variable('CONSERV_ENABLED', 'False').lower() == 'true'
         testing = read_env_variable('TESTING', 'False').lower() == 'true'
         run_window_hours = int(read_env_variable('RUN_WINDOW_HOURS', '24'))
         
+        # Debug Conserv API keys availability
+        conserv_keys_found = []
+        for customer_id in [1545, 333, 307, 2671, 1696]:
+            key = read_env_variable(f'CONSERV_API_KEY_{customer_id}')
+            if key:
+                conserv_keys_found.append(customer_id)
+        
         logger.info(f"Configuration:")
         logger.info(f"  CATS_USER_ID: {cats_user_id}")
         logger.info(f"  CONSERV_ENABLED: {conserv_enabled}")
         logger.info(f"  TESTING: {testing}")
         logger.info(f"  RUN_WINDOW_HOURS: {run_window_hours}")
+        logger.info(f"  Conserv API keys found for customers: {conserv_keys_found}")
+        
+        # Critical validation
+        if conserv_enabled and not conserv_keys_found:
+            logger.error("CONSERV_ENABLED=True but no Conserv API keys found!")
+        elif conserv_enabled:
+            logger.info(f"Conserv integration active with {len(conserv_keys_found)} customers")
         
         # ============ INITIALIZE ENVIRONMENT DATA ============
         logger.info("Initializing EnvironmentData...")

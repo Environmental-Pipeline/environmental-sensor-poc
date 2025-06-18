@@ -430,14 +430,32 @@ class EnvironmentData():
             df = df.with_columns(polars.lit(None, dtype=dtype).alias(col))
         
         # ============ DATA TYPE CONSISTENCY ============
-        # Ensure data types match Coris schema
-        df = df.with_columns([
-            polars.col('SensorReadingUTC').cast(polars.Int64),
-            polars.col('QueryUTC').cast(polars.Int64),
-            polars.col('SensorReadingF').cast(polars.Float32),
-            polars.col('SensorReadingRh').cast(polars.Float32),
-            polars.col('customer_id').cast(polars.Int32) if 'customer_id' in df.columns else polars.lit(None, dtype=polars.Int32).alias('customer_id')
+        # Ensure data types match Coris schema - safely handle potential missing columns
+        type_conversions = []
+        
+        if 'SensorReadingUTC' in df.columns:
+            type_conversions.append(polars.col('SensorReadingUTC').cast(polars.Int64))
+        if 'QueryUTC' in df.columns:
+            type_conversions.append(polars.col('QueryUTC').cast(polars.Int64))
+        if 'SensorReadingF' in df.columns:
+            type_conversions.append(polars.col('SensorReadingF').cast(polars.Float32))
+        if 'SensorReadingRh' in df.columns:
+            type_conversions.append(polars.col('SensorReadingRh').cast(polars.Float32))
+        
+        # Always explicitly cast string columns as Utf8 to avoid type conflicts
+        type_conversions.extend([
+            polars.col('SensorID_Conserv').cast(polars.Utf8, strict=False),
+            polars.col('SensorName').cast(polars.Utf8, strict=False),
+            polars.col('source').cast(polars.Utf8, strict=False)
         ])
+        
+        # Handle customer_id safely
+        if 'customer_id' in df.columns:
+            type_conversions.append(polars.col('customer_id').cast(polars.Int32))
+        else:
+            type_conversions.append(polars.lit(None, dtype=polars.Int32).alias('customer_id'))
+        
+        df = df.with_columns(type_conversions)
         
         self.logger.info(f'Conserv schema transformation complete: {df.shape[0]} records')
         return df
