@@ -1,0 +1,42 @@
+2025-06-17 15:21:10,358 - EnvironmentData-Errors - ERROR - get_current_readings_coris validation errors : SensorReadingUTC differs from UTC: UTC: 1750162868, maximum absolute difference (minutes): 8e+05.
+
+2025-06-17 15:21:12,545 - EnvironmentData-Errors - ERROR - Validation errors: 
+5 missing values in [SensorReadingRh].
+2025-06-18 16:11:17,273 - EnvironmentData-Errors - ERROR - get_current_readings_coris validation errors : SensorReadingUTC differs from UTC: UTC: 1750252275, maximum absolute difference (minutes): 8e+05.
+
+2025-06-18 16:11:21,856 - EnvironmentData-Errors - ERROR - Validation errors: 
+10 missing values in [SensorReadingRh].
+2025-06-18 16:14:52,999 - EnvironmentData-Errors - ERROR - get_current_readings_coris validation errors : SensorReadingUTC differs from UTC: UTC: 1750252490, maximum absolute difference (minutes): 8e+05.
+
+2025-06-18 16:14:58,366 - EnvironmentData-Errors - ERROR - Validation errors: 
+15 missing values in [SensorReadingRh].
+2025-06-18 16:15:25,065 - EnvironmentData-Errors - ERROR - get_current_readings_coris validation errors : SensorReadingUTC differs from UTC: UTC: 1750252523, maximum absolute difference (minutes): 8e+05.
+
+2025-06-18 16:15:29,392 - EnvironmentData-Errors - ERROR - Validation errors: 
+20 missing values in [SensorReadingRh].
+2025-06-18 16:16:04,024 - EnvironmentData-Errors - ERROR - get_current_readings_coris validation errors : SensorReadingUTC differs from UTC: UTC: 1750252561, maximum absolute difference (minutes): 8e+05.
+
+2025-06-18 16:19:40,553 - EnvironmentData-Errors - ERROR - get_current_readings_coris validation errors : SensorReadingUTC differs from UTC: UTC: 1750252778, maximum absolute difference (minutes): 8e+05.
+
+2025-06-18 16:27:53,465 - EnvironmentData-Errors - ERROR - Validation errors: 
+25 missing values in [SensorReadingRh].
+2025-06-18 16:34:50,545 - EnvironmentData-Errors - ERROR - get_current_readings_coris validation errors : SensorReadingUTC differs from UTC: UTC: 1750253687, maximum absolute difference (minutes): 8e+05.
+
+2025-06-18 16:43:51,884 - EnvironmentData-Errors - ERROR - Validation errors: 
+30 missing values in [SensorReadingRh].
+2025-06-18 16:51:57,905 - EnvironmentData-Errors - ERROR - get_current_readings_coris validation errors : SensorReadingUTC differs from UTC: UTC: 1750254715, maximum absolute difference (minutes): 8e+05.
+
+2025-06-18 17:01:11,758 - EnvironmentData-Errors - ERROR - Validation errors: 
+35 missing values in [SensorReadingRh].
+2025-06-18 17:32:49,351 - EnvironmentData-Errors - ERROR - get_current_readings_coris validation errors : SensorReadingUTC differs from UTC: UTC: 1750257167, maximum absolute difference (minutes): 8e+05.
+
+2025-06-18 17:32:49,419 - EnvironmentData-Errors - ERROR - consolidate_readings validation errors : Count of sensors missing from historical data: 42.
+
+2025-06-18 17:32:49,485 - EnvironmentData-Errors - ERROR - Validation errors: 
+36 missing values in [SensorReadingRh].
+2025-06-18 17:35:21,357 - EnvironmentData-Errors - ERROR - get_current_readings_coris validation errors : SensorReadingUTC differs from UTC: UTC: 1750257318, maximum absolute difference (minutes): 8e+05.
+
+2025-06-18 17:46:28,760 - EnvironmentData-Errors - ERROR - get_current_readings_coris validation errors : SensorReadingUTC differs from UTC: UTC: 1750257986, maximum absolute difference (minutes): 8e+05.
+
+2025-06-18 17:48:37,041 - EnvironmentData-Errors - ERROR - get_current_readings_coris validation errors : SensorReadingUTC differs from UTC: UTC: 1750258114, maximum absolute difference (minutes): 8e+05.
+
