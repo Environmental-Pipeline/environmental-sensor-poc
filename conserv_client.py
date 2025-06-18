@@ -89,9 +89,29 @@ class ConservAPIClient:
                 response = requests.request(method, url, headers=headers, verify=False, **kwargs)
                 response.raise_for_status()
                 return response
+            except requests.exceptions.HTTPError as e2:
+                # Log response body for debugging 400 errors
+                if e2.response.status_code == 400:
+                    try:
+                        error_body = e2.response.text
+                        self.logger.error(f"400 Bad Request response body: {error_body}")
+                    except:
+                        pass
+                self.logger.error(f"Conserv API request failed even without SSL verification: {e2}")
+                raise
             except requests.exceptions.RequestException as e2:
                 self.logger.error(f"Conserv API request failed even without SSL verification: {e2}")
                 raise
+        except requests.exceptions.HTTPError as e:
+            # Log response body for debugging 400 errors
+            if e.response.status_code == 400:
+                try:
+                    error_body = e.response.text
+                    self.logger.error(f"400 Bad Request response body: {error_body}")
+                except:
+                    pass
+            self.logger.error(f"Conserv API request failed: {e}")
+            raise
         except requests.exceptions.RequestException as e:
             self.logger.error(f"Conserv API request failed: {e}")
             raise
@@ -125,7 +145,18 @@ class ConservAPIClient:
         }
 
         
-        response = self._make_request("POST", "/v1/sensors/export", api_key, json=payload)
+        # Debug the request payload
+        if self.logger:
+            self.logger.info(f"Launch export payload: {payload}")
+        
+        try:
+            response = self._make_request("POST", "/v1/sensors/export", api_key, json=payload)
+        except requests.exceptions.HTTPError as e:
+            # Log the response body for 400 errors to see what's wrong
+            if e.response.status_code == 400:
+                error_body = e.response.text
+                self.logger.error(f"400 Bad Request response body: {error_body}")
+            raise
         result = response.json()
         
         uuid = result.get("uuid")
@@ -247,6 +278,9 @@ class ConservAPIClient:
             elif status in ("pending", "processing", "queued"):
                 self.logger.info(f"Export {uuid} still {status}, waiting {self.poll_interval_seconds}s...")
                 time.sleep(self.poll_interval_seconds)
+            elif status == "processing":
+                self.logger.info(f"Export {uuid} still processing, waiting {self.poll_interval_seconds}s...")
+                time.sleep(self.poll_interval_seconds)
             else:
                 raise ValueError(f"Unknown export status: {status}")
         
@@ -284,6 +318,9 @@ class ConservAPIClient:
             if status != "completed":
                 self.logger.warning(f"Export failed for customer {customer_id}, UUID {uuid}")
                 return None
+            
+            # Add delay to ensure download URL is ready after export completion
+            time.sleep(5)
             
             # Get download URL and fetch data
             download_url = self.get_download_url(uuid, api_key)
