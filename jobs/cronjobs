@@ -1,7 +1,6 @@
-# Unified data ingestion: pull from both Coris and Conserv APIs, then consolidate
-# Run hourly (can be adjusted to daily if needed)
-0 * * * * cd /src/ && /usr/local/bin/python3 /src/ingest_all_sources.py
-
-# Backup: Keep legacy jobs as fallback (disabled by default)
-# */1 * * * * cd /src/ && /usr/local/bin/python3 /src/jobs/1-pull.py
-# */10 * * * * cd /src/ && /usr/local/bin/python3 /src/jobs/2-consolidate.py
+# minute  hour  dom  mon  dow  user  command
+0 * * * * root cd /src && /usr/local/bin/python3 /src/ingest_all_sources.py
+#
+# Backup examples (disabled):
+# */1  * * * * root cd /src && /usr/local/bin/python3 /src/jobs/1-pull.py
+# */10 * * * * root cd /src && /usr/local/bin/python3 /src/jobs/2-consolidate.py
