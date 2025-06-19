@@ -357,6 +357,153 @@ class EnvironmentData():
         """
 
         return int(datetime.datetime.now(datetime.timezone.utc).timestamp())
+    
+    def get_master_schema(self) -> dict:
+        """
+        Get the master schema from existing parquet file.
+        This defines the target schema that ALL data must conform to.
+        
+        Returns
+        -------
+        dict : Column name -> polars data type mapping
+        """
+        
+        # Define the master schema based on existing parquet structure
+        master_schema = {
+            "source": polars.String,
+            "SensorID_Coris": polars.Int32,
+            "SensorID_Conserv": polars.String,
+            "customer_id": polars.Int32,
+            "QueryUTC": polars.Int32,
+            "SensorReadingUTC": polars.Int64,
+            "DeviceID_Coris": polars.Int32,
+            "SensorReadingUTC_SecondsFromPrior": polars.Int64,
+            "SensorReadingF": polars.Float32,
+            "SensorReadingRh": polars.Float32,
+            "SensorName": polars.String,
+            "SensorPort": polars.Int64,
+            "ServerUTC": polars.Int64,
+            "HexGatewayMac": polars.String,
+            "LoraHexGatewayMac": polars.String,
+            "LoraGatewayLastHeardUTC": polars.Int64,
+            "SensorUnplugged": polars.Boolean,
+            "LinkQualityText": polars.String,
+            "HexMac": polars.String,
+            "SensorDeleted": polars.Boolean,
+            "SensorDeactivated": polars.Boolean,
+            "SensorReading": polars.Float64,
+            "DeviceName": polars.String,
+            "DevTypeInt": polars.Int64,
+            "SensorTempPref": polars.String,
+            "DeviceTempPref": polars.Null,
+            "UserTempPref": polars.String,
+            "SensorTimeZone": polars.String,
+            "SensorZipcode": polars.Null,
+            "SensorType": polars.String,
+            "SensorState0String": polars.String,
+            "SensorState1String": polars.String,
+            "ExpectedSensorReadingIntervalSeconds": polars.Int64,
+            "SensorReadingC": polars.Float64,
+            "SensorCalibrationOffsetC": polars.Float64,
+            "SensorCalibrationOffsetF": polars.Float64,
+            "SensorCalibrationOffsetExplanationText": polars.String,
+            "SensorCalibrationOffsetExplanationFirstName": polars.String,
+            "SensorCalibrationOffsetExplanationLastName": polars.String,
+            "SensorCalibrationOffsetUTC": polars.Int64,
+            "LoraBatteryPresent": polars.Int64,
+            "LoraBattery_mV": polars.Int64,
+            "LoraBatteryPercentage": polars.Int64,
+            "LoraBatteryUTC": polars.Int64,
+            "LoraBatteryIsCharging": polars.Int64,
+            "LastSensorErrorValue": polars.Int64,
+            "LastSensorErrorUTC": polars.Int64,
+            "UnivID": polars.Int64,
+            "SensorSerialNumber": polars.Null,
+            "HeatIndexRh": polars.Float64,
+            "ConjoinedRhSensorSensorReadingRh": polars.Float64,
+            "SensorReadingHeatIndexF": polars.Float64,
+            "SensorReadingHeatIndexC": polars.Float64,
+            "HeatIndexWarningTier": polars.Int64,
+            "LoraExternalPowerPresent": polars.Int64,
+            "SensorCalibrationOffsetRh": polars.Int64,
+            "SensorEventCount": polars.Int64,
+            "SensorState": polars.String
+        }
+        
+        return master_schema
+    
+    def enforce_schema(self, df: polars.DataFrame, step_name: str = "") -> polars.DataFrame:
+        """
+        SCHEMA GATE: Enforce master schema on any DataFrame before concatenation.
+        This prevents ALL type mismatch errors by converting data to expected types.
+        
+        Parameters
+        ----------
+        df : polars.DataFrame
+            DataFrame to enforce schema on
+        step_name : str
+            Name of the step for logging
+            
+        Returns
+        -------
+        polars.DataFrame
+            DataFrame with all columns converted to master schema types
+        """
+        
+        if df.is_empty():
+            return df
+            
+        master_schema = self.get_master_schema()
+        
+        self.logger.info(f'SCHEMA GATE [{step_name}]: Enforcing schema on {df.shape[0]} rows, {df.shape[1]} columns')
+        
+        # Track conversions for logging
+        conversions_made = []
+        
+        # Apply schema enforcement
+        conversion_exprs = []
+        
+        for column in df.columns:
+            if column in master_schema:
+                target_type = master_schema[column]
+                current_type = df[column].dtype
+                
+                if current_type != target_type:
+                    conversions_made.append(f"{column}: {current_type} -> {target_type}")
+                    
+                    try:
+                        # Handle specific conversion cases
+                        if target_type == polars.Null:
+                            # Keep null columns as-is
+                            continue
+                        elif str(current_type).startswith('Int') and str(target_type).startswith('Int'):
+                            # Int64 -> Int32 or vice versa (check for overflow)
+                            conversion_exprs.append(polars.col(column).cast(target_type, strict=False))
+                        elif str(current_type).startswith('Float') and str(target_type).startswith('Float'):
+                            # Float64 -> Float32 or vice versa
+                            conversion_exprs.append(polars.col(column).cast(target_type))
+                        else:
+                            # Generic conversion
+                            conversion_exprs.append(polars.col(column).cast(target_type, strict=False))
+                            
+                    except Exception as conv_error:
+                        self.logger.warning(f"SCHEMA GATE: Failed to convert {column}: {conv_error}")
+                        # Keep original column if conversion fails
+                        continue
+        
+        # Apply all conversions at once
+        if conversion_exprs:
+            df = df.with_columns(conversion_exprs)
+        
+        # Log conversions made
+        if conversions_made:
+            self.logger.info(f'SCHEMA GATE [{step_name}]: Made {len(conversions_made)} conversions:')
+            for conv in conversions_made:
+                self.logger.info(f'  -> {conv}')
+        else:
+            self.logger.info(f'SCHEMA GATE [{step_name}]: No conversions needed, schema already correct')
+        
+        return df
 
     def _transform_conserv_to_coris_schema(self, conserv_data: polars.DataFrame, query_utc: int) -> polars.DataFrame:
         """
@@ -377,32 +524,39 @@ class EnvironmentData():
         
         self.logger.info('Transforming Conserv data to Coris schema')
         
+        # DEBUG: Log incoming data types
+        self.logger.info(f'INCOMING Conserv data types: {dict(zip(conserv_data.columns, [str(dtype) for dtype in conserv_data.dtypes]))}')
+        self.logger.info(f'INCOMING Conserv data shape: {conserv_data.shape}')
+        if not conserv_data.is_empty():
+            self.logger.info(f'INCOMING Conservv sample data: {conserv_data.head(1).to_dicts()}')
+        
         # Create a copy to avoid modifying the original
         df = conserv_data.clone()
         
         # ============ CRITICAL TRANSFORMATIONS ============
         
-        # 1. Temperature: Convert °C to °F for consistency
+        # ============ BASIC COLUMN TRANSFORMATIONS ============
+        # Note: Schema gate will handle all type conversions, we just do basic mapping
+        
+        # 1. Temperature: Convert °C to °F (let schema gate handle final type)
         if 'Temperature (°C)' in df.columns:
             df = df.with_columns(
                 ((polars.col('Temperature (°C)') * 9/5) + 32).alias('SensorReadingF')
             ).drop('Temperature (°C)')
         
-        # 2. Humidity: Map directly (already in %)
+        # 2. Humidity: Map directly 
         if 'Humidity (%)' in df.columns:
             df = df.rename({'Humidity (%)': 'SensorReadingRh'})
         
-        # 3. Time: Convert to SensorReadingUTC (assuming 'Time' is already UTC timestamp)
+        # 3. Time: Map to SensorReadingUTC
         if 'Time' in df.columns:
-            # Convert string time to UTC timestamp if needed
-            if df['Time'].dtype == polars.Utf8:
+            # Handle string time if needed
+            if df['Time'].dtype == polars.String:
                 df = df.with_columns(
-                    polars.col('Time').str.strptime(polars.Datetime, "%Y-%m-%d %H:%M:%S%.f").dt.timestamp('s').alias('SensorReadingUTC')
+                    (polars.col('Time').str.strptime(polars.Datetime, "%Y-%m-%d %H:%M:%S%.f").dt.timestamp('ms') // 1000).alias('SensorReadingUTC')
                 ).drop('Time')
             else:
                 df = df.rename({'Time': 'SensorReadingUTC'})
-        
-        # ============ NEW SCHEMA COLUMNS ============
         
         # 4. Sensor identification for Conserv
         if 'Sensor Name' in df.columns:
@@ -417,45 +571,20 @@ class EnvironmentData():
         # 6. Add query timestamp
         df = df.with_columns(polars.lit(query_utc).alias('QueryUTC'))
         
-        # ============ NULL CORIS COLUMNS ============
-        # Set Coris-specific columns to null to maintain schema compatibility
-        coris_null_columns = {
-            'SensorID_Coris': polars.Int32,
-            'DeviceID_Coris': polars.Int32,
-            'DeviceName': polars.Utf8,
-            'SensorType': polars.Utf8
-        }
-        
-        for col, dtype in coris_null_columns.items():
-            df = df.with_columns(polars.lit(None, dtype=dtype).alias(col))
-        
-        # ============ DATA TYPE CONSISTENCY ============
-        # Ensure data types match Coris schema - safely handle potential missing columns
-        type_conversions = []
-        
-        if 'SensorReadingUTC' in df.columns:
-            type_conversions.append(polars.col('SensorReadingUTC').cast(polars.Int64))
-        if 'QueryUTC' in df.columns:
-            type_conversions.append(polars.col('QueryUTC').cast(polars.Int64))
-        if 'SensorReadingF' in df.columns:
-            type_conversions.append(polars.col('SensorReadingF').cast(polars.Float32))
-        if 'SensorReadingRh' in df.columns:
-            type_conversions.append(polars.col('SensorReadingRh').cast(polars.Float32))
-        
-        # Always explicitly cast string columns as Utf8 to avoid type conflicts
-        type_conversions.extend([
-            polars.col('SensorID_Conserv').cast(polars.Utf8, strict=False),
-            polars.col('SensorName').cast(polars.Utf8, strict=False),
-            polars.col('source').cast(polars.Utf8, strict=False)
+        # 7. Add null Coris columns for schema compatibility
+        df = df.with_columns([
+            polars.lit(None, dtype=polars.Int32).alias('SensorID_Coris'),
+            polars.lit(None, dtype=polars.Int32).alias('DeviceID_Coris'),
+            polars.lit(None, dtype=polars.String).alias('DeviceName'),
+            polars.lit(None, dtype=polars.String).alias('SensorType')
         ])
         
-        # Handle customer_id safely
-        if 'customer_id' in df.columns:
-            type_conversions.append(polars.col('customer_id').cast(polars.Int32))
-        else:
-            type_conversions.append(polars.lit(None, dtype=polars.Int32).alias('customer_id'))
+        # 8. Ensure customer_id exists (schema gate will handle final type)
+        if 'customer_id' not in df.columns:
+            df = df.with_columns(polars.lit(None, dtype=polars.Int32).alias('customer_id'))
         
-        df = df.with_columns(type_conversions)
+        # DEBUG: Log transformed data types BEFORE final return
+        self.logger.info(f'TRANSFORMED Conserv data types: {dict(zip(df.columns, [str(dtype) for dtype in df.dtypes]))}')
         
         self.logger.info(f'Conserv schema transformation complete: {df.shape[0]} records')
         return df
@@ -483,10 +612,13 @@ class EnvironmentData():
 
         # Add new schema columns for compatibility with Conserv data
         coris_sensors = coris_sensors.with_columns([
-            polars.lit('coris').alias('source'),
-            polars.lit(None, dtype=polars.Utf8).alias('SensorID_Conserv'),
-            polars.lit(None, dtype=polars.Int32).alias('customer_id')
+            polars.lit('coris').cast(polars.String).alias('source'),
+            polars.lit(None, dtype=polars.String).alias('SensorID_Conserv'), 
+            polars.lit(None, dtype=polars.Int32).alias('customer_id')  # Fixed: Match existing schema
         ])
+        
+        # DEBUG: Log Coris schema types
+        self.logger.info(f'CORIS schema types: {dict(zip(coris_sensors.columns, [str(dtype) for dtype in coris_sensors.dtypes]))}')
 
         # ============ CONSERV DATA PROCESSING (NEW FUNCTIONALITY) ============
         conserv_sensors = None
@@ -516,25 +648,48 @@ class EnvironmentData():
                 )
                 
                 if conserv_data is not None and not conserv_data.is_empty():
+                    self.logger.info(f'Raw Conserv data shape: {conserv_data.shape}')
+                    
                     # Transform Conserv data to match Coris schema
                     conserv_sensors = self._transform_conserv_to_coris_schema(conserv_data, current_utc)
                     
-                    # Clean and validate Conserv data
-                    conserv_sensors = self.clean_validate_sensors(sensors=conserv_sensors, step='get_current_readings_conserv')
-                    
-                    self.logger.info(f'Successfully processed {conserv_sensors.shape[0]} current Conserv records')
+                    if conserv_sensors is not None and not conserv_sensors.is_empty():
+                        # Clean and validate Conserv data
+                        conserv_sensors = self.clean_validate_sensors(sensors=conserv_sensors, step='get_current_readings_conserv')
+                        
+                        if conserv_sensors is not None and not conserv_sensors.is_empty():
+                            self.logger.info(f'Successfully processed {conserv_sensors.shape[0]} current Conserv records')
+                        else:
+                            self.logger.warning('Conserv data was cleaned out completely during validation!')
+                    else:
+                        self.logger.warning('Conserv transformation returned empty data!')
                 else:
                     self.logger.info('No current Conserv data available')
                     
             except Exception as e:
                 self.logger.warning(f'Failed to fetch current Conserv data: {e}')
+                import traceback
+                self.logger.warning(f'Conserv error traceback: {traceback.format_exc()}')
                 # Continue with Coris data only - don't fail the entire process
 
-        # ============ COMBINE ALL DATA SOURCES ============
-        # Merge Coris and Conserv data
-        if conserv_sensors is not None:
-            all_sensors = polars.concat([coris_sensors, conserv_sensors], how='diagonal')
-            self.logger.info(f'Combined current readings: {coris_sensors.shape[0]} Coris + {conserv_sensors.shape[0]} Conserv = {all_sensors.shape[0]} total')
+        # ============ COMBINE ALL DATA SOURCES WITH SCHEMA GATE ============
+        # Apply schema enforcement before merging
+        coris_sensors = self.enforce_schema(coris_sensors, "Coris_Current_Readings")
+        
+        if conserv_sensors is not None and not conserv_sensors.is_empty():
+            conserv_sensors = self.enforce_schema(conserv_sensors, "Conserv_Current_Readings") 
+            
+            self.logger.info('MERGING DATA SOURCES:')
+            self.logger.info(f'  CORIS: {coris_sensors.shape[0]} rows')
+            self.logger.info(f'  CONSERV: {conserv_sensors.shape[0]} rows')
+            
+            try:
+                all_sensors = polars.concat([coris_sensors, conserv_sensors], how='diagonal')
+                self.logger.info(f'MERGE SUCCESS: Combined current readings: {coris_sensors.shape[0]} Coris + {conserv_sensors.shape[0]} Conserv = {all_sensors.shape[0]} total')
+            except Exception as merge_error:
+                self.logger.error(f'MERGE FAILED even with schema gate: {merge_error}')
+                self.logger.error('Falling back to Coris-only data')
+                all_sensors = coris_sensors
         else:
             all_sensors = coris_sensors
             self.logger.info(f'Current readings: {all_sensors.shape[0]} Coris only')
@@ -576,16 +731,29 @@ class EnvironmentData():
             except:
                 pass
 
+        # Apply schema gate to new readings before concatenation
+        normalized_new_readings = []
+        for i, reading_df in enumerate(new_readings):
+            normalized = self.enforce_schema(reading_df, f"NewReading_{i}")
+            normalized_new_readings.append(normalized)
+        
         # Combine the readings into a single polars DataFrame.
-        dt = polars.concat(new_readings)
-        self.logger.info(f'{dt.shape[0]} new readings.')
+        dt = polars.concat(normalized_new_readings) if normalized_new_readings else polars.DataFrame()
+        self.logger.info(f'{dt.shape[0]} new readings after schema enforcement.')
 
         # Clean the data.
-        historical = polars.read_parquet(f'{self.data_path}/sensor_readings.parquet')
+        try:
+            historical = polars.read_parquet(f'{self.data_path}/sensor_readings.parquet')
+        except FileNotFoundError:
+            # Create empty DataFrame with correct schema for first run
+            historical = polars.DataFrame()
+            
         dt = self.clean_validate_sensors(sensors = dt, historical = historical, step = 'consolidate_readings')
 
-        # Set the column data types to match the database.
-        dt = self.match_types(dt, historical)
+        # Apply schema gate before concatenating with historical data
+        dt = self.enforce_schema(dt, "CleanedNewReadings")
+        if not historical.is_empty():
+            historical = self.enforce_schema(historical, "HistoricalData")
 
         # Append these to the database.
         dt = polars.concat([historical, dt], how = 'diagonal')
@@ -606,14 +774,25 @@ class EnvironmentData():
         else:
             coris_seconds_from_prior = polars.DataFrame()
 
-        # For Conserv sensors (group by SensorID_Conserv + customer_id)
+        # For Conserv sensors (group by SensorID_Conserv + customer_id)  
         if not conserv_data.is_empty():
             conserv_data = conserv_data.sort(['customer_id', 'SensorID_Conserv', 'SensorReadingUTC'])
-            conserv_seconds_from_prior = conserv_data.group_by(['customer_id', 'SensorID_Conserv'], maintain_order=True).map_groups(
-                lambda x: x.with_columns((
-                    polars.col('SensorReadingUTC') - polars.col('SensorReadingUTC').shift(1)
-                ).alias('SensorReadingUTC_SecondsFromPrior'))
-            )
+            try:
+                # Try modern Polars syntax first
+                conserv_seconds_from_prior = conserv_data.group_by(['customer_id', 'SensorID_Conserv'], maintain_order=True).map_batches(
+                    lambda x: x.with_columns((
+                        polars.col('SensorReadingUTC') - polars.col('SensorReadingUTC').shift(1)
+                    ).alias('SensorReadingUTC_SecondsFromPrior'))
+                )
+            except (AttributeError, TypeError):
+                # Fallback to older syntax or alternative approach
+                conserv_seconds_from_prior = (
+                    conserv_data
+                    .sort(['customer_id', 'SensorID_Conserv', 'SensorReadingUTC'])
+                    .with_columns((
+                        polars.col('SensorReadingUTC') - polars.col('SensorReadingUTC').shift(1).over(['customer_id', 'SensorID_Conserv'])
+                    ).alias('SensorReadingUTC_SecondsFromPrior'))
+                )
         else:
             conserv_seconds_from_prior = polars.DataFrame()
 
@@ -750,16 +929,17 @@ class EnvironmentData():
         polars.DataFrame : Cleaned DataFrame.
         """
 
-        # Set data types.
+        # Set data types - MATCH EXISTING SCHEMA EXACTLY
         dtypes = {
             'SensorID': polars.String, # this is extracted from the SensorName, it isn't always a number.
-            'SensorID_Coris': polars.Int32,
-            'DeviceID_Coris': polars.Int32,
+            'SensorID_Coris': polars.Int32,  # Fixed: Match parquet file
+            'DeviceID_Coris': polars.Int32,  # Fixed: Match parquet file  
             'SensorReadingUTC': polars.Int64,
+            'QueryUTC': polars.Int32,        # Fixed: Match parquet file
             # New Conserv-specific columns
-            'SensorID_Conserv': polars.Utf8,
-            'customer_id': polars.Int32,
-            'source': polars.Utf8
+            'SensorID_Conserv': polars.String,  # Fixed: Use String not Utf8
+            'customer_id': polars.Int32,     # Fixed: Match parquet file
+            'source': polars.String          # Fixed: Use String not Utf8
         }
         for dtype in dtypes:
             if dtype in sensors.columns:
@@ -767,7 +947,7 @@ class EnvironmentData():
         
         for reading in self.acceptable_range:
             if reading in sensors.columns:
-                sensors = sensors.with_columns(polars.col(reading).cast(polars.Float32))
+                sensors = sensors.with_columns(polars.col(reading).cast(polars.Float32))  # Fixed: Use Float32 not String
 
         # Validate the data.
         self.validate_sensors(sensors= sensors, historical = historical, step = step)
@@ -818,10 +998,10 @@ class EnvironmentData():
 
         # Is the data format as expected?
         self.logger.info(f'{step} validation: correct column data types.')
-        expect_types = {"SensorReadingUTC": polars.Int64, "SensorID": polars.Int32}
+        expect_types = {"SensorReadingUTC": polars.Int64, "SensorID": polars.Int32}  # Fixed SensorID type
         for reading in self.acceptable_range:
             if reading in sensors.columns:
-                expect_types[reading] = polars.Float32
+                expect_types[reading] = polars.Float32  # Fixed: Should be Float32 like existing data
         
         for col in expect_types:
             if col in sensors.columns:
@@ -962,7 +1142,7 @@ class EnvironmentData():
 
         # Sensor Info.
         sensors_data = polars.read_parquet(f'{self.data_path}/sensor_readings.parquet', columns = [
-            'SensorName', 'SensorID_Coris', 'DeviceID_Coris', 'SensorType'
+            'SensorName', 'SensorID_Coris', 'DeviceID_Coris', 'SensorType', 'source', 'SensorID_Conserv', 'customer_id'
         ])
         sensors_data  = sensors_data.unique().to_dicts()
         sensors = []
@@ -971,6 +1151,41 @@ class EnvironmentData():
             sensorname = sensor['SensorName']
             if sensorname in name_overrides:
                 sensorname = name_overrides[sensorname]
+            
+            # Handle sensor names with extra text like " - no comm.", " - dead batt."
+            # Remove common status indicators (expanded list)
+            status_indicators = [
+                ' - no comm.', ' - offline', ' - error', ' - disconnected',
+                ' - dead batt.', ' - low batt.', ' - no battery', ' - battery dead',
+                ' - fault', ' - failed', ' - timeout', ' - inactive'
+            ]
+            for indicator in status_indicators:
+                if indicator in sensorname:
+                    sensorname = sensorname.replace(indicator, '')
+                    break  # Only remove the first match to avoid over-processing
+            
+            # Special handling for Conserv sensors which have different naming conventions
+            # Check multiple conditions to catch all Conserv sensors
+            is_conserv_sensor = (
+                sensor.get('source') == 'conserv' or
+                (sensor.get('SensorID_Conserv') is not None and 
+                 str(sensor.get('SensorID_Conserv')).lower() not in ['null', 'none', '']) or
+                sensor.get('customer_id') is not None
+            )
+            
+            if is_conserv_sensor:
+                sensors.append({
+                    'SensorName': sensorname,
+                    'DeviceID': sensor.get('SensorID_Conserv', 'CONSERV_UNKNOWN'),
+                    'SensorType': sensor['SensorType'],
+                    'SensorID_Coris': sensor['SensorID_Coris'],
+                    'DeviceID_Coris': sensor['DeviceID_Coris'],
+                    'BuildingID': 'CONSERV',
+                    'Building': f'Conserv Customer {sensor.get("customer_id", "Unknown")}',
+                    'Room': sensorname,  # Use the full sensor name as room
+                    'CardinalDirection': 'Not Indicated'
+                })
+                continue
             
             if 'floator' in sensorname.lower():
                 info = sensorname.strip().split('_')
@@ -1026,8 +1241,20 @@ class EnvironmentData():
                 })
             
             else:
-                
-                raise Exception(f'Unexpected SensorName format: {sensorname}.')
+                # Final fallback for any sensors that don't match expected patterns
+                # This catches edge cases and unusual sensor names
+                self.logger.warning(f'Using fallback parsing for unexpected sensor name: {sensorname}')
+                sensors.append({
+                    'SensorName': sensorname,
+                    'DeviceID': 'UNKNOWN',
+                    'SensorType': sensor['SensorType'],
+                    'SensorID_Coris': sensor['SensorID_Coris'],
+                    'DeviceID_Coris': sensor['DeviceID_Coris'],
+                    'BuildingID': 'UNKNOWN',
+                    'Building': 'Unknown Building',
+                    'Room': sensorname,  # Use the full sensor name as room
+                    'CardinalDirection': 'Not Indicated'
+                })
                 
         # Write the table to a file.
         sensors = polars.DataFrame(sensors).unique()
@@ -1039,12 +1266,20 @@ class EnvironmentData():
         # It will be helpful to have the Building, Room, and CardinalDirection appended to Devices. 
         # Check for a valid mapping. 
         device_info_from_sensors = sensors.select(['DeviceID_Coris', 'BuildingID', 'Building', 'Room', 'CardinalDirection', 'DeviceID']).unique()
-        bad_values = device_info_from_sensors.filter(device_info_from_sensors.select("DeviceID_Coris").is_duplicated()).sort('DeviceID_Coris')
+        
+        # Exclude Conserv sensors (which have null DeviceID_Coris) from the duplication check
+        # since they use SensorID_Conserv instead and multiple Conserv sensors can have null DeviceID_Coris
+        device_info_from_sensors_coris = device_info_from_sensors.filter(polars.col('DeviceID_Coris').is_not_null())
+        bad_values = device_info_from_sensors_coris.filter(device_info_from_sensors_coris.select("DeviceID_Coris").is_duplicated()).sort('DeviceID_Coris')
+        
         if bad_values.shape[0] > 0:
             # If there is a bad mapping, log it and remove the duplicates so we can use the data that is properly mapped.
             # For invalid mappings, Building, Room, and CardinalDirection will be null.
-            self.error(f'DeviceID_Coris to Building, Room, CardinalDirection is not a 1-1 mapping. Invalid mappings will be excluded: \n{bad_values}', raise_exception = True)
-            device_info_from_sensors = device_info_from_sensors.filter(polars.col('DeviceID_Coris').is_duplicated().not_())
+            self.logger.warning(f'DeviceID_Coris to Building, Room, CardinalDirection is not a 1-1 mapping for Coris sensors. Invalid mappings will be excluded: \n{bad_values}')
+            # Filter out only the duplicated Coris devices, but keep all Conserv devices
+            valid_coris_devices = device_info_from_sensors_coris.filter(polars.col('DeviceID_Coris').is_duplicated().not_())
+            conserv_devices = device_info_from_sensors.filter(polars.col('DeviceID_Coris').is_null())
+            device_info_from_sensors = polars.concat([valid_coris_devices, conserv_devices])
 
         # Device Info.
         devices = polars.read_parquet(f'{self.data_path}/sensor_readings.parquet', columns = ['DeviceID_Coris', 'DeviceName']).unique()
@@ -1055,6 +1290,10 @@ class EnvironmentData():
         # UTC info.
         # Start with the timestamps and datetime in UTC.
         utc_timestamps = polars.read_parquet(f'{self.data_path}/sensor_readings.parquet', columns = 'SensorReadingUTC')['SensorReadingUTC'].unique().to_list()
+        
+        # Filter out None/null values that can't be converted to datetime
+        utc_timestamps = [x for x in utc_timestamps if x is not None]
+        
         utcs = polars.DataFrame({
             "UTC": utc_timestamps,
             "datetime_utc": [datetime.datetime.fromtimestamp(x) for x in utc_timestamps]

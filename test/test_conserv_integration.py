@@ -347,7 +347,7 @@ if __name__ == '__main__':
     success = run_conserv_tests()
     
     if success:
-        print("\n✅ ALL CONSERV INTEGRATION TESTS PASSED!")
+        print("\nSUCCESS: ALL CONSERV INTEGRATION TESTS PASSED!")
     else:
-        print("\n❌ SOME TESTS FAILED!")
+        print("\nFAILED: SOME TESTS FAILED!")
         exit(1) 

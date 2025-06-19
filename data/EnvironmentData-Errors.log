@@ -40,3 +40,121 @@
 
 2025-06-18 17:48:37,041 - EnvironmentData-Errors - ERROR - get_current_readings_coris validation errors : SensorReadingUTC differs from UTC: UTC: 1750258114, maximum absolute difference (minutes): 8e+05.
 
+2025-06-18 22:09:37,907 - EnvironmentData-Errors - ERROR - get_current_readings_coris validation errors : SensorReadingUTC differs from UTC: UTC: 1750273775, maximum absolute difference (minutes): 8e+05.
+
+2025-06-18 22:26:58,674 - EnvironmentData-Errors - ERROR - get_current_readings_coris validation errors : SensorReadingUTC differs from UTC: UTC: 1750274816, maximum absolute difference (minutes): 8e+05.
+
+2025-06-18 22:36:35,309 - EnvironmentData-Errors - ERROR - consolidate_readings validation errors : Count of duplicated SensorReadingUTC: 18.
+
+2025-06-18 22:36:35,372 - EnvironmentData-Errors - ERROR - Validation errors: 
+10 missing values in [SensorReadingRh].
+2025-06-18 22:42:42,777 - EnvironmentData-Errors - ERROR - get_current_readings_coris validation errors : SensorReadingUTC differs from UTC: UTC: 1750275760, maximum absolute difference (minutes): 8e+05.
+
+2025-06-18 22:51:37,501 - EnvironmentData-Errors - ERROR - Validation errors: 
+15 missing values in [SensorReadingRh].
+2025-06-18 22:58:12,132 - EnvironmentData-Errors - ERROR - get_current_readings_coris validation errors : SensorReadingUTC differs from UTC: UTC: 1750276690, maximum absolute difference (minutes): 8e+05.
+
+2025-06-18 23:07:08,589 - EnvironmentData-Errors - ERROR - Validation errors: 
+20 missing values in [SensorReadingRh].
+2025-06-18 23:14:56,627 - EnvironmentData-Errors - ERROR - get_current_readings_coris validation errors : SensorReadingUTC differs from UTC: UTC: 1750277694, maximum absolute difference (minutes): 8e+05.
+
+2025-06-18 23:23:51,172 - EnvironmentData-Errors - ERROR - Validation errors: 
+25 missing values in [SensorReadingRh].
+2025-06-19 00:07:50,012 - EnvironmentData-Errors - ERROR - get_current_readings_coris validation errors : SensorReadingUTC differs from UTC: UTC: 1750280868, maximum absolute difference (minutes): 8e+05.
+
+2025-06-19 00:18:21,505 - EnvironmentData-Errors - ERROR - Validation errors: 
+30 missing values in [SensorReadingRh].
+2025-06-19 00:45:12,298 - EnvironmentData-Errors - ERROR - get_current_readings_coris validation errors : SensorReadingUTC differs from UTC: UTC: 1750283109, maximum absolute difference (minutes): 8e+05.
+
+2025-06-19 00:45:40,991 - EnvironmentData-Errors - ERROR - get_current_readings_coris validation errors : SensorReadingUTC differs from UTC: UTC: 1750283138, maximum absolute difference (minutes): 8e+05.
+
+2025-06-19 01:15:45,909 - EnvironmentData-Errors - ERROR - get_current_readings_coris validation errors : SensorReadingUTC differs from UTC: UTC: 1750284943, maximum absolute difference (minutes): 8e+05.
+
+2025-06-19 01:39:20,928 - EnvironmentData-Errors - ERROR - get_current_readings_coris validation errors : SensorReadingUTC differs from UTC: UTC: 1750286357, maximum absolute difference (minutes): 8e+05.
+
+2025-06-19 01:48:24,556 - EnvironmentData-Errors - ERROR - consolidate_readings validation errors : Count of duplicated SensorReadingUTC: 256.
+
+2025-06-19 01:48:24,628 - EnvironmentData-Errors - ERROR - Validation errors: 
+50 missing values in [SensorReadingRh].
+2025-06-19 05:59:58,212 - EnvironmentData-Errors - ERROR - get_current_readings_coris validation errors : SensorReadingUTC differs from UTC: UTC: 1750301995, maximum absolute difference (minutes): 8e+05.
+
+2025-06-19 06:09:57,928 - EnvironmentData-Errors - ERROR - Validation errors: 
+55 missing values in [SensorReadingRh].
+2025-06-19 06:14:05,162 - EnvironmentData-Errors - ERROR - get_current_readings_coris validation errors : SensorReadingUTC differs from UTC: UTC: 1750302842, maximum absolute difference (minutes): 8e+05.
+
+2025-06-19 06:23:34,634 - EnvironmentData-Errors - ERROR - Validation errors: 
+60 missing values in [SensorReadingRh].
+2025-06-19 06:25:33,308 - EnvironmentData-Errors - ERROR - get_current_readings_coris validation errors : SensorReadingUTC differs from UTC: UTC: 1750303530, maximum absolute difference (minutes): 8e+05.
+
+2025-06-19 06:34:30,402 - EnvironmentData-Errors - ERROR - Validation errors: 
+65 missing values in [SensorReadingRh].
+2025-06-19 06:39:14,948 - EnvironmentData-Errors - ERROR - get_current_readings_coris validation errors : SensorReadingUTC differs from UTC: UTC: 1750304351, maximum absolute difference (minutes): 8e+05.
+
+2025-06-19 06:48:14,195 - EnvironmentData-Errors - ERROR - get_current_readings_conserv validation errors : Count of duplicated SensorReadingUTC: 6009.; Count of multiple names for SensorID_Coris: 1.
+
+2025-06-19 06:48:14,362 - EnvironmentData-Errors - ERROR - consolidate_readings validation errors : Count of duplicated SensorReadingUTC: 6009.; Count of multiple names for SensorID_Coris: 1.
+
+2025-06-19 07:12:43,043 - EnvironmentData-Errors - ERROR - get_current_readings_coris validation errors : SensorReadingUTC differs from UTC: UTC: 1750306360, maximum absolute difference (minutes): 8e+05.
+
+2025-06-19 07:21:38,189 - EnvironmentData-Errors - ERROR - get_current_readings_conserv validation errors : Count of duplicated SensorReadingUTC: 6009.; Count of multiple names for SensorID_Coris: 1.
+
+2025-06-19 07:21:38,229 - EnvironmentData-Errors - ERROR - consolidate_readings validation errors : Count of duplicated SensorReadingUTC: 12036.; Count of multiple names for SensorID_Coris: 1.
+
+2025-06-19 07:21:38,277 - EnvironmentData-Errors - ERROR - Validation errors: 
+10 missing values in [SensorReadingRh].
+2025-06-19 07:34:43,117 - EnvironmentData-Errors - ERROR - get_current_readings_coris validation errors : SensorReadingUTC differs from UTC: UTC: 1750307680, maximum absolute difference (minutes): 8e+05.
+
+2025-06-19 07:44:15,033 - EnvironmentData-Errors - ERROR - get_current_readings_conserv validation errors : Count of duplicated SensorReadingUTC: 6006.; Count of multiple names for SensorID_Coris: 1.
+
+2025-06-19 07:44:15,071 - EnvironmentData-Errors - ERROR - consolidate_readings validation errors : Count of duplicated SensorReadingUTC: 6006.; Count of multiple names for SensorID_Coris: 1.
+
+2025-06-19 07:44:15,115 - EnvironmentData-Errors - ERROR - Validation errors: 
+15 missing values in [SensorReadingRh].
+2025-06-19 07:46:36,427 - EnvironmentData-Errors - ERROR - get_current_readings_coris validation errors : SensorReadingUTC differs from UTC: UTC: 1750308394, maximum absolute difference (minutes): 8e+05.
+
+2025-06-19 07:55:43,245 - EnvironmentData-Errors - ERROR - get_current_readings_conserv validation errors : Count of duplicated SensorReadingUTC: 6005.; Count of multiple names for SensorID_Coris: 1.
+
+2025-06-19 07:55:43,335 - EnvironmentData-Errors - ERROR - consolidate_readings validation errors : Count of duplicated SensorReadingUTC: 6005.; Count of multiple names for SensorID_Coris: 1.
+
+2025-06-19 07:55:43,455 - EnvironmentData-Errors - ERROR - Validation errors: 
+20 missing values in [SensorReadingRh].
+2025-06-19 07:59:19,178 - EnvironmentData-Errors - ERROR - get_current_readings_coris validation errors : SensorReadingUTC differs from UTC: UTC: 1750309157, maximum absolute difference (minutes): 8e+05.
+
+2025-06-19 08:08:17,956 - EnvironmentData-Errors - ERROR - get_current_readings_conserv validation errors : Count of duplicated SensorReadingUTC: 6008.; Count of multiple names for SensorID_Coris: 1.
+
+2025-06-19 08:08:18,024 - EnvironmentData-Errors - ERROR - consolidate_readings validation errors : Count of duplicated SensorReadingUTC: 6008.; Count of multiple names for SensorID_Coris: 1.
+
+2025-06-19 08:08:18,134 - EnvironmentData-Errors - ERROR - Validation errors: 
+25 missing values in [SensorReadingRh].
+2025-06-19 08:08:18,172 - EnvironmentData-Errors - ERROR - update_lookups validation errors : Count of multiple names for SensorID_Coris: 1.
+
+2025-06-19 08:13:01,952 - EnvironmentData-Errors - ERROR - get_current_readings_coris validation errors : SensorReadingUTC differs from UTC: UTC: 1750309979, maximum absolute difference (minutes): 8e+05.
+
+2025-06-19 08:22:03,000 - EnvironmentData-Errors - ERROR - get_current_readings_conserv validation errors : Count of duplicated SensorReadingUTC: 6006.; Count of multiple names for SensorID_Coris: 1.
+
+2025-06-19 08:22:03,142 - EnvironmentData-Errors - ERROR - consolidate_readings validation errors : Count of duplicated SensorReadingUTC: 6006.; Count of multiple names for SensorID_Coris: 1.
+
+2025-06-19 08:22:03,307 - EnvironmentData-Errors - ERROR - Validation errors: 
+30 missing values in [SensorReadingRh].
+2025-06-19 08:22:03,360 - EnvironmentData-Errors - ERROR - update_lookups validation errors : Count of multiple names for SensorID_Coris: 1.
+
+2025-06-19 09:16:32,863 - EnvironmentData-Errors - ERROR - get_current_readings_coris validation errors : SensorReadingUTC differs from UTC: UTC: 1750313789, maximum absolute difference (minutes): 8e+05.
+
+2025-06-19 09:25:49,587 - EnvironmentData-Errors - ERROR - get_current_readings_conserv validation errors : Count of duplicated SensorReadingUTC: 6011.; Count of multiple names for SensorID_Coris: 1.
+
+2025-06-19 09:25:49,706 - EnvironmentData-Errors - ERROR - consolidate_readings validation errors : Count of duplicated SensorReadingUTC: 6011.; Count of multiple names for SensorID_Coris: 1.
+
+2025-06-19 09:25:49,858 - EnvironmentData-Errors - ERROR - Validation errors: 
+35 missing values in [SensorReadingRh].
+2025-06-19 09:25:49,883 - EnvironmentData-Errors - ERROR - update_lookups validation errors : Count of multiple names for SensorID_Coris: 1.
+
+2025-06-19 17:16:29,248 - EnvironmentData-Errors - ERROR - get_current_readings_coris validation errors : SensorReadingUTC differs from UTC: UTC: 1750342587, maximum absolute difference (minutes): 8e+05.
+
+2025-06-19 17:23:18,211 - EnvironmentData-Errors - ERROR - get_current_readings_conserv validation errors : Count of duplicated SensorReadingUTC: 5839.; Count of multiple names for SensorID_Coris: 1.
+
+2025-06-19 17:23:18,294 - EnvironmentData-Errors - ERROR - consolidate_readings validation errors : Count of duplicated SensorReadingUTC: 5839.; Count of multiple names for SensorID_Coris: 1.
+
+2025-06-19 17:23:18,364 - EnvironmentData-Errors - ERROR - Validation errors: 
+5 missing values in [SensorReadingRh].
+2025-06-19 17:23:18,382 - EnvironmentData-Errors - ERROR - update_lookups validation errors : Count of multiple names for SensorID_Coris: 1.
+

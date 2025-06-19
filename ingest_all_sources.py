@@ -149,9 +149,9 @@ def main():
         
         # Check if we're under the 15-minute target
         if duration.total_seconds() > 900:  # 15 minutes = 900 seconds
-            logger.warning(f"⚠️  DURATION EXCEEDED 15 MINUTES: {duration}")
+            logger.warning(f"WARNING: DURATION EXCEEDED 15 MINUTES: {duration}")
         else:
-            logger.info(f"✅ COMPLETED WITHIN 15-MINUTE TARGET")
+            logger.info(f"SUCCESS: COMPLETED WITHIN 15-MINUTE TARGET")
         
         logger.info("="*60)
         

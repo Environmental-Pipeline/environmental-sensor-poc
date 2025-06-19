@@ -510,16 +510,186 @@ class ConservAPIClient:
                 # Continue with other customers
                 continue
         
-        # Combine all customer data
+        # Combine all customer data with master schema enforcement
         if all_customer_data:
-            combined_data = polars.concat(all_customer_data, how='diagonal')
+            # Apply master schema enforcement before concatenation
+            normalized_data = []
+            for i, customer_data in enumerate(all_customer_data):
+                normalized = self._apply_conserv_master_schema(customer_data, f"Customer_{i}")
+                
+                # DEBUG: Log detailed schema information for each customer
+                if self.logger:
+                    self.logger.info(f"CUSTOMER {i} POST-NORMALIZATION SCHEMA:")
+                    for col in normalized.columns:
+                        self.logger.info(f"  {col}: {normalized[col].dtype}")
+                
+                normalized_data.append(normalized)
+            
+            # DEBUG: Check for schema mismatches between customers before concat
+            if len(normalized_data) > 1 and self.logger:
+                self.logger.info("SCHEMA MISMATCH DETECTION:")
+                base_schema = {col: normalized_data[0][col].dtype for col in normalized_data[0].columns}
+                for i, df in enumerate(normalized_data[1:], 1):
+                    mismatches = []
+                    for col in df.columns:
+                        if col in base_schema and df[col].dtype != base_schema[col]:
+                            mismatches.append(f"{col}: Customer_0={base_schema[col]} vs Customer_{i}={df[col].dtype}")
+                    
+                    if mismatches:
+                        self.logger.error(f"SCHEMA MISMATCHES found between customers:")
+                        for mismatch in mismatches:
+                            self.logger.error(f"  {mismatch}")
+                    else:
+                        self.logger.info(f"Customer_{i}: No schema mismatches with Customer_0")
+            
+            combined_data = polars.concat(normalized_data, how='diagonal')
             if self.logger:
-                self.logger.info(f"Successfully combined data from {len(all_customer_data)} customers: {combined_data.shape[0]} total records")
+                self.logger.info(f"Successfully combined data from {len(normalized_data)} customers: {combined_data.shape[0]} total records")
             return combined_data
         else:
             if self.logger:
                 self.logger.warning("No data retrieved from any customer")
             return None
+    
+    def _apply_conserv_master_schema(self, df: polars.DataFrame, step_name: str) -> polars.DataFrame:
+        """
+        Apply master schema enforcement to Conserv data for consistency.
+        Uses the same master schema as EnvironmentData to ensure perfect compatibility.
+        
+        Parameters
+        ----------
+        df : polars.DataFrame
+            Customer data to normalize
+        step_name : str
+            Step name for logging
+            
+        Returns
+        -------
+        polars.DataFrame
+            Data with master schema types applied
+        """
+        if df.is_empty():
+            return df
+            
+        if self.logger:
+            self.logger.info(f'CONSERV MASTER SCHEMA [{step_name}]: Enforcing schema on {df.shape[0]} rows')
+        
+        # Use EXACT master schema from EnvironmentData for perfect compatibility
+        master_schema = {
+            "source": polars.String,
+            "SensorID_Coris": polars.Int32,
+            "SensorID_Conserv": polars.String,
+            "customer_id": polars.Int32,
+            "QueryUTC": polars.Int32,
+            "SensorReadingUTC": polars.Int64,
+            "DeviceID_Coris": polars.Int32,
+            "SensorReadingUTC_SecondsFromPrior": polars.Int64,
+            "SensorReadingF": polars.Float32,
+            "SensorReadingRh": polars.Float32,
+            "SensorName": polars.String,
+            "SensorPort": polars.Int64,
+            "ServerUTC": polars.Int64,
+            "HexGatewayMac": polars.String,
+            "LoraHexGatewayMac": polars.String,
+            "LoraGatewayLastHeardUTC": polars.Int64,
+            "SensorUnplugged": polars.Boolean,
+            "LinkQualityText": polars.String,
+            "HexMac": polars.String,
+            "SensorDeleted": polars.Boolean,
+            "SensorDeactivated": polars.Boolean,
+            "SensorReading": polars.Float64,
+            "DeviceName": polars.String,
+            "DevTypeInt": polars.Int64,
+            "SensorTempPref": polars.String,
+            "DeviceTempPref": polars.Null,
+            "UserTempPref": polars.String,
+            "SensorTimeZone": polars.String,
+            "SensorZipcode": polars.Null,
+            "SensorType": polars.String,
+            "SensorState0String": polars.String,
+            "SensorState1String": polars.String,
+            "ExpectedSensorReadingIntervalSeconds": polars.Int64,
+            "SensorReadingC": polars.Float64,
+            "SensorCalibrationOffsetC": polars.Float64,
+            "SensorCalibrationOffsetF": polars.Float64,
+            "SensorCalibrationOffsetExplanationText": polars.String,
+            "SensorCalibrationOffsetExplanationFirstName": polars.String,
+            "SensorCalibrationOffsetExplanationLastName": polars.String,
+            "SensorCalibrationOffsetUTC": polars.Int64,
+            "LoraBatteryPresent": polars.Int64,
+            "LoraBattery_mV": polars.Int64,
+            "LoraBatteryPercentage": polars.Int64,
+            "LoraBatteryUTC": polars.Int64,
+            "LoraBatteryIsCharging": polars.Int64,
+            "LastSensorErrorValue": polars.Int64,
+            "LastSensorErrorUTC": polars.Int64,
+            "UnivID": polars.Int64,
+            "SensorSerialNumber": polars.Null,
+            "HeatIndexRh": polars.Float64,
+            "ConjoinedRhSensorSensorReadingRh": polars.Float64,
+            "SensorReadingHeatIndexF": polars.Float64,
+            "SensorReadingHeatIndexC": polars.Float64,
+            "HeatIndexWarningTier": polars.Int64,
+            "LoraExternalPowerPresent": polars.Int64,
+            "SensorCalibrationOffsetRh": polars.Int64,
+            "SensorEventCount": polars.Int64,
+            "SensorState": polars.String,
+            # ALL Conserv-specific columns that appear in the data
+            "Sensor Name": polars.String,
+            "Sensor Serial": polars.String,
+            "Time": polars.Int64,
+            "Temperature (°C)": polars.Float64,
+            "Humidity (%)": polars.Float64,
+            "Dewpoint (°C)": polars.Float64,
+            "Illuminance (lux)": polars.Float64,
+            "UV (µW/cm²)": polars.Float64
+        }
+        
+        # Track conversions for logging
+        conversions_made = []
+        conversion_exprs = []
+        
+        for column in df.columns:
+            if column in master_schema:
+                target_type = master_schema[column]
+                current_type = df[column].dtype
+                
+                if current_type != target_type:
+                    conversions_made.append(f"{column}: {current_type} -> {target_type}")
+                    
+                    try:
+                        # Handle specific conversion cases
+                        if target_type == polars.Null:
+                            # Keep null columns as-is
+                            continue
+                        elif str(current_type).startswith('Int') and str(target_type).startswith('Int'):
+                            # Int64 -> Int32 or vice versa
+                            conversion_exprs.append(polars.col(column).cast(target_type, strict=False))
+                        elif str(current_type).startswith('Float') and str(target_type).startswith('Float'):
+                            # Float64 -> Float32 or vice versa
+                            conversion_exprs.append(polars.col(column).cast(target_type))
+                        else:
+                            # Generic conversion
+                            conversion_exprs.append(polars.col(column).cast(target_type, strict=False))
+                            
+                    except Exception as conv_error:
+                        if self.logger:
+                            self.logger.warning(f"CONSERV MASTER SCHEMA: Failed to convert {column}: {conv_error}")
+                        continue
+        
+        # Apply all conversions at once
+        if conversion_exprs:
+            df = df.with_columns(conversion_exprs)
+            
+        # Log conversions made (using ASCII characters to avoid Unicode issues)
+        if conversions_made and self.logger:
+            self.logger.info(f'CONSERV MASTER SCHEMA [{step_name}]: Made {len(conversions_made)} conversions')
+            for conv in conversions_made:
+                self.logger.info(f'  -> {conv}')
+        elif self.logger:
+            self.logger.info(f'CONSERV MASTER SCHEMA [{step_name}]: No conversions needed, schema already correct')
+        
+        return df
 
 
 def create_conserv_client_from_env(logger: Optional[logging.Logger] = None) -> ConservAPIClient:
