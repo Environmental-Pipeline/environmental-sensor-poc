@@ -1,4 +1,3 @@
-# ruff: noqa: E402
 # use EnvironmentData to initialize the database.
 from EnvironmentData import EnvironmentData
 envdt = EnvironmentData(CatsUserID = 2496, out_of_scope = ['-80', 'Cryo tank', 'Water'], testing = True) # this will initialize the database.

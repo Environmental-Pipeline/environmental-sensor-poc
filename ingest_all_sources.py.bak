@@ -170,12 +170,12 @@ def main():
         
         # Try to clean up if env_data was created
         try:
-        if "env_data" in locals():
-            env_data.close()
-    except Exception:
-        pass
-
-    return 1
+            if 'env_data' in locals():
+                env_data.close()
+        except:
+            pass
+        
+        return 1
 
 
 if __name__ == "__main__":
