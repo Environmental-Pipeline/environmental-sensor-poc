@@ -1,6 +1,10 @@
-import os, requests, polars, time, numpy, tqdm, datetime, pytz
+import os
+import requests
+import polars
+import numpy
+import tqdm
+import datetime
 import pandas as pd
-import polars as p
 
 apikey = os.environ.get('CORIS_API_KEY')
 CatsUserID = 2496
@@ -44,8 +48,8 @@ url = '&'.join([
     f'SensorID={diffs.id.values[0]}',
     f'ReadingType={diffs.type.values[0]}',
     f'StartUTC={start_utc}',
-    f'MinReadingSpacing=600', # every 10 minutes.
-    f'RequestedOutputFormat=raw'
+    'MinReadingSpacing=600', # every 10 minutes.
+    'RequestedOutputFormat=raw'
 ])
 response = requests.get(url)
 
@@ -97,19 +101,19 @@ for reading in acceptable_range:
             f'ReadingType={reading}',
             f'StartUTC={start_utc}',
             f'EndUTC={current_utc}',
-            f'MinReadingSpacing=600', # every 10 minutes.
-            f'RequestedOutputFormat=raw'
+            'MinReadingSpacing=600', # every 10 minutes.
+            'RequestedOutputFormat=raw'
         ])
 
         # create a duplicate of the url for logging purposes, which doesn't include sensitive information.
         logurl = '&'.join([
-            f'https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX',
+            'https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX',
             f'SensorID={sensor_id}',
             f'ReadingType={reading}',
             f'StartUTC={start_utc}',
             f'EndUTC={current_utc}',
-            f'MinReadingSpacing=600', # every 10 minutes.
-            f'RequestedOutputFormat=raw'
+            'MinReadingSpacing=600', # every 10 minutes.
+            'RequestedOutputFormat=raw'
         ])
         response = requests.get(url)
 

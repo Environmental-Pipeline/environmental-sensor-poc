@@ -91,7 +91,7 @@ def main():
             if key:
                 conserv_keys_found.append(customer_id)
         
-        logger.info(f"Configuration:")
+        logger.info("Configuration:")
         logger.info(f"  CATS_USER_ID: {cats_user_id}")
         logger.info(f"  CONSERV_ENABLED: {conserv_enabled}")
         logger.info(f"  TESTING: {testing}")
@@ -114,7 +114,7 @@ def main():
             testing=testing
         )
         
-        logger.info(f"EnvironmentData initialized successfully")
+        logger.info("EnvironmentData initialized successfully")
         logger.info(f"  Conserv enabled: {env_data.conserv_enabled}")
         if env_data.conserv_client:
             logger.info(f"  Conserv customers: {len(env_data.conserv_client.customers)}")
@@ -151,7 +151,7 @@ def main():
         if duration.total_seconds() > 900:  # 15 minutes = 900 seconds
             logger.warning(f"WARNING: DURATION EXCEEDED 15 MINUTES: {duration}")
         else:
-            logger.info(f"SUCCESS: COMPLETED WITHIN 15-MINUTE TARGET")
+            logger.info("SUCCESS: COMPLETED WITHIN 15-MINUTE TARGET")
         
         logger.info("="*60)
         

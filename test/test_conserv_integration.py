@@ -7,10 +7,9 @@ using mocked API responses to ensure reliable testing without external dependenc
 """
 
 import unittest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 import polars
 import datetime
-import json
 import sys
 import os
 

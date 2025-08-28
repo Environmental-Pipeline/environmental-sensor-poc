@@ -1145,62 +1145,63 @@ class EnvironmentData():
             sensorname = sensor['SensorName']
             if sensorname in name_overrides:
                 sensorname = name_overrides[sensorname]
-            
+
             if 'floator' in sensorname.lower():
                 info = sensorname.strip().split('_')
             else:
                 info = sensorname.strip().split(' ')
-                info = info[0:-1] + info[-1].split('_') 
-            
-            # If the cardinal direction is included, there will be 4 pieces of info.
-                if len(info) == 5:   
-                    sensors.append({
-                        'SensorName': sensorname, 
-                    #   'SensorType_fromName': info[0],
-                        'DeviceID': info[4],
-                        'SensorType': sensor['SensorType'],
-                        'SensorID_Coris': sensor['SensorID_Coris'],
-                        'DeviceID_Coris': sensor['DeviceID_Coris'],
-                        'BuildingID': info[1],
-                        'Building': building_name_map[info[1]] if info[1] in building_name_map else '',
-                        'Room': info[2].replace('_', ''),
-                        'CardinalDirection': info[3]
-                    })
+                info = info[0:-1] + info[-1].split('_')
 
-                elif len(info) == 4:
-                
-                    sensors.append({
-                        'SensorName': sensorname, 
-                        #'SensorType_fromName': info[0],
-                        'DeviceID': info[3],
-                        'SensorType': sensor['SensorType'],
-                        'SensorID_Coris': sensor['SensorID_Coris'],
-                        'DeviceID_Coris': sensor['DeviceID_Coris'],
-                        'BuildingID': info[1],
-                        'Building': building_name_map[info[1]] if info[1] in building_name_map else '',
-                        'Room': info[2].replace('_', ''),
-                        'CardinalDirection': 'Not Indicated'
-                    })
-                
-            # Floaters are len 3.
-                elif len(info) == 3:
-                
+            # If the cardinal direction is included, there will be 4 pieces of info.
+            if len(info) == 5:
                 sensors.append({
-                    'SensorName': sensorname, 
+                    'SensorName': sensorname,
+                    #   'SensorType_fromName': info[0],
+                    'DeviceID': info[4],
+                    'SensorType': sensor['SensorType'],
+                    'SensorID_Coris': sensor['SensorID_Coris'],
+                    'DeviceID_Coris': sensor['DeviceID_Coris'],
+                    'BuildingID': info[1],
+                    'Building': building_name_map[info[1]] if info[1] in building_name_map else 'Unknown',
+                    'Room': info[2].replace('_', ''),
+                    'CardinalDirection': info[3]
+                })
+                if info[1] not in building_name_map:
+                    self.logger.warning(f'Building ID {info[1]} not found in building_name_map for sensor {sensorname}')
+
+            elif len(info) == 4:
+
+                sensors.append({
+                    'SensorName': sensorname,
                     #'SensorType_fromName': info[0],
+                    'DeviceID': info[3],
+                    'SensorType': sensor['SensorType'],
+                    'SensorID_Coris': sensor['SensorID_Coris'],
+                    'DeviceID_Coris': sensor['DeviceID_Coris'],
+                    'BuildingID': info[1],
+                    'Building': building_name_map[info[1]] if info[1] in building_name_map else 'Unknown',
+                    'Room': info[2].replace('_', ''),
+                    'CardinalDirection': 'Not Indicated'
+                })
+                if info[1] not in building_name_map:
+                    self.logger.warning(f'Building ID {info[1]} not found in building_name_map for sensor {sensorname}')
+
+            # Floaters are len 3.
+            elif len(info) == 3:
+                sensors.append({
+                    'SensorName': sensorname,
+                    # 'SensorType_fromName': info[0],
                     'DeviceID': info[2],
                     'SensorType': sensor['SensorType'],
                     'SensorID_Coris': sensor['SensorID_Coris'],
                     'DeviceID_Coris': sensor['DeviceID_Coris'],
                     'BuildingID': 'FLOATER',
-                    'Building': building_name_map[info[1]] if info[1] in building_name_map else '',
+                    'Building': building_name_map[info[1]] if info[1] in building_name_map else 'Unknown',
                     'Room': 'FLOATER',
                     'CardinalDirection': None
                 })
-            
             else:
-                
-                raise Exception(f'Unexpected SensorName format: {sensorname}.')
+                raise Exception(f'Unexpected SensorName format: {sensorname}. Info: {info}')
                 
         # Write the table to a file.
         sensors = polars.DataFrame(sensors).unique()

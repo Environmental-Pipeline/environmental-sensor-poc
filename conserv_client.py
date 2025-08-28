@@ -12,7 +12,7 @@ import logging
 import datetime
 import polars
 import io
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
 from dataclasses import dataclass
 
 
@@ -230,7 +230,7 @@ class ConservAPIClient:
         polars.DataFrame
             Parsed sensor data
         """
-        self.logger.info(f"Downloading export data from S3")
+        self.logger.info("Downloading export data from S3")
         
         try:
             response = requests.get(download_url)
@@ -537,7 +537,7 @@ class ConservAPIClient:
                             mismatches.append(f"{col}: Customer_0={base_schema[col]} vs Customer_{i}={df[col].dtype}")
                     
                     if mismatches:
-                        self.logger.error(f"SCHEMA MISMATCHES found between customers:")
+                        self.logger.error("SCHEMA MISMATCHES found between customers:")
                         for mismatch in mismatches:
                             self.logger.error(f"  {mismatch}")
                     else:
