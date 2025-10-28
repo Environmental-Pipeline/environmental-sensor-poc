@@ -252,7 +252,7 @@ class EnvironmentData:
                 if not response.ok:
                     self.logger.error(
                         f"Error getting historical {reading} for {sensor_id}: {response.json()}",
-                        raise_exception=True,
+                        raise_exception=False,
                     )
 
                 # Data comes in as comma separated values with no header. Convert this to a polars DataFrame.
@@ -1399,6 +1399,14 @@ class EnvironmentData:
             if sensorname in name_overrides:
                 sensorname = name_overrides[sensorname]
 
+            # Fix sensor names with problematic prefixes by removing everything up to and including the first space
+            if "__" in sensorname and " " in sensorname:
+                sensorname = sensorname[sensorname.index(" ") + 1:]
+
+            # Fix sensor names with " - no comm" suffix
+            if " - no comm" in sensorname:
+                sensorname = sensorname.replace(" - no comm", "")
+
             if "floator" in sensorname.lower():
                 info = sensorname.strip().split("_")
             else:
@@ -1477,7 +1485,11 @@ class EnvironmentData:
                 )
             else:
                 raise Exception(
-                    f"Unexpected SensorName format: {sensorname}. Info: {info}"
+                    f"Unexpected SensorName format: {sensorname}. Info: {info}. "
+                    f"Valid formats: "
+                    f"'Temp ESC Room101 North_1234' (5 parts with cardinal direction), "
+                    f"'RH YPM Gallery_2567' (4 parts without cardinal direction), "
+                    f"'Temp_Floater ESC_3890' (3 parts for floaters)"
                 )
 
         # Write the table to a file.

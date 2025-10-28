@@ -110,6 +110,7 @@ def main():
 
         env_data = EnvironmentData(
             CatsUserID=cats_user_id,
+            out_of_scope=['-80', 'Cryo tank', 'Water'],
             data_path="./data",
             conserv_enabled=conserv_enabled,
             testing=testing,
