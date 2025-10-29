@@ -595,6 +595,14 @@ class EnvironmentData:
             testing_sensor_ids=self.testing_sensor_ids
         )
         
+        # Convert data types to match expected schema before validation
+        if not coris_sensors.is_empty():
+            for reading in self.acceptable_range:
+                if reading in coris_sensors.columns:
+                    coris_sensors = coris_sensors.with_columns(
+                        polars.col(reading).cast(polars.Float32)
+                    )
+        
         self.validate_sensors(
             sensors=coris_sensors, utc=current_utc, step="get_current_readings_coris"
         )
@@ -1018,6 +1026,18 @@ class EnvironmentData:
                 sensors = sensors.with_columns(
                     polars.col(reading).cast(polars.Float32)
                 )  # Fixed: Use Float32 not String
+
+        # Also ensure validation expected columns are correct type
+        validation_types = {
+            "SensorReadingUTC": polars.Int64,
+            "SensorID": polars.Int32,
+            "SensorReadingF": polars.Float32,
+            "SensorReadingRh": polars.Float32,
+        }
+        for col, expected_type in validation_types.items():
+            if col in sensors.columns and sensors[col].dtype != expected_type:
+                sensors = sensors.with_columns(polars.col(col).cast(expected_type))
+                self.logger.info(f"Type conversion: {col} -> {expected_type}")
 
         # Validate the data.
         self.validate_sensors(sensors=sensors, historical=historical, step=step)
