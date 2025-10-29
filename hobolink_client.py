@@ -6,8 +6,8 @@ It handles sensor data retrieval, historical data queries, and data transformati
 to maintain compatibility with the EnvironmentData schema.
 
 API Endpoints:
-- GET https://api.licor.cloud/v2/devices?includeSensors=true
-- GET https://api.licor.cloud/v2/data?deviceSerialNumber=X&sensorSerialNumber=Y&startTime=Z&endTime=W
+- GET https://api.licor.cloud/v2/devices?includeSensors=true Identify available sensors.
+- GET https://api.licor.cloud/v2/data?deviceSerialNumber=X&sensorSerialNumber=Y&startTime=Z&endTime=W Get sensor data.
 Authentication: Bearer Token via HOBOLINK_API_KEY environment variable
 """
 
@@ -16,7 +16,6 @@ import requests
 import polars
 import datetime
 import logging
-import json
 import tqdm
 from typing import List, Dict, Optional, Any
 
@@ -98,42 +97,16 @@ class HobolinkClient:
         """
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
         
-        # Log sanitized request info
-        sanitized_headers = {k: "XXXX" if k == "Authorization" else v 
-                           for k, v in self.headers.items()}
-        self.logger.info(f"Making API request to: {url}")
-        self.logger.info(f"Headers: {sanitized_headers}")
+        # Log request info
+        self.logger.info(f"Making API request to: {endpoint}")
         if params:
-            self.logger.info(f"Parameters: {params}")
+            self.logger.debug(f"Parameters: {params}")
         
         try:
             response = requests.get(url, headers=self.headers, params=params)
             
-            # Log response details
-            self.logger.info(f"Response status: {response.status_code}")
-            self.logger.info(f"Response headers: {dict(response.headers)}")
-            
             if response.ok:
-                response_json = response.json()
-                
-                # Log response structure for inspection
-                self.logger.info(f"Response JSON keys: {list(response_json.keys()) if isinstance(response_json, dict) else 'Not a dict'}")
-                self.logger.info(f"Response type: {type(response_json)}")
-                
-                # If it's a list, log info about first few items
-                if isinstance(response_json, list) and len(response_json) > 0:
-                    self.logger.info(f"Response list length: {len(response_json)}")
-                    self.logger.info(f"First item keys: {list(response_json[0].keys()) if isinstance(response_json[0], dict) else 'First item not a dict'}")
-                    if len(response_json) > 1:
-                        self.logger.info(f"Second item keys: {list(response_json[1].keys()) if isinstance(response_json[1], dict) else 'Second item not a dict'}")
-                
-                # Log full response for first few calls (be careful with large responses)
-                if len(str(response_json)) < 2000:  # Only log small responses fully
-                    self.logger.info(f"Full response: {json.dumps(response_json, indent=2)}")
-                else:
-                    self.logger.info(f"Response too large to log fully ({len(str(response_json))} chars)")
-                
-                return response_json
+                return response.json()
             else:
                 error_msg = f"API request failed: {response.status_code} - {response.text}"
                 self.logger.error(error_msg)
@@ -166,17 +139,12 @@ class HobolinkClient:
         
         response_data = self._make_api_request("devices", params)
         
-        # Log detailed device structure analysis
+        # Log basic device count for tracking
         if isinstance(response_data, list):
             self.logger.info(f"Found {len(response_data)} devices")
-            for i, device in enumerate(response_data[:3]):  # Log first 3 devices in detail
-                if isinstance(device, dict):
-                    self.logger.info(f"Device {i+1} structure: {json.dumps(device, indent=2)}")
-        elif isinstance(response_data, dict):
-            self.logger.info(f"Device response is dict with keys: {list(response_data.keys())}")
-            if "devices" in response_data:
-                devices = response_data["devices"]
-                self.logger.info(f"Found {len(devices)} devices in 'devices' key")
+        elif isinstance(response_data, dict) and "devices" in response_data:
+            devices = response_data["devices"]
+            self.logger.info(f"Found {len(devices)} devices")
         
         return response_data
     
@@ -212,35 +180,16 @@ class HobolinkClient:
         
         response_data = self._make_api_request("data", params)
         
-        # Log detailed data structure analysis
-        self.logger.info(f"Data response type: {type(response_data)}")
+        # Log basic data retrieval info
         if isinstance(response_data, dict):
-            self.logger.info(f"Data response keys: {list(response_data.keys())}")
-            
-            # Handle specific response patterns
             if "message" in response_data:
                 self.logger.info(f"API message: {response_data['message']}")
             
-            # Look for common data patterns
+            # Log data count for tracking
             for key in ["data", "readings", "measurements", "values", "results", "sensors"]:
-                if key in response_data:
-                    self.logger.info(f"Found '{key}' in response with type: {type(response_data[key])}")
-                    if isinstance(response_data[key], list):
-                        self.logger.info(f"'{key}' contains {len(response_data[key])} items")
-                        if len(response_data[key]) > 0:
-                            first_item = response_data[key][0]
-                            self.logger.info(f"First item in '{key}': {json.dumps(first_item, indent=2)}")
-                            
-                            # If it's sensors data, look deeper into the structure
-                            if key == "sensors" and isinstance(first_item, dict):
-                                if "data" in first_item:
-                                    sensor_data = first_item["data"]
-                                    self.logger.info(f"Sensor data type: {type(sensor_data)}")
-                                    if isinstance(sensor_data, list) and len(sensor_data) > 0:
-                                        self.logger.info(f"Sensor data has {len(sensor_data)} readings")
-                                        self.logger.info(f"First reading: {json.dumps(sensor_data[0], indent=2)}")
-                                        if len(sensor_data) > 1:
-                                            self.logger.info(f"Second reading: {json.dumps(sensor_data[1], indent=2)}")
+                if key in response_data and isinstance(response_data[key], list):
+                    self.logger.info(f"Retrieved {len(response_data[key])} items from '{key}'")
+                    break
         
         return response_data
     
