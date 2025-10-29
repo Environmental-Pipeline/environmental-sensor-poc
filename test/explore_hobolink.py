@@ -120,10 +120,12 @@ def diagnose_api_endpoints_unlimited(client, save_samples: bool = True):
             
             print(f"Found {len(candidate_sensors)} candidate temperature/humidity sensors")
             
-            # Try sensors until we find one with actual data - using DAYS_BACK from .env
-            successful_response = None
+            # Try sensors until we find data from up to 3 devices
+            successful_responses = []
+            successful_devices = set()  # Track unique devices we've found data for
             attempts = 0
-            max_attempts = min(10, len(candidate_sensors))  # Try up to 10 sensors
+            max_devices = 3  # Target number of devices to get data from
+            max_attempts = min(20, len(candidate_sensors))  # Try up to 20 sensors to find 3 devices
             
             # Get date range using DAYS_BACK environment variable (like other parts of the system)
             # Note: Hobolink API limits historical data to less than 1 year maximum
@@ -145,6 +147,11 @@ def diagnose_api_endpoints_unlimited(client, save_samples: bool = True):
             print(f"Date range: {start_time.strftime('%Y-%m-%d %H:%M:%S')} to {end_time.strftime('%Y-%m-%d %H:%M:%S')} UTC")
             
             for candidate in candidate_sensors[:max_attempts]:
+                # Stop if we've found data from enough devices
+                if len(successful_devices) >= max_devices:
+                    print(f"\n✓ Found data from {max_devices} devices, stopping search")
+                    break
+                    
                 attempts += 1
                 target_device = candidate['device']
                 target_sensor = candidate['sensor']
@@ -155,8 +162,14 @@ def diagnose_api_endpoints_unlimited(client, save_samples: bool = True):
                 units = target_sensor.get("units")
                 latest = target_sensor.get("latest")
                 
+                # Skip if we already have data from this device
+                if device_serial in successful_devices:
+                    print(f"\nSkipping device {device_serial} (already have data from this device)")
+                    continue
+                
                 print(f"\nAttempt {attempts}: Testing device {device_serial}, sensor {sensor_serial}")
                 print(f"  Sensor: {measurement_type}, {units}, latest: {latest}")
+                print(f"  Progress: {len(successful_devices)}/{max_devices} devices found")
                 
                 try:
                     print(f"  Making {days_back}-day historical data request...")
@@ -190,7 +203,8 @@ def diagnose_api_endpoints_unlimited(client, save_samples: bool = True):
                                 print(f"  ⚠️  Pagination handling is not currently implemented!")
                             
                             print(f"  ✓ SUCCESS! Found {days_back}-day historical data for {device_serial}/{sensor_serial}")
-                            successful_response = data_response
+                            successful_responses.append(data_response)
+                            successful_devices.add(device_serial)
                             
                             # Save successful data response to file
                             if save_samples and samples_dir:
@@ -202,60 +216,28 @@ def diagnose_api_endpoints_unlimited(client, save_samples: bool = True):
                                 except Exception as e:
                                     print(f"  ✗ Failed to save {days_back}-day data response: {e}")
                             
-                            # Analyze the response structure
-                            print(f"  {days_back}-day data response type: {type(data_response)}")
-                            if isinstance(data_response, dict):
-                                print(f"  {days_back}-day data response keys: {list(data_response.keys())}")
-                                
-                                # Show message if present
-                                if "message" in data_response:
-                                    print(f"    message: {data_response['message']}")
-                                
-                                # Look for data patterns and count records
-                                for key in ["sensors", "data", "readings", "measurements", "results"]:
-                                    if key in data_response:
-                                        data_content = data_response[key]
-                                        print(f"    {key}: {type(data_content)}")
+                            # Analyze the response structure (show brief summary for multiple devices)
+                            if isinstance(data_response, dict) and "sensors" in data_response:
+                                for sensor_resp in data_response["sensors"]:
+                                    if "data" in sensor_resp:
+                                        total_records = 0
+                                        for measurement in sensor_resp["data"]:
+                                            if isinstance(measurement, dict) and "records" in measurement:
+                                                records_count = len(measurement["records"])
+                                                total_records += records_count
+                                        print(f"    Device {device_serial}: {total_records} total records found")
                                         
-                                        if isinstance(data_content, list):
-                                            print(f"      Length: {len(data_content)}")
-                                            if len(data_content) > 0:
-                                                first_item = data_content[0]
-                                                print(f"      First item type: {type(first_item)}")
-                                                if isinstance(first_item, dict):
-                                                    print(f"      First item keys: {list(first_item.keys())}")
-                                                    
-                                                    # Count total records in the date range
-                                                    if key == "sensors" and "data" in first_item:
-                                                        sensor_data = first_item["data"]
-                                                        print(f"        sensor.data: {type(sensor_data)} with {len(sensor_data) if isinstance(sensor_data, list) else 'N/A'} items")
-                                                        if isinstance(sensor_data, list) and len(sensor_data) > 0:
-                                                            total_records = 0
-                                                            for measurement in sensor_data:
-                                                                if isinstance(measurement, dict) and "records" in measurement:
-                                                                    records_count = len(measurement["records"])
-                                                                    total_records += records_count
-                                                                    print(f"          {measurement.get('measurementType', 'unknown')}: {records_count} records")
-                                                            print(f"          TOTAL {days_back}-DAY RECORDS: {total_records}")
-                                                            
-                                                            # Show sample of first and last records with dates
-                                                            if sensor_data and isinstance(sensor_data[0], dict) and "records" in sensor_data[0]:
-                                                                records = sensor_data[0]["records"]
-                                                                if records:
-                                                                    # Convert timestamps to readable dates
-                                                                    first_ts = records[0][0] / 1000
-                                                                    first_date = datetime.datetime.fromtimestamp(first_ts, datetime.timezone.utc)
-                                                                    print(f"          First record: {records[0]} ({first_date.strftime('%Y-%m-%d %H:%M:%S')} UTC)")
-                                                                    if len(records) > 1:
-                                                                        last_ts = records[-1][0] / 1000
-                                                                        last_date = datetime.datetime.fromtimestamp(last_ts, datetime.timezone.utc)
-                                                                        print(f"          Last record: {records[-1]} ({last_date.strftime('%Y-%m-%d %H:%M:%S')} UTC)")
-                                                else:
-                                                    print(f"      Sample item: {first_item}")
-                                        else:
-                                            print(f"      Content: {data_content}")
+                                        # Show sample record for first successful device only
+                                        if len(successful_responses) == 1:
+                                            sensor_data = sensor_resp["data"]
+                                            if sensor_data and isinstance(sensor_data[0], dict) and "records" in sensor_data[0]:
+                                                records = sensor_data[0]["records"]
+                                                if records:
+                                                    first_ts = records[0][0] / 1000
+                                                    first_date = datetime.datetime.fromtimestamp(first_ts, datetime.timezone.utc)
+                                                    print(f"    Sample record: {records[0]} ({first_date.strftime('%Y-%m-%d %H:%M:%S')} UTC)")
                             
-                            break  # Found successful response, stop trying
+                            # Continue to next device instead of breaking
                         else:
                             print(f"  ✗ No data found for {device_serial}/{sensor_serial}")
                             if isinstance(data_response, dict) and "message" in data_response:
@@ -266,88 +248,87 @@ def diagnose_api_endpoints_unlimited(client, save_samples: bool = True):
                 except Exception as e:
                     print(f"  ✗ Error querying {device_serial}/{sensor_serial}: {str(e)}")
             
-            if not successful_response:
+            if not successful_responses:
                 print(f"\n✗ No sensors returned {days_back}-day historical data after {attempts} attempts")
             else:
-                print(f"\n✓ Successfully found {days_back}-day historical data after {attempts} attempt(s)")
+                print(f"\n✓ Successfully found {days_back}-day historical data from {len(successful_devices)} device(s) after {attempts} attempt(s)")
                 
                 # Generate clean CSV of readings with human-readable timestamps
-                if successful_response and save_samples and samples_dir:
+                if successful_responses and save_samples and samples_dir:
                     print(f"\n3. GENERATING CLEAN CSV EXPORT")
                     print("-" * 30)
                     
                     try:
                         csv_data = []
                         
-                        # Extract readings from successful response
-                        if "sensors" in successful_response:
-                            for sensor_info in successful_response["sensors"]:
-                                sensor_serial = sensor_info.get("sensorSerialNumber", "unknown")
-                                
-                                # Find the device that contains this sensor by searching through all devices
-                                device_serial = "unknown"
-                                device_info = {
-                                    "device_name": "unknown",
-                                    "product_code": "unknown", 
-                                    "unit_system": "unknown",
-                                    "logging_state": "unknown",
-                                    "alarmed": "unknown",
-                                    "last_connection_time": "unknown"
-                                }
-                                
-                                # Search through devices to find which one contains this sensor
-                                for device in devices:
-                                    device_sensors = device.get("sensors", [])
-                                    for device_sensor in device_sensors:
-                                        if device_sensor.get("sensorSerialNumber") == sensor_serial:
-                                            # Found the device that contains this sensor
-                                            device_serial = device.get("deviceSerialNumber", "unknown")
-                                            device_info = {
-                                                "device_name": device.get("deviceName", "unknown"),
-                                                "product_code": device.get("productCode", "unknown"),
-                                                "unit_system": device.get("unitSystem", "unknown"), 
-                                                "logging_state": device.get("loggingState", "unknown"),
-                                                "alarmed": device.get("alarmed", "unknown"),
-                                                "last_connection_time": device.get("lastConnectionTime", "unknown")
-                                            }
-                                            break
-                                    if device_info["device_name"] != "unknown":  # Found it
-                                        break
-                                
-
-                                
-                                for measurement_data in sensor_info.get("data", []):
-                                    measurement_type = measurement_data.get("measurementType", "unknown")
-                                    units = measurement_data.get("units", "")
-                                    records = measurement_data.get("records", [])
+                        # Extract readings from all successful responses
+                        for successful_response in successful_responses:
+                            if "sensors" in successful_response:
+                                for sensor_info in successful_response["sensors"]:
+                                    sensor_serial = sensor_info.get("sensorSerialNumber", "unknown")
                                     
-                                    for record in records:
-                                        if len(record) >= 2:
-                                            timestamp_ms = record[0]
-                                            value = record[1]
-                                            
-                                            # Convert timestamp to human-readable format
-                                            timestamp_sec = timestamp_ms / 1000
-                                            readable_time = datetime.datetime.fromtimestamp(timestamp_sec, datetime.timezone.utc)
-                                            
-                                            csv_data.append({
-                                                "timestamp_utc": readable_time.strftime('%Y-%m-%d %H:%M:%S'),
-                                                "timestamp_ms": int(timestamp_ms),
-                                                "device_serial": device_serial,
-                                                "device_name": device_info["device_name"],
-                                                "product_code": device_info["product_code"],
-                                                "unit_system": device_info["unit_system"],
-                                                "logging_state": device_info["logging_state"],
-                                                "alarmed": device_info["alarmed"],
-                                                "last_connection_time": device_info["last_connection_time"],
-                                                "sensor_serial": sensor_serial,
-                                                "measurement_type": measurement_type,
-                                                "value": value,
-                                                "units": units,
-                                                "data_type": measurement_data.get("dataType", ""),
-                                                "total_records": sensor_info.get("totalRecords", 0),
-                                                "latest_timestamp": sensor_info.get("latestTimestamp", "")
-                                            })
+                                    # Find the device that contains this sensor by searching through all devices
+                                    device_serial = "unknown"
+                                    device_info = {
+                                        "device_name": "unknown",
+                                        "product_code": "unknown", 
+                                        "unit_system": "unknown",
+                                        "logging_state": "unknown",
+                                        "alarmed": "unknown",
+                                        "last_connection_time": "unknown"
+                                    }
+                                    
+                                    # Search through devices to find which one contains this sensor
+                                    for device in devices:
+                                        device_sensors = device.get("sensors", [])
+                                        for device_sensor in device_sensors:
+                                            if device_sensor.get("sensorSerialNumber") == sensor_serial:
+                                                # Found the device that contains this sensor
+                                                device_serial = device.get("deviceSerialNumber", "unknown")
+                                                device_info = {
+                                                    "device_name": device.get("deviceName", "unknown"),
+                                                    "product_code": device.get("productCode", "unknown"),
+                                                    "unit_system": device.get("unitSystem", "unknown"), 
+                                                    "logging_state": device.get("loggingState", "unknown"),
+                                                    "alarmed": device.get("alarmed", "unknown"),
+                                                    "last_connection_time": device.get("lastConnectionTime", "unknown")
+                                                }
+                                                break
+                                        if device_info["device_name"] != "unknown":  # Found it
+                                            break
+                                    
+                                    for measurement_data in sensor_info.get("data", []):
+                                        measurement_type = measurement_data.get("measurementType", "unknown")
+                                        units = measurement_data.get("units", "")
+                                        records = measurement_data.get("records", [])
+                                        
+                                        for record in records:
+                                            if len(record) >= 2:
+                                                timestamp_ms = record[0]
+                                                value = record[1]
+                                                
+                                                # Convert timestamp to human-readable format
+                                                timestamp_sec = timestamp_ms / 1000
+                                                readable_time = datetime.datetime.fromtimestamp(timestamp_sec, datetime.timezone.utc)
+                                                
+                                                csv_data.append({
+                                                    "timestamp_utc": readable_time.strftime('%Y-%m-%d %H:%M:%S'),
+                                                    "timestamp_ms": int(timestamp_ms),
+                                                    "device_serial": device_serial,
+                                                    "device_name": device_info["device_name"],
+                                                    "product_code": device_info["product_code"],
+                                                    "unit_system": device_info["unit_system"],
+                                                    "logging_state": device_info["logging_state"],
+                                                    "alarmed": device_info["alarmed"],
+                                                    "last_connection_time": device_info["last_connection_time"],
+                                                    "sensor_serial": sensor_serial,
+                                                    "measurement_type": measurement_type,
+                                                    "value": value,
+                                                    "units": units,
+                                                    "data_type": measurement_data.get("dataType", ""),
+                                                    "total_records": sensor_info.get("totalRecords", 0),
+                                                    "latest_timestamp": sensor_info.get("latestTimestamp", "")
+                                                })
                         
                         # Write CSV file
                         if csv_data:
