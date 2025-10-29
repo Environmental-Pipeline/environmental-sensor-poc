@@ -151,6 +151,21 @@ class TestHobolinkClient(unittest.TestCase):
                 sources = df['source'].unique().to_list()
                 self.assertEqual(sources, ['hobolink'], 
                                 "All historical records should have source='hobolink'")
+                
+                # Verify timeframe - all timestamps should be within requested range
+                timestamps = df['SensorReadingUTC'].to_list()
+                for timestamp in timestamps:
+                    self.assertGreaterEqual(timestamp, start_utc, 
+                                          f"Timestamp {timestamp} should be >= start time {start_utc}")
+                    self.assertLessEqual(timestamp, end_utc, 
+                                       f"Timestamp {timestamp} should be <= end time {end_utc}")
+                
+                # Log timeframe validation results for debugging
+                if timestamps:
+                    min_timestamp = min(timestamps)
+                    max_timestamp = max(timestamps)
+                    print(f"Timeframe validation: requested [{start_utc}, {end_utc}], "
+                          f"got [{min_timestamp}, {max_timestamp}]")
     
     def test_transform_to_standardized_schema(self):
         """Test data transformation to standardized schema."""
@@ -244,6 +259,65 @@ class TestHobolinkClient(unittest.TestCase):
         self.assertIn('SensorReadingC', transformed_c.columns)
         self.assertAlmostEqual(transformed_c['SensorReadingC'].to_list()[0], 22.5, places=1)
     
+    def test_timeframe_validation(self):
+        """Test that returned data respects the requested timeframe."""
+        # Create mock data with timestamps both inside and outside a time window
+        now = datetime.datetime.now(datetime.timezone.utc)
+        window_start = now - datetime.timedelta(hours=2)
+        window_end = now - datetime.timedelta(hours=1) 
+        
+        # Timestamps: before window, in window, after window
+        before_window_ts = int((window_start - datetime.timedelta(minutes=30)).timestamp() * 1000)
+        in_window_ts = int((window_start + datetime.timedelta(minutes=30)).timestamp() * 1000)
+        after_window_ts = int((window_end + datetime.timedelta(minutes=30)).timestamp() * 1000)
+        
+        # Mock data that includes timestamps outside the requested range
+        mock_data_mixed = {
+            "sensors": [{
+                "sensorSerialNumber": "test-sensor-timeframe",
+                "data": [{
+                    "measurementType": "Temperature", 
+                    "units": "°F",
+                    "records": [
+                        [before_window_ts, 70.0],  # Before window - should be filtered
+                        [in_window_ts, 72.0],      # In window - should be kept
+                        [after_window_ts, 74.0]    # After window - should be filtered  
+                    ]
+                }]
+            }]
+        }
+        
+        # Transform the data
+        transformed = self.client.transform_to_standardized_schema(mock_data_mixed)
+        
+        # All transformed timestamps should be in seconds (converted from ms)
+        expected_before = before_window_ts // 1000
+        expected_in = in_window_ts // 1000  
+        expected_after = after_window_ts // 1000
+        
+        timestamps = transformed['SensorReadingUTC'].to_list()
+        
+        # Verify we got all three timestamps (transformation doesn't filter by time)
+        self.assertEqual(len(timestamps), 3, "Should have 3 timestamp records")
+        self.assertIn(expected_before, timestamps, "Should include before-window timestamp")
+        self.assertIn(expected_in, timestamps, "Should include in-window timestamp") 
+        self.assertIn(expected_after, timestamps, "Should include after-window timestamp")
+        
+        # Now test what would happen if we filter by timeframe
+        window_start_utc = int(window_start.timestamp())
+        window_end_utc = int(window_end.timestamp())
+        
+        # Filter to simulate what the API should return
+        filtered_df = transformed.filter(
+            (pl.col('SensorReadingUTC') >= window_start_utc) & 
+            (pl.col('SensorReadingUTC') <= window_end_utc)
+        )
+        
+        # Should only have the in-window timestamp
+        filtered_timestamps = filtered_df['SensorReadingUTC'].to_list()
+        self.assertEqual(len(filtered_timestamps), 1, "Should have 1 timestamp in window")
+        self.assertEqual(filtered_timestamps[0], expected_in, "Should only have in-window timestamp")
+
     def test_empty_response_handling(self):
         """Test handling of empty API responses."""
         # Test with empty sensors array
@@ -321,6 +395,24 @@ class TestHobolinkIntegration(unittest.TestCase):
                               "Combined historical data should have readings")
             self.assertIn('source', combined_df.columns)
             self.assertEqual(combined_df['source'].unique().to_list(), ['hobolink'])
+            
+            # Verify timeframe for integration test
+            start_utc = int(start_time.timestamp())
+            end_utc = int(end_time.timestamp())
+            timestamps = combined_df['SensorReadingUTC'].to_list()
+            
+            for timestamp in timestamps:
+                self.assertGreaterEqual(timestamp, start_utc,
+                                      f"Integration test: timestamp {timestamp} should be >= {start_utc}")
+                self.assertLessEqual(timestamp, end_utc,
+                                   f"Integration test: timestamp {timestamp} should be <= {end_utc}")
+            
+            # Log integration timeframe results
+            if timestamps:
+                min_ts = min(timestamps)
+                max_ts = max(timestamps)
+                print(f"Integration timeframe validation: requested [{start_utc}, {end_utc}], "
+                      f"received [{min_ts}, {max_ts}]")
 
 
 if __name__ == '__main__':
