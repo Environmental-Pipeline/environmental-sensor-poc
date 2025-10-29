@@ -94,8 +94,9 @@ The project also integrates with the Conserv API as a second data source, suppor
   - GET https://api.licor.cloud/v2/data?deviceSerialNumber=X&sensorSerialNumber=Y&startTime=Z&endTime=W Get sensor data.
 * **Data format**: JSON. Query devices then loop over devices and sensors to get readings. Run `python test/explore_hobolink.py` to save sample output to `samples/`.
 * Only allows data within the last year. 
-* Readings response has property moreResults that is always False. The code will error if it is ever true, in which case this would need to be handled. 
-* Most readings come in Fahrenheit, but some do come through in Celsius in which case we convert to Fahrenheit for consistency.
+* The data API response has a property "moreResults" that is always False. The code will error out if it is ever true, in which case this would need to be handled. It isn't possible to handle it now since I can't find any data that has it true, so I'm not sure what that data would look like. It is either an unused property or only comes into play when there is too much data in one record, which didn't happen when I searched the max duration (one year) across all sensors.
+* Most readings come in Fahrenheit, but some do come through in Celsius, in which case we convert to Fahrenheit for consistency.
+
 
 **Unified Data Integration**
 
