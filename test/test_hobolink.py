@@ -244,7 +244,7 @@ class TestHobolinkClient(unittest.TestCase):
         self.assertIn('SensorReadingF', transformed_f.columns)
         self.assertAlmostEqual(transformed_f['SensorReadingF'].to_list()[0], 72.5, places=1)
         
-        # Test Celsius temperature
+        # Test Celsius temperature (should be suppressed/skipped)
         mock_raw_data_c = {
             "sensors": [{
                 "sensorSerialNumber": "temp-sensor-c",
@@ -257,8 +257,9 @@ class TestHobolinkClient(unittest.TestCase):
         }
         
         transformed_c = self.client.transform_to_standardized_schema(mock_raw_data_c)
-        self.assertIn('SensorReadingC', transformed_c.columns)
-        self.assertAlmostEqual(transformed_c['SensorReadingC'].to_list()[0], 22.5, places=1)
+        # Celsius sensors should be suppressed, so result should be empty
+        self.assertEqual(len(transformed_c), 0, 
+                        "Celsius temperature sensors should be suppressed")
     
     def test_timeframe_validation(self):
         """Test that returned data respects the requested timeframe."""

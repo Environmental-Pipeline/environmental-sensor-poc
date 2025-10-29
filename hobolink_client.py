@@ -253,21 +253,31 @@ class HobolinkClient:
                     ])
                     
                     # Map measurement types to standardized reading columns
+                    # Focus on temperature and humidity only (matching Coris behavior)
                     if measurement_type.lower() in ["temperature", "temp"]:
                         if "°F" in units or "F" in units:
+                            # Already in Fahrenheit - keep this sensor
                             df = df.with_columns(polars.col("value").cast(polars.Float32).alias("SensorReadingF"))
-                        else:  # Assume Celsius
-                            df = df.with_columns(polars.col("value").cast(polars.Float64).alias("SensorReadingC"))
+                        elif "°C" in units or "C" in units:
+                            # Celsius detected - skip this sensor and log suppression
+                            self.logger.info(f"Suppressing Celsius temperature sensor: {sensor_serial} "
+                                           f"(measurement_type: {measurement_type}, units: {units})")
+                            continue
+                        else:
+                            # Unknown temperature units - skip and log
+                            self.logger.warning(f"Unknown temperature units for sensor {sensor_serial}: "
+                                              f"measurement_type={measurement_type}, units='{units}' - skipping")
+                            continue
                     elif measurement_type.lower() in ["rh", "humidity", "relative humidity"]:
                         df = df.with_columns(polars.col("value").cast(polars.Float32).alias("SensorReadingRh"))
-                    elif measurement_type.lower() in ["dew point", "dewpoint"]:
-                        if "°F" in units or "F" in units:
-                            df = df.with_columns(polars.col("value").cast(polars.Float32).alias("SensorReadingDewPointF"))
-                        else:
-                            df = df.with_columns(polars.col("value").cast(polars.Float64).alias("SensorReadingDewPointC"))
+                    # elif measurement_type.lower() in ["dew point", "dewpoint"]:
+                    #     if "°F" in units or "F" in units:
+                    #         df = df.with_columns(polars.col("value").cast(polars.Float32).alias("SensorReadingDewPointF"))
+                    #     else:
+                    #         df = df.with_columns(polars.col("value").cast(polars.Float64).alias("SensorReadingDewPointC"))
                     else:
-                        # Generic sensor reading
-                        df = df.with_columns(polars.col("value").cast(polars.Float64).alias("SensorReading"))
+                        # Skip other sensor types - only collect temperature and humidity
+                        continue
                     
                     # Drop the temporary columns
                     df = df.drop(["timestamp_ms", "value"])
@@ -357,12 +367,16 @@ class HobolinkClient:
             device_name = device.get("deviceName", "Unknown Device")
             
             if include_sensors and "sensors" in device:
-                # Create a record for each sensor
+                # Create a record for each sensor (temperature and humidity only)
                 for sensor in device["sensors"]:
                     sensor_serial = sensor.get("sensorSerialNumber")
                     measurement_type = sensor.get("measurementType", "Unknown")
                     units = sensor.get("units", "")
                     latest_value = sensor.get("latest")
+                    
+                    # Filter to only temperature and humidity sensors (matching Coris behavior)
+                    if measurement_type.lower() not in ["temperature", "temp", "rh", "humidity", "relative humidity"]:
+                        continue
                     
                     device_records.append({
                         "DeviceID_Hobolink": device_serial,
@@ -576,27 +590,17 @@ class HobolinkClient:
             polars.col("LatestReading").cast(polars.Float64).alias("SensorReading"),
         ])
         
-        # Map specific measurement types to appropriate columns
+        # Map specific measurement types to appropriate columns  
+        # Only include Fahrenheit temperatures (matching Coris behavior)
         result = result.with_columns([
             polars.when(polars.col("SensorType").str.to_lowercase().str.contains("temperature"))
             .then(
                 polars.when(polars.col("SensorUnits").str.contains("°F|F"))
-                .then(polars.col("LatestReading").cast(polars.Float32))
-                .otherwise(None)
-                .alias("SensorReadingF")
+                .then(polars.col("LatestReading").cast(polars.Float32))  # Only Fahrenheit
+                .otherwise(None)  # Skip Celsius and unknown temperature units
             )
             .otherwise(None)
             .alias("SensorReadingF"),
-            
-            polars.when(polars.col("SensorType").str.to_lowercase().str.contains("temperature"))
-            .then(
-                polars.when(polars.col("SensorUnits").str.contains("°C|C"))
-                .then(polars.col("LatestReading").cast(polars.Float64))
-                .otherwise(None)
-                .alias("SensorReadingC")
-            )
-            .otherwise(None)
-            .alias("SensorReadingC"),
             
             polars.when(polars.col("SensorType").str.to_lowercase().str.contains("rh|humidity"))
             .then(polars.col("LatestReading").cast(polars.Float32))
@@ -604,12 +608,26 @@ class HobolinkClient:
             .alias("SensorReadingRh"),
         ])
         
+        # Log suppressed Celsius temperature sensors
+        celsius_sensors = result.filter(
+            (polars.col("SensorType").str.to_lowercase().str.contains("temperature")) &
+            (polars.col("SensorUnits").str.contains("°C|C")) &
+            (polars.col("SensorReadingF").is_null())
+        )
+        
+        if len(celsius_sensors) > 0:
+            for row in celsius_sensors.select(["SensorID_Hobolink", "SensorType", "SensorUnits"]).iter_rows():
+                sensor_id, sensor_type, units = row
+                self.logger.info(f"Suppressing Celsius temperature sensor in current readings: {sensor_id} "
+                               f"(measurement_type: {sensor_type}, units: {units})")
+        
         # Select only the columns that match the standardized schema
+        # Note: Only SensorReadingF (no SensorReadingC) to match Coris behavior
         standardized_columns = [
             "source", "SensorID_Hobolink", "SensorID_Coris", "SensorID_Conserv", 
             "customer_id", "QueryUTC", "SensorReadingUTC", "DeviceID_Hobolink", 
             "DeviceID_Coris", "SensorName", "DeviceName", "SensorType", 
-            "SensorReading", "SensorReadingF", "SensorReadingC", "SensorReadingRh"
+            "SensorReading", "SensorReadingF", "SensorReadingRh"
         ]
         
         # Add missing columns with None values
