@@ -7,17 +7,33 @@ and saves sample responses for analysis and development purposes.
 Now includes unlimited historical data pulls without date restrictions.
 
 Usage:
+    # Sample run (first 3 devices only)
     python test/explore_hobolink.py
+    
+    # Full run (all devices - comprehensive analysis)
+    python test/explore_hobolink.py --all-devices
+
+Arguments:
+    --all-devices    Run comprehensive analysis on all available devices
+    --days-back N    Number of days of historical data to pull (default: 364, max: 364)
+
+Features:
+    - Pulls historical data based on days-back parameter
+    - Exports clean CSV with device metadata and human-readable timestamps
+    - Analyzes device properties (logging states, product codes, alarm states)
+    - Sample mode: 3 devices for quick testing
+    - All devices mode: Complete analysis of all available devices
 
 Requirements:
     - HOBOLINK_API_KEY environment variable must be set
-    - Creates samples/ directory for storing API responses
+    - Creates samples/ directory for storing API responses and CSV exports
 """
 
 import os
 import sys
 import logging
 import json
+import argparse
 
 # Add parent directory to path to import hobolink_client
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -25,7 +41,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from hobolink_client import create_hobolink_client_from_env
 
 
-def diagnose_api_endpoints_unlimited(client, save_samples: bool = True):
+def diagnose_api_endpoints_unlimited(client, save_samples: bool = True, all_devices_mode: bool = False):
     """
     Enhanced diagnostic function that pulls all available historical data
     without date restrictions to see what the API returns.
@@ -125,8 +141,7 @@ def diagnose_api_endpoints_unlimited(client, save_samples: bool = True):
             successful_devices = set()  # Track unique devices we've found data for
             attempts = 0
             
-            # Check for ALL_DEVICES option
-            all_devices_mode = os.getenv('ALL_DEVICES', 'False').lower() == 'true'
+            # Check for all devices mode
             if all_devices_mode:
                 max_devices = len(set(device.get("deviceSerialNumber") for device in devices))  # All unique devices
                 max_attempts = len(candidate_sensors)  # Try all sensors
@@ -451,10 +466,23 @@ def diagnose_api_endpoints_unlimited(client, save_samples: bool = True):
 
 
 def main():
-    """Run Hobolink API exploration with DAYS_BACK historical data pulls."""
-    days_back_env = int(os.getenv('DAYS_BACK', 364))
-    days_back = min(days_back_env, 364)  # Cap at API limit
-    all_devices_mode = os.getenv('ALL_DEVICES', 'False').lower() == 'true'
+    """Run Hobolink API exploration with historical data pulls."""
+    parser = argparse.ArgumentParser(description='Hobolink API Explorer')
+    parser.add_argument('--all-devices', action='store_true',
+                       help='Run comprehensive analysis on all available devices')
+    parser.add_argument('--days-back', type=int, default=364,
+                       help='Number of days of historical data to pull (default: 364, max: 364)')
+    
+    args = parser.parse_args()
+    
+    # Cap days at API limit and fallback to environment variable if not provided
+    if args.days_back == 364:  # Default value, check environment
+        days_back_env = int(os.getenv('DAYS_BACK', 364))
+        days_back = min(days_back_env, 364)
+    else:
+        days_back = min(args.days_back, 364)  # Cap at API limit
+    
+    all_devices_mode = args.all_devices
     mode_text = "ALL DEVICES" if all_devices_mode else f"{days_back}-DAY"
     print("=" * 60)
     print(f"HOBOLINK API EXPLORER ({mode_text} HISTORICAL DATA)")
@@ -473,7 +501,7 @@ def main():
         
         # Run historical diagnostics with sample saving
         print(f"Running {days_back}-day historical data exploration...")
-        diagnose_api_endpoints_unlimited(client, save_samples=True)
+        diagnose_api_endpoints_unlimited(client, save_samples=True, all_devices_mode=all_devices_mode)
         
         print("\n" + "=" * 60)
         print(f"{days_back}-DAY EXPLORATION COMPLETE!")
