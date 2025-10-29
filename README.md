@@ -88,6 +88,14 @@ The project also integrates with the Conserv API as a second data source, suppor
 * **Error handling**: Individual customer failures don't break the entire process ("No data found" handled gracefully)
 * **New schema columns**: `SensorID_Conserv`, `customer_id`, `source` (preserves backward compatibility)
 
+**Hobolink Sensors**
+* **API Endpoints**:
+  - GET https://api.licor.cloud/v2/devices?includeSensors=true Identify available sensors.
+  - GET https://api.licor.cloud/v2/data?deviceSerialNumber=X&sensorSerialNumber=Y&startTime=Z&endTime=W Get sensor data.
+* **Data format**: JSON. Query devices then loop over devices and sensors to get readings. Run `python test/explore_hobolink.py` to save sample output to `samples/`.
+* Only allows data within the last year. 
+* Readings response has property moreResults that is always False. The code will error if it is ever true, in which case this would need to be handled. 
+
 **Unified Data Integration**
 
 Both APIs are processed through a unified entry point (`ingest_all_sources.py`) that:
