@@ -123,12 +123,13 @@ class TestHobolinkClient(unittest.TestCase):
         end_utc = int(end_time.timestamp())
         start_utc = int(start_time.timestamp())
         
+        # Use actual available data but limit for reasonable test time
         historical_data_list = self.client.get_historical_data_bulk(
             start_utc=start_utc,
             end_utc=end_utc,
             testing=True,
-            testing_device_limit=1,
-            testing_sensors_per_device=1
+            testing_device_limit=3,  # Allow up to 3 devices
+            testing_sensors_per_device=3  # Allow up to 3 sensors per device
         )
         
         # Verify return type
@@ -375,12 +376,13 @@ class TestHobolinkIntegration(unittest.TestCase):
         end_time = datetime.datetime.now(datetime.timezone.utc)
         start_time = end_time - datetime.timedelta(hours=48)  # Wider range for integration test
         
+        # Use reasonable limits for integration testing but allow multiple sensors
         historical_list = self.client.get_historical_data_bulk(
             start_utc=int(start_time.timestamp()),
             end_utc=int(end_time.timestamp()),
             testing=True,
-            testing_device_limit=1,
-            testing_sensors_per_device=1
+            testing_device_limit=2,  # Test with up to 2 devices
+            testing_sensors_per_device=3  # Test with up to 3 sensors per device
         )
         
         # Verify we can process the pipeline without errors
