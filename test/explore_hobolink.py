@@ -270,6 +270,113 @@ def diagnose_api_endpoints_unlimited(client, save_samples: bool = True):
                 print(f"\n✗ No sensors returned {days_back}-day historical data after {attempts} attempts")
             else:
                 print(f"\n✓ Successfully found {days_back}-day historical data after {attempts} attempt(s)")
+                
+                # Generate clean CSV of readings with human-readable timestamps
+                if successful_response and save_samples and samples_dir:
+                    print(f"\n3. GENERATING CLEAN CSV EXPORT")
+                    print("-" * 30)
+                    
+                    try:
+                        csv_data = []
+                        
+                        # Extract readings from successful response
+                        if "sensors" in successful_response:
+                            for sensor_info in successful_response["sensors"]:
+                                sensor_serial = sensor_info.get("sensorSerialNumber", "unknown")
+                                
+                                # Find the device that contains this sensor by searching through all devices
+                                device_serial = "unknown"
+                                device_info = {
+                                    "device_name": "unknown",
+                                    "product_code": "unknown", 
+                                    "unit_system": "unknown",
+                                    "logging_state": "unknown",
+                                    "alarmed": "unknown",
+                                    "last_connection_time": "unknown"
+                                }
+                                
+                                # Search through devices to find which one contains this sensor
+                                for device in devices:
+                                    device_sensors = device.get("sensors", [])
+                                    for device_sensor in device_sensors:
+                                        if device_sensor.get("sensorSerialNumber") == sensor_serial:
+                                            # Found the device that contains this sensor
+                                            device_serial = device.get("deviceSerialNumber", "unknown")
+                                            device_info = {
+                                                "device_name": device.get("deviceName", "unknown"),
+                                                "product_code": device.get("productCode", "unknown"),
+                                                "unit_system": device.get("unitSystem", "unknown"), 
+                                                "logging_state": device.get("loggingState", "unknown"),
+                                                "alarmed": device.get("alarmed", "unknown"),
+                                                "last_connection_time": device.get("lastConnectionTime", "unknown")
+                                            }
+                                            break
+                                    if device_info["device_name"] != "unknown":  # Found it
+                                        break
+                                
+
+                                
+                                for measurement_data in sensor_info.get("data", []):
+                                    measurement_type = measurement_data.get("measurementType", "unknown")
+                                    units = measurement_data.get("units", "")
+                                    records = measurement_data.get("records", [])
+                                    
+                                    for record in records:
+                                        if len(record) >= 2:
+                                            timestamp_ms = record[0]
+                                            value = record[1]
+                                            
+                                            # Convert timestamp to human-readable format
+                                            timestamp_sec = timestamp_ms / 1000
+                                            readable_time = datetime.datetime.fromtimestamp(timestamp_sec, datetime.timezone.utc)
+                                            
+                                            csv_data.append({
+                                                "timestamp_utc": readable_time.strftime('%Y-%m-%d %H:%M:%S'),
+                                                "timestamp_ms": int(timestamp_ms),
+                                                "device_serial": device_serial,
+                                                "device_name": device_info["device_name"],
+                                                "product_code": device_info["product_code"],
+                                                "unit_system": device_info["unit_system"],
+                                                "logging_state": device_info["logging_state"],
+                                                "alarmed": device_info["alarmed"],
+                                                "last_connection_time": device_info["last_connection_time"],
+                                                "sensor_serial": sensor_serial,
+                                                "measurement_type": measurement_type,
+                                                "value": value,
+                                                "units": units,
+                                                "data_type": measurement_data.get("dataType", ""),
+                                                "total_records": sensor_info.get("totalRecords", 0),
+                                                "latest_timestamp": sensor_info.get("latestTimestamp", "")
+                                            })
+                        
+                        # Write CSV file
+                        if csv_data:
+                            import csv
+                            csv_file = os.path.join(samples_dir, f"hobolink_{days_back}day_readings.csv")
+                            
+                            with open(csv_file, 'w', newline='', encoding='utf-8') as f:
+                                if csv_data:  # Check if we have data
+                                    fieldnames = csv_data[0].keys()
+                                    writer = csv.DictWriter(f, fieldnames=fieldnames)
+                                    writer.writeheader()
+                                    writer.writerows(csv_data)
+                            
+                            print(f"✓ Generated clean CSV with {len(csv_data)} readings: {csv_file}")
+                            
+                            # Show sample of CSV data
+                            print(f"CSV columns: {', '.join(csv_data[0].keys())}")
+                            print(f"Sample readings:")
+                            for i, row in enumerate(csv_data[:3]):  # Show first 3 rows
+                                print(f"  [{i+1}] {row['timestamp_utc']} | {row['device_name']} ({row['product_code']}) | {row['measurement_type']}: {row['value']} {row['units']}")
+                            if len(csv_data) > 3:
+                                print(f"  ... and {len(csv_data) - 3} more readings")
+                        else:
+                            print("✗ No readings found to export to CSV")
+                    
+                    except Exception as e:
+                        print(f"✗ Error generating CSV: {str(e)}")
+                        import traceback
+                        traceback.print_exc()
         
         else:
             print("No devices found or invalid response format")
@@ -282,11 +389,26 @@ def diagnose_api_endpoints_unlimited(client, save_samples: bool = True):
         if save_samples and samples_dir:
             print(f"\nSaved sample files:")
             try:
+                json_files = []
+                csv_files = []
+                
                 for file in os.listdir(samples_dir):
                     if file.startswith('hobolink_'):
                         file_path = os.path.join(samples_dir, file)
                         file_size = os.path.getsize(file_path)
-                        print(f"  - {file} ({file_size} bytes)")
+                        if file.endswith('.json'):
+                            json_files.append(f"  - {file} ({file_size} bytes)")
+                        elif file.endswith('.csv'):
+                            csv_files.append(f"  - {file} ({file_size} bytes)")
+                        else:
+                            print(f"  - {file} ({file_size} bytes)")
+                
+                # Display JSON files first, then CSV files
+                for json_file in json_files:
+                    print(json_file)
+                for csv_file in csv_files:
+                    print(csv_file)
+                    
             except Exception as e:
                 print(f"Error listing saved files: {e}")
         
