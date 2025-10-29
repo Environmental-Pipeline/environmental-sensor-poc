@@ -118,38 +118,45 @@ def diagnose_api_endpoints_unlimited(client, save_samples: bool = True, all_devi
             # Find temperature or humidity sensors and try them until we get data
             candidate_sensors = []
             
-            # Collect all temperature/humidity sensors from all devices
+            # Collect ALL sensors from all devices (all measurement types)
             for device in devices:
                 device_serial = device.get("deviceSerialNumber")
                 if "sensors" in device:
                     for sensor in device["sensors"]:
-                        measurement_type = sensor.get("measurementType", "").lower()
-                        if measurement_type in ["temperature", "temp", "rh", "humidity", "relative humidity"]:
-                            candidate_sensors.append({
-                                'device': device,
-                                'sensor': sensor,
-                                'has_latest': sensor.get("latest") is not None
-                            })
+                        candidate_sensors.append({
+                            'device': device,
+                            'sensor': sensor,
+                            'has_latest': sensor.get("latest") is not None
+                        })
             
             # Sort by preference: sensors with latest data first
             candidate_sensors.sort(key=lambda x: x['has_latest'], reverse=True)
             
-            print(f"Found {len(candidate_sensors)} candidate temperature/humidity sensors")
+            print(f"Found {len(candidate_sensors)} total sensors across all measurement types")
             
-            # Try sensors until we find data from target number of devices
+            # Try ALL sensors from selected devices
             successful_responses = []
-            successful_devices = set()  # Track unique devices we've found data for
+            successful_sensors = set()  # Track unique sensors we've processed
             attempts = 0
             
             # Check for all devices mode
             if all_devices_mode:
-                max_devices = len(set(device.get("deviceSerialNumber") for device in devices))  # All unique devices
-                max_attempts = len(candidate_sensors)  # Try all sensors
-                print(f"ALL_DEVICES mode: Will attempt to get data from all {max_devices} devices")
+                # Process ALL sensors from ALL devices
+                max_attempts = len(candidate_sensors)
+                print(f"ALL_DEVICES mode: Will attempt to get data from ALL {len(candidate_sensors)} sensors")
             else:
-                max_devices = 3  # Default: Target 3 devices
-                max_attempts = min(20, len(candidate_sensors))  # Try up to 20 sensors to find 3 devices
-                print(f"Standard mode: Will attempt to get data from up to {max_devices} devices")
+                # Process sensors from first 3 devices only
+                target_devices = set()
+                limited_sensors = []
+                for candidate in candidate_sensors:
+                    device_serial = candidate['device'].get("deviceSerialNumber")
+                    if len(target_devices) < 3:
+                        target_devices.add(device_serial)
+                    if device_serial in target_devices:
+                        limited_sensors.append(candidate)
+                candidate_sensors = limited_sensors
+                max_attempts = len(candidate_sensors)
+                print(f"Sample mode: Will get data from ALL sensors in first 3 devices ({len(candidate_sensors)} sensors)")
             
             # Get date range using DAYS_BACK environment variable (like other parts of the system)
             # Note: Hobolink API limits historical data to less than 1 year maximum
@@ -171,10 +178,7 @@ def diagnose_api_endpoints_unlimited(client, save_samples: bool = True, all_devi
             print(f"Date range: {start_time.strftime('%Y-%m-%d %H:%M:%S')} to {end_time.strftime('%Y-%m-%d %H:%M:%S')} UTC")
             
             for candidate in candidate_sensors[:max_attempts]:
-                # Stop if we've found data from enough devices (unless in all_devices mode)
-                if not all_devices_mode and len(successful_devices) >= max_devices:
-                    print(f"\n✓ Found data from {max_devices} devices, stopping search")
-                    break
+                # Process all sensors in the list (no early stopping based on device count)
                     
                 attempts += 1
                 target_device = candidate['device']
@@ -186,14 +190,14 @@ def diagnose_api_endpoints_unlimited(client, save_samples: bool = True, all_devi
                 units = target_sensor.get("units")
                 latest = target_sensor.get("latest")
                 
-                # Skip if we already have data from this device
-                if device_serial in successful_devices:
-                    print(f"\nSkipping device {device_serial} (already have data from this device)")
-                    continue
+                # Process every sensor (no skipping by device)
+                sensor_key = f"{device_serial}/{sensor_serial}"
+                if sensor_key in successful_sensors:
+                    continue  # Skip if we already processed this specific sensor
                 
                 print(f"\nAttempt {attempts}: Testing device {device_serial}, sensor {sensor_serial}")
                 print(f"  Sensor: {measurement_type}, {units}, latest: {latest}")
-                print(f"  Progress: {len(successful_devices)}/{max_devices} devices found")
+                print(f"  Progress: {len(successful_sensors)} sensors processed")
                 
                 try:
                     print(f"  Making {days_back}-day historical data request...")
@@ -228,7 +232,7 @@ def diagnose_api_endpoints_unlimited(client, save_samples: bool = True, all_devi
                             
                             print(f"  ✓ SUCCESS! Found {days_back}-day historical data for {device_serial}/{sensor_serial}")
                             successful_responses.append(data_response)
-                            successful_devices.add(device_serial)
+                            successful_sensors.add(sensor_key)
                             
                             # Save successful data response to file
                             if save_samples and samples_dir:
@@ -275,7 +279,7 @@ def diagnose_api_endpoints_unlimited(client, save_samples: bool = True, all_devi
             if not successful_responses:
                 print(f"\n✗ No sensors returned {days_back}-day historical data after {attempts} attempts")
             else:
-                print(f"\n✓ Successfully found {days_back}-day historical data from {len(successful_devices)} device(s) after {attempts} attempt(s)")
+                print(f"\n✓ Successfully found {days_back}-day historical data from {len(successful_sensors)} sensor(s) after {attempts} attempt(s)")
                 
                 # Generate clean CSV of readings with human-readable timestamps
                 if successful_responses and save_samples and samples_dir:
