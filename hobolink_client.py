@@ -289,10 +289,12 @@ class HobolinkClient:
                             # Already in Fahrenheit - keep this sensor
                             df = df.with_columns(polars.col("value").cast(polars.Float32).alias("SensorReadingF"))
                         elif "°C" in units or "C" in units:
-                            # Celsius detected - skip this sensor and log suppression
-                            self.logger.info(f"Suppressing Celsius temperature sensor: {sensor_serial} "
+                            # Celsius detected - convert to Fahrenheit
+                            self.logger.info(f"Converting Celsius to Fahrenheit for sensor: {sensor_serial} "
                                            f"(measurement_type: {measurement_type}, units: {units})")
-                            continue
+                            df = df.with_columns(
+                                (polars.col("value") * 9.0 / 5.0 + 32.0).cast(polars.Float32).alias("SensorReadingF")
+                            )
                         else:
                             # Unknown temperature units - skip and log
                             self.logger.warning(f"Unknown temperature units for sensor {sensor_serial}: "
@@ -639,13 +641,15 @@ class HobolinkClient:
         ])
         
         # Map specific measurement types to appropriate columns  
-        # Only include Fahrenheit temperatures (matching Coris behavior)
+        # Include both Fahrenheit and Celsius temperatures (convert Celsius to Fahrenheit)
         result = result.with_columns([
             polars.when(polars.col("SensorType").str.to_lowercase().str.contains("temperature"))
             .then(
                 polars.when(polars.col("SensorUnits").str.contains("°F|F"))
-                .then(polars.col("LatestReading").cast(polars.Float32))  # Only Fahrenheit
-                .otherwise(None)  # Skip Celsius and unknown temperature units
+                .then(polars.col("LatestReading").cast(polars.Float32))  # Already Fahrenheit
+                .when(polars.col("SensorUnits").str.contains("°C|C"))
+                .then((polars.col("LatestReading") * 9.0 / 5.0 + 32.0).cast(polars.Float32))  # Convert C to F
+                .otherwise(None)  # Skip unknown temperature units
             )
             .otherwise(None)
             .alias("SensorReadingF"),
@@ -656,17 +660,17 @@ class HobolinkClient:
             .alias("SensorReadingRh"),
         ])
         
-        # Log suppressed Celsius temperature sensors
+        # Log converted Celsius temperature sensors
         celsius_sensors = result.filter(
             (polars.col("SensorType").str.to_lowercase().str.contains("temperature")) &
             (polars.col("SensorUnits").str.contains("°C|C")) &
-            (polars.col("SensorReadingF").is_null())
+            (polars.col("SensorReadingF").is_not_null())
         )
         
         if len(celsius_sensors) > 0:
             for row in celsius_sensors.select(["SensorID_Hobolink", "SensorType", "SensorUnits"]).iter_rows():
                 sensor_id, sensor_type, units = row
-                self.logger.info(f"Suppressing Celsius temperature sensor in current readings: {sensor_id} "
+                self.logger.info(f"Converting Celsius to Fahrenheit for current reading: {sensor_id} "
                                f"(measurement_type: {sensor_type}, units: {units})")
         
         # Select only the columns that match the standardized schema

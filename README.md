@@ -95,6 +95,7 @@ The project also integrates with the Conserv API as a second data source, suppor
 * **Data format**: JSON. Query devices then loop over devices and sensors to get readings. Run `python test/explore_hobolink.py` to save sample output to `samples/`.
 * Only allows data within the last year. 
 * Readings response has property moreResults that is always False. The code will error if it is ever true, in which case this would need to be handled. 
+* Most readings come in Fahrenheit, but some do come through in Celsius in which case we convert to Fahrenheit for consistency.
 
 **Unified Data Integration**
 
