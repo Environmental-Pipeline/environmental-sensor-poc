@@ -120,12 +120,21 @@ def diagnose_api_endpoints_unlimited(client, save_samples: bool = True):
             
             print(f"Found {len(candidate_sensors)} candidate temperature/humidity sensors")
             
-            # Try sensors until we find data from up to 3 devices
+            # Try sensors until we find data from target number of devices
             successful_responses = []
             successful_devices = set()  # Track unique devices we've found data for
             attempts = 0
-            max_devices = 3  # Target number of devices to get data from
-            max_attempts = min(20, len(candidate_sensors))  # Try up to 20 sensors to find 3 devices
+            
+            # Check for ALL_DEVICES option
+            all_devices_mode = os.getenv('ALL_DEVICES', 'False').lower() == 'true'
+            if all_devices_mode:
+                max_devices = len(set(device.get("deviceSerialNumber") for device in devices))  # All unique devices
+                max_attempts = len(candidate_sensors)  # Try all sensors
+                print(f"ALL_DEVICES mode: Will attempt to get data from all {max_devices} devices")
+            else:
+                max_devices = 3  # Default: Target 3 devices
+                max_attempts = min(20, len(candidate_sensors))  # Try up to 20 sensors to find 3 devices
+                print(f"Standard mode: Will attempt to get data from up to {max_devices} devices")
             
             # Get date range using DAYS_BACK environment variable (like other parts of the system)
             # Note: Hobolink API limits historical data to less than 1 year maximum
@@ -147,8 +156,8 @@ def diagnose_api_endpoints_unlimited(client, save_samples: bool = True):
             print(f"Date range: {start_time.strftime('%Y-%m-%d %H:%M:%S')} to {end_time.strftime('%Y-%m-%d %H:%M:%S')} UTC")
             
             for candidate in candidate_sensors[:max_attempts]:
-                # Stop if we've found data from enough devices
-                if len(successful_devices) >= max_devices:
+                # Stop if we've found data from enough devices (unless in all_devices mode)
+                if not all_devices_mode and len(successful_devices) >= max_devices:
                     print(f"\n✓ Found data from {max_devices} devices, stopping search")
                     break
                     
@@ -351,6 +360,48 @@ def diagnose_api_endpoints_unlimited(client, save_samples: bool = True):
                                 print(f"  [{i+1}] {row['timestamp_utc']} | {row['device_name']} ({row['product_code']}) | {row['measurement_type']}: {row['value']} {row['units']}")
                             if len(csv_data) > 3:
                                 print(f"  ... and {len(csv_data) - 3} more readings")
+                            
+                            # Analyze device properties from the CSV data
+                            print(f"\n4. DEVICE PROPERTY ANALYSIS")
+                            print("-" * 30)
+                            
+                            # Get unique values for each device property
+                            unique_devices = set()
+                            unique_logging_states = set()
+                            unique_product_codes = set()
+                            unique_unit_systems = set()
+                            unique_alarmed_states = set()
+                            
+                            for row in csv_data:
+                                unique_devices.add(f"{row['device_name']} ({row['device_serial']})")
+                                unique_logging_states.add(row['logging_state'])
+                                unique_product_codes.add(row['product_code'])
+                                unique_unit_systems.add(row['unit_system'])
+                                unique_alarmed_states.add(str(row['alarmed']))
+                            
+                            print(f"Devices with data ({len(unique_devices)}):")
+                            for device in sorted(unique_devices):
+                                print(f"  - {device}")
+                            
+                            print(f"\nLogging States found ({len(unique_logging_states)}):")
+                            for state in sorted(unique_logging_states):
+                                count = sum(1 for row in csv_data if row['logging_state'] == state)
+                                print(f"  - {state}: {count:,} readings")
+                            
+                            print(f"\nProduct Codes found ({len(unique_product_codes)}):")
+                            for code in sorted(unique_product_codes):
+                                count = sum(1 for row in csv_data if row['product_code'] == code)
+                                print(f"  - {code}: {count:,} readings")
+                            
+                            print(f"\nUnit Systems found ({len(unique_unit_systems)}):")
+                            for system in sorted(unique_unit_systems):
+                                count = sum(1 for row in csv_data if row['unit_system'] == system)
+                                print(f"  - {system}: {count:,} readings")
+                            
+                            print(f"\nAlarm States found ({len(unique_alarmed_states)}):")
+                            for alarmed in sorted(unique_alarmed_states):
+                                count = sum(1 for row in csv_data if str(row['alarmed']) == alarmed)
+                                print(f"  - {alarmed}: {count:,} readings")
                         else:
                             print("✗ No readings found to export to CSV")
                     
@@ -403,8 +454,10 @@ def main():
     """Run Hobolink API exploration with DAYS_BACK historical data pulls."""
     days_back_env = int(os.getenv('DAYS_BACK', 364))
     days_back = min(days_back_env, 364)  # Cap at API limit
+    all_devices_mode = os.getenv('ALL_DEVICES', 'False').lower() == 'true'
+    mode_text = "ALL DEVICES" if all_devices_mode else f"{days_back}-DAY"
     print("=" * 60)
-    print(f"HOBOLINK API EXPLORER ({days_back}-DAY HISTORICAL DATA)")
+    print(f"HOBOLINK API EXPLORER ({mode_text} HISTORICAL DATA)")
     print("=" * 60)
     
     # Set up logging
