@@ -291,19 +291,22 @@ def diagnose_api_endpoints_unlimited(client, save_samples: bool = True, all_devi
                         
                         # Extract readings from all successful responses
                         for successful_response in successful_responses:
+                            # Get moreResults flag from the response (indicates if data is paginated/incomplete)
+                            more_results = successful_response.get("moreResults", False)
+                            
                             if "sensors" in successful_response:
                                 for sensor_info in successful_response["sensors"]:
-                                    sensor_serial = sensor_info.get("sensorSerialNumber", "unknown")
+                                    sensor_serial = sensor_info.get("sensorSerialNumber")
                                     
                                     # Find the device that contains this sensor by searching through all devices
-                                    device_serial = "unknown"
+                                    device_serial = None
                                     device_info = {
-                                        "device_name": "unknown",
-                                        "product_code": "unknown", 
-                                        "unit_system": "unknown",
-                                        "logging_state": "unknown",
-                                        "alarmed": "unknown",
-                                        "last_connection_time": "unknown"
+                                        "device_name": None,
+                                        "product_code": None, 
+                                        "unit_system": None,
+                                        "logging_state": None,
+                                        "alarmed": None,
+                                        "last_connection_time": None
                                     }
                                     
                                     # Search through devices to find which one contains this sensor
@@ -312,22 +315,22 @@ def diagnose_api_endpoints_unlimited(client, save_samples: bool = True, all_devi
                                         for device_sensor in device_sensors:
                                             if device_sensor.get("sensorSerialNumber") == sensor_serial:
                                                 # Found the device that contains this sensor
-                                                device_serial = device.get("deviceSerialNumber", "unknown")
+                                                device_serial = device.get("deviceSerialNumber")
                                                 device_info = {
-                                                    "device_name": device.get("deviceName", "unknown"),
-                                                    "product_code": device.get("productCode", "unknown"),
-                                                    "unit_system": device.get("unitSystem", "unknown"), 
-                                                    "logging_state": device.get("loggingState", "unknown"),
-                                                    "alarmed": device.get("alarmed", "unknown"),
-                                                    "last_connection_time": device.get("lastConnectionTime", "unknown")
+                                                    "device_name": device.get("deviceName"),
+                                                    "product_code": device.get("productCode"),
+                                                    "unit_system": device.get("unitSystem"), 
+                                                    "logging_state": device.get("loggingState"),
+                                                    "alarmed": device.get("alarmed"),
+                                                    "last_connection_time": device.get("lastConnectionTime")
                                                 }
                                                 break
-                                        if device_info["device_name"] != "unknown":  # Found it
+                                        if device_info["device_name"] is not None:  # Found it
                                             break
                                     
                                     for measurement_data in sensor_info.get("data", []):
-                                        measurement_type = measurement_data.get("measurementType", "unknown")
-                                        units = measurement_data.get("units", "")
+                                        measurement_type = measurement_data.get("measurementType")
+                                        units = measurement_data.get("units")
                                         records = measurement_data.get("records", [])
                                         
                                         for record in records:
@@ -353,9 +356,10 @@ def diagnose_api_endpoints_unlimited(client, save_samples: bool = True, all_devi
                                                     "measurement_type": measurement_type,
                                                     "value": value,
                                                     "units": units,
-                                                    "data_type": measurement_data.get("dataType", ""),
-                                                    "total_records": sensor_info.get("totalRecords", 0),
-                                                    "latest_timestamp": sensor_info.get("latestTimestamp", "")
+                                                    "data_type": measurement_data.get("dataType"),
+                                                    "total_records": sensor_info.get("totalRecords"),
+                                                    "latest_timestamp": sensor_info.get("latestTimestamp"),
+                                                    "incomplete_results": more_results
                                                 })
                         
                         # Write CSV file
@@ -399,28 +403,44 @@ def diagnose_api_endpoints_unlimited(client, save_samples: bool = True, all_devi
                                 unique_alarmed_states.add(str(row['alarmed']))
                             
                             print(f"Devices with data ({len(unique_devices)}):")
-                            for device in sorted(unique_devices):
+                            for device in sorted(d for d in unique_devices if d is not None):
                                 print(f"  - {device}")
                             
                             print(f"\nLogging States found ({len(unique_logging_states)}):")
-                            for state in sorted(unique_logging_states):
+                            for state in sorted(s for s in unique_logging_states if s is not None):
                                 count = sum(1 for row in csv_data if row['logging_state'] == state)
                                 print(f"  - {state}: {count:,} readings")
+                            # Show None count separately if any
+                            none_count = sum(1 for row in csv_data if row['logging_state'] is None)
+                            if none_count > 0:
+                                print(f"  - None/Missing: {none_count:,} readings")
                             
                             print(f"\nProduct Codes found ({len(unique_product_codes)}):")
-                            for code in sorted(unique_product_codes):
+                            for code in sorted(c for c in unique_product_codes if c is not None):
                                 count = sum(1 for row in csv_data if row['product_code'] == code)
                                 print(f"  - {code}: {count:,} readings")
+                            # Show None count separately if any
+                            none_count = sum(1 for row in csv_data if row['product_code'] is None)
+                            if none_count > 0:
+                                print(f"  - None/Missing: {none_count:,} readings")
                             
                             print(f"\nUnit Systems found ({len(unique_unit_systems)}):")
-                            for system in sorted(unique_unit_systems):
+                            for system in sorted(s for s in unique_unit_systems if s is not None):
                                 count = sum(1 for row in csv_data if row['unit_system'] == system)
                                 print(f"  - {system}: {count:,} readings")
+                            # Show None count separately if any
+                            none_count = sum(1 for row in csv_data if row['unit_system'] is None)
+                            if none_count > 0:
+                                print(f"  - None/Missing: {none_count:,} readings")
                             
                             print(f"\nAlarm States found ({len(unique_alarmed_states)}):")
-                            for alarmed in sorted(unique_alarmed_states):
+                            for alarmed in sorted(a for a in unique_alarmed_states if a != 'None'):
                                 count = sum(1 for row in csv_data if str(row['alarmed']) == alarmed)
                                 print(f"  - {alarmed}: {count:,} readings")
+                            # Show None count separately if any
+                            none_count = sum(1 for row in csv_data if row['alarmed'] is None)
+                            if none_count > 0:
+                                print(f"  - None/Missing: {none_count:,} readings")
                         else:
                             print("✗ No readings found to export to CSV")
                     
