@@ -7,13 +7,14 @@ import logging
 import datetime
 import warnings
 from conserv_client import create_conserv_client_from_env
+from coris_client import create_coris_client_from_env
 
 
 class EnvironmentData:
 
     def __init__(
         self,
-        CatsUserID: int,
+        CatsUserID: int = None,  # Deprecated - now read from environment
         data_path: str = "./data/",
         days_back: int = int(365 * 2),
         out_of_scope: list = [],
@@ -25,8 +26,9 @@ class EnvironmentData:
 
         Parameters
         ----------
-        CatsUserID : int
-            Cats User ID from Coris. Necessary for querying the Coris API.
+        CatsUserID : int, optional (deprecated)
+            DEPRECATED: Cats User ID is now read from CATS_USER_ID environment variable.
+            This parameter is maintained for backward compatibility but is ignored.
 
         data_path : str, default='./data/'
             Path to store the parquet files which make up the database.
@@ -50,7 +52,7 @@ class EnvironmentData:
         """
 
         # Save inputs to the class instance.
-        self.CatsUserID = CatsUserID
+        self.CatsUserID = CatsUserID  # Kept for backward compatibility
         self.data_path = data_path
         self.testing = testing
         self.testing_sensor_ids = []
@@ -93,18 +95,13 @@ class EnvironmentData:
         else:
             self.update_cron_status("not-initialized")
 
-        # Get the API key.
-        # cron can't read environment variables so we need read the key in from the .env file.
-        # See the README for a note about API key security.
-        def read_env_variable(var_name):
-            with open(".env") as f:
-                for line in f:
-                    if line.startswith(var_name):
-                        return line.split("=", 1)[1].strip()
-
-        self.apikeys = {
-            "CORIS": read_env_variable("CORIS_API_KEY")
-        }  # Use a dictionary in case we need more keys in the future.
+        # Initialize Coris API client
+        try:
+            self.coris_client = create_coris_client_from_env(self.logger)
+            self.logger.info("Coris API client initialized successfully")
+        except Exception as e:
+            self.logger.error(f"Failed to initialize Coris client: {e}")
+            raise Exception(f"Coris API client is required but failed to initialize: {e}")
 
         # Initialize Conserv API client if enabled
         self.conserv_client = None
@@ -195,98 +192,25 @@ class EnvironmentData:
 
         # Make a log entry and gather current and starting UTC.
         self.logger.info("initialize_database")
-        sensor_ids = []
         current_utc = self.get_current_utc()
         start_utc = current_utc - days_back * 24 * 60 * 60
-        sensors = self.get_sensors()
 
-        # Use the API to get historical data for each sensor type.
-        readings = []
-        for reading in self.acceptable_range:
+        # ============ CORIS HISTORICAL DATA PROCESSING ============
+        # Get historical data from Coris API using the client
+        readings = self.coris_client.get_historical_data_bulk(
+            acceptable_range=self.acceptable_range,
+            start_utc=start_utc,
+            end_utc=current_utc,
+            out_of_scope=self.out_of_scope,
+            testing=self.testing,
+            testing_sensor_ids=self.testing_sensor_ids
+        )
 
-            sensor_ids = (
-                sensors.filter(polars.col(reading).is_nan().not_())["SensorID_Coris"]
-                .unique()
-                .to_list()
+        # Clean and validate the Coris data
+        for i, data in enumerate(readings):
+            readings[i] = self.clean_validate_sensors(
+                sensors=data, step="initialize_database"
             )
-            if self.testing:
-                sensor_ids = sensor_ids[0:3]
-
-            # Query the API for each sensor and save the data as a polars DataFrame with optimal data types.
-            pbar = tqdm.tqdm(total=len(sensor_ids), desc=f"Gather readings: {reading}")
-            for sensor_id in sensor_ids:
-
-                if self.testing:
-                    self.testing_sensor_ids.append(sensor_id)
-
-                # it is possible to pull everything by leaving out StartUTC and EndUTC.
-                # leaving it in for now though, in case we do want to limit it.
-                url = "&".join(
-                    [
-                        f'https://cats.corismonitoring.com/api/sensor/historical/?ApiKey={self.apikeys["CORIS"]}',
-                        f"SensorID={sensor_id}",
-                        f"ReadingType={reading}",
-                        f"StartUTC={start_utc}",
-                        f"EndUTC={current_utc}",
-                        "MinReadingSpacing=600",  # every 10 minutes.
-                        "RequestedOutputFormat=raw",
-                    ]
-                )
-
-                # create a duplicate of the url for logging purposes, which doesn't include sensitive information.
-                logurl = "&".join(
-                    [
-                        "https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX",
-                        f"SensorID={sensor_id}",
-                        f"ReadingType={reading}",
-                        f"StartUTC={start_utc}",
-                        f"EndUTC={current_utc}",
-                        "MinReadingSpacing=600",  # every 10 minutes.
-                        "RequestedOutputFormat=raw",
-                    ]
-                )
-                self.logger.info(f"API call: {logurl}")
-                response = requests.get(url)
-
-                # Check for errors.
-                if not response.ok:
-                    self.logger.error(
-                        f"Error getting historical {reading} for {sensor_id}: {response.json()}",
-                        raise_exception=False,
-                    )
-
-                # Data comes in as comma separated values with no header. Convert this to a polars DataFrame.
-                data = polars.read_csv(response.content, has_header=False)
-                data.columns = ["SensorReadingUTC", reading]
-
-                # Add data from the sensors dataset.
-                data = data.with_columns(polars.lit(sensor_id).alias("SensorID_Coris"))
-                sensor_data = sensors.filter(polars.col("SensorID_Coris") == sensor_id)
-                for col in ["SensorName", "DeviceName", "DeviceID_Coris", "SensorType"]:
-                    data = data.with_columns(
-                        polars.lit(sensor_data[col].to_list()[0]).alias(col)
-                    )
-
-                # Add new schema columns for compatibility with Conserv data
-                data = data.with_columns(
-                    [
-                        polars.lit("coris").alias("source"),
-                        polars.lit(None, dtype=polars.Utf8).alias("SensorID_Conserv"),
-                        polars.lit(None, dtype=polars.Int32).alias("customer_id"),
-                    ]
-                )
-
-                # Clean and validate the data.
-                data = self.clean_validate_sensors(
-                    sensors=data, step="initialize_database"
-                )
-
-                # Append the data to the list of DataFrame for this sensor type.
-                readings.append(data)
-
-                pbar.update(1)
-
-            pbar.close()
 
         # ============ CONSERV HISTORICAL DATA PROCESSING ============
         conserv_readings = []
@@ -348,54 +272,7 @@ class EnvironmentData:
 
         self.update_cron_status("initialized")
 
-    def get_sensors(self) -> polars.DataFrame:
-        """
-        Get the list of all sensors, along with data sent by the Coris API.
 
-        Returns
-        -------
-        polars.DataFrame : sensor data returned by the API. Contains SensorID_Coris, Device information, readings, and more.
-        """
-
-        # Build the URL and call the API.
-        self.logger.info("get_sensors")
-        url = f'https://cats.corismonitoring.com/api/cats/user/?ApiKey={self.apikeys["CORIS"]}&CatsUserID={self.CatsUserID}'
-        self.logger.info(
-            "API call: https://cats.corismonitoring.com/api/cats/user/?ApiKey=XXXX&CatsUserID=XXXX"
-        )  # log a duplicate of the url for logging purposes, which doesn't include sensitive information.
-        current_utc = self.get_current_utc()
-        response = requests.get(url)
-
-        # Check for errors and raise an exception if there is one.
-        if not response.ok:
-            self.error(
-                f"Error getting sensors: {response.json()}", raise_exception=True
-            )
-
-        # Remove out-of-scope sensors.
-        sensors = polars.DataFrame(response.json()["Sensors"])
-        for i in self.out_of_scope:
-            sensors = sensors.filter(polars.col("SensorName").str.starts_with(i).not_())
-
-        # If testing, only use the selected sensors.
-        if self.testing and (len(self.testing_sensor_ids) > 0):
-            sensors = sensors.filter(
-                polars.col("SensorID").is_in(self.testing_sensor_ids)
-            )
-
-        # There are multiple sensors, so rename the ID to indicate the data source.
-        sensors = sensors.rename(
-            {"SensorID": "SensorID_Coris", "DeviceDevID": "DeviceID_Coris"}
-        )
-
-        # Attach the query UTC.
-        sensors = sensors.with_columns(polars.lit(current_utc).alias("QueryUTC"))
-
-        # Clean and validate the data.
-        sensors = self.clean_validate_sensors(sensors=sensors, step="get_sensors")
-
-        # Return the data.
-        return sensors
 
     def get_current_utc(self) -> int:
         """
@@ -710,22 +587,16 @@ class EnvironmentData:
         current_utc = self.get_current_utc()
         self.logger.info(f"get_current_readings: {current_utc}")
 
-        # ============ CORIS DATA PROCESSING (EXISTING FUNCTIONALITY) ============
-        # Get the current status from the Coris API.
-        coris_sensors = self.get_sensors()
+        # ============ CORIS DATA PROCESSING (USING CLIENT) ============
+        # Get the current status from the Coris API using the client
+        coris_sensors = self.coris_client.get_current_readings(
+            out_of_scope=self.out_of_scope,
+            testing=self.testing,
+            testing_sensor_ids=self.testing_sensor_ids
+        )
+        
         self.validate_sensors(
             sensors=coris_sensors, utc=current_utc, step="get_current_readings_coris"
-        )
-
-        # Add new schema columns for compatibility with Conserv data
-        coris_sensors = coris_sensors.with_columns(
-            [
-                polars.lit("coris").cast(polars.String).alias("source"),
-                polars.lit(None, dtype=polars.String).alias("SensorID_Conserv"),
-                polars.lit(None, dtype=polars.Int32).alias(
-                    "customer_id"
-                ),  # Fixed: Match existing schema
-            ]
         )
 
         # DEBUG: Log Coris schema types
