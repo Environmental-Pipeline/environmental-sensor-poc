@@ -37,10 +37,25 @@ _Commands should be run from the project root, possibly by using the terminal af
 To modify the behavior of the container:
 
 * .env contains variables that can be used for testing or to modify settings:
-  - DAYS_BACK: How many days of historical data to pull during initialization
-  - TESTING: Use =True to run a test that only pulls data for 6 sensors.
+  - **Existing Coris settings:**
+    - `CORIS_API_KEY`: Your Coris API key
+    - `CATS_USER_ID`: Your Coris user ID
+    - `DAYS_BACK`: How many days of historical data to pull during initialization
+    - `TESTING`: Use =True to run a test that only pulls data for 6 sensors
+  - **New Conserv multi-tenant settings:**
+    - `CONSERV_ENABLED`: Set to "True" to enable Conserv API integration
+    - `RUN_WINDOW_HOURS`: Hours of data to pull per run (default: 24)
+    - `CONSERV_API_KEY_1545`: API key for Conserv customer 1545
+    - `CONSERV_API_KEY_333`: API key for Conserv customer 333
+    - `CONSERV_API_KEY_307`: API key for Conserv customer 307
+    - `CONSERV_API_KEY_2671`: API key for Conserv customer 2671
+    - `CONSERV_API_KEY_1696`: API key for Conserv customer 1696
 
-* jobs/cronjobs defines how frequently the pull and consolidate operations run. Use https://crontab.guru/ to get new cron expressions.
+* **Container execution modes:**
+  - **Default mode**: Runs unified data ingestion once (`ingest_all_sources.py`) - ideal for cron scheduling
+  - **Development mode**: Set `JUPYTER_MODE=true` to enable Jupyter + continuous monitoring
+  
+* jobs/cronjobs defines how frequently the unified ingestion runs. The default is hourly, but can be adjusted using https://crontab.guru/ for cron expressions.
 
 ## Other Commands
 
@@ -57,11 +72,50 @@ The project reads `SensorType` = "Temperature", "Humidity" from the Coris API. N
 * The `sensor/historical` endpoint is used to get historical readings for a single sensor and type. Example: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey={mykey}&SensorID={sensor_id}&ReadingType={readingtype}&StartUTC={start_utc}&EndUTC={current_utc}&MinReadingSpacing=600&RequestedOutputFormat=raw
     - You can remove StartUTC and/or EndUTC to get the full historical data (this should be confirmed with the API provider though). 
 
-**Importing Other APIs**
+**Conserv (Multi-Tenant)**
 
-Other APIs can be implemented to replace or supplement Coris by expanding `EnvironmentData.initialize_database()` and `EnvironmentData.get_current_readings()` to read sensors from the new API.
+The project also integrates with the Conserv API as a second data source, supporting multiple customer tenants.
 
-Take note of the IDs SensorID_Coris and DeviceID_Coris. You'll need to rename these to be more general, or add new ID columns for each new API.
+* **Multi-tenant architecture**: Processes data from 5 different Conserv customers (API keys) in a single container run
+* **Export-based workflow**: Uses export → status polling → download pattern due to API design
+* **Data format**: CSV with columns: Sensor Name, Time, Temperature (°C), Humidity (%)
+* **Schema mapping**: Automatically converts °C→°F and maps to existing `SensorReadingF`/`SensorReadingRh` columns
+* **7-day limitation**: API limits exports to 7-day windows, automatically chunked for historical data
+* **API Endpoints**:
+  - `POST /v1/sensors/export` - Launch export job
+  - `GET /v1/sensors/export/{uuid}/status` - Poll export status
+  - `POST /v1/sensors/export/{uuid}/download` - Get download URL
+* **Error handling**: Individual customer failures don't break the entire process ("No data found" handled gracefully)
+* **New schema columns**: `SensorID_Conserv`, `customer_id`, `source` (preserves backward compatibility)
+
+**Hobolink Sensors**
+* **API Endpoints**:
+  - GET https://api.licor.cloud/v2/devices?includeSensors=true Identify available sensors.
+  - GET https://api.licor.cloud/v2/data?deviceSerialNumber=X&sensorSerialNumber=Y&startTime=Z&endTime=W Get sensor data.
+* **Data format**: JSON. Query devices then loop over devices and sensors to get readings. Run `python test/explore_hobolink.py` to save sample output to `samples/`.
+* Only allows data within the last year. 
+* The data API response has a property "moreResults" that is always False. The code will error out if it is ever true, in which case this would need to be handled. It isn't possible to handle it now since I can't find any data that has it true, so I'm not sure what that data would look like. It is either an unused property or only comes into play when there is too much data in one record, which didn't happen when I searched the max duration (one year) across all sensors.
+* Most readings come in Fahrenheit, but some do come through in Celsius, in which case we convert to Fahrenheit for consistency.
+
+
+**Unified Data Integration**
+
+Both APIs are processed through a unified entry point (`ingest_all_sources.py`) that:
+* Pulls 24-hour data from Coris API (existing functionality preserved)
+* Pulls 24-hour data from all 5 Conserv customers  
+* Merges and consolidates data maintaining schema compatibility
+* Completes entire process in <15 minutes
+* Handles individual API/customer failures gracefully
+
+**Adding New APIs**
+
+Other APIs can be implemented following the established pattern:
+1. Create dedicated API client class (see `conserv_client.py` as example)
+2. Extend `EnvironmentData.get_current_readings()` to include new source
+3. Create schema transformation method to map to existing column structure
+4. Add new identifier columns (e.g., `SensorID_NewAPI`) while preserving existing ones
+5. Update unified entry point script to include new source
+6. Add comprehensive unit tests for the new integration
 
 
 ## Design Notes

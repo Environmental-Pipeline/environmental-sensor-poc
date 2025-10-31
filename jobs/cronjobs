@@ -1,2 +1,6 @@
-*/1 * * * * cd /src/ && /usr/local/bin/python3 /src/jobs/1-pull.py
-*/10 * * * * cd /src/ && /usr/local/bin/python3 /src/jobs/2-consolidate.py
+# minute  hour  dom  mon  dow  user  command
+0 * * * * root cd /src && /usr/local/bin/python3 /src/ingest_all_sources.py
+#
+# Backup examples (disabled):
+# */1  * * * * root cd /src && /usr/local/bin/python3 /src/jobs/1-pull.py
+# */10 * * * * root cd /src && /usr/local/bin/python3 /src/jobs/2-consolidate.py
