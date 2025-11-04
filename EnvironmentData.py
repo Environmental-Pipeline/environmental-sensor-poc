@@ -143,10 +143,23 @@ class EnvironmentData:
                 # self.logger.info("Hobolink API client initialized successfully")
             except Exception as e:
                 self.logger.warning(f"Failed to initialize Hobolink client: {e}")
+                print(f"DEBUG: Failed to initialize Hobolink client: {e}")
                 self.hobolink_enabled = False
 
         # Set up the readings data structure that will be used throughout.
         self.acceptable_range = {"SensorReadingF": [], "SensorReadingRh": []}
+
+        # Debug: Show which data sources are actually enabled
+        enabled_sources = []
+        if self.coris_enabled and self.coris_client:
+            enabled_sources.append("Coris")
+        if self.conserv_enabled and self.conserv_client:
+            enabled_sources.append("Conserv") 
+        if self.hobolink_enabled and self.hobolink_client:
+            enabled_sources.append("Hobolink")
+        
+        print(f"DEBUG: Enabled data sources: {enabled_sources}")
+        self.logger.info(f"Enabled data sources: {enabled_sources}")
 
         # Initialize the database by creating a parquet file for each reading type and populate it with historical data.
         self.initialize_database(days_back=days_back)
@@ -226,21 +239,25 @@ class EnvironmentData:
         start_utc = current_utc - days_back * 24 * 60 * 60
 
         # ============ CORIS HISTORICAL DATA PROCESSING ============
-        # Get historical data from Coris API using the client
-        readings = self.coris_client.get_historical_data_bulk(
-            acceptable_range=self.acceptable_range,
-            start_utc=start_utc,
-            end_utc=current_utc,
-            out_of_scope=self.out_of_scope,
-            testing=self.testing,
-            testing_sensor_ids=self.testing_sensor_ids
-        )
-
-        # Clean and validate the Coris data
-        for i, data in enumerate(readings):
-            readings[i] = self.clean_validate_sensors(
-                sensors=data, step="initialize_database"
+        readings = []
+        if self.coris_enabled and self.coris_client:
+            # Get historical data from Coris API using the client
+            coris_readings = self.coris_client.get_historical_data_bulk(
+                acceptable_range=self.acceptable_range,
+                start_utc=start_utc,
+                end_utc=current_utc,
+                out_of_scope=self.out_of_scope,
+                testing=self.testing,
+                testing_sensor_ids=self.testing_sensor_ids
             )
+
+            # Clean and validate the Coris data
+            for i, data in enumerate(coris_readings):
+                coris_readings[i] = self.clean_validate_sensors(
+                    sensors=data, step="initialize_database"
+                )
+            
+            readings.extend(coris_readings)
 
         # ============ CONSERV HISTORICAL DATA PROCESSING ============
         conserv_readings = []
@@ -274,11 +291,55 @@ class EnvironmentData:
 
             except Exception as e:
                 self.logger.warning(f"Failed to fetch Conserv historical data: {e}")
-                # Continue with Coris data only - don't fail the entire initialization
+                # Continue without Conserv data - don't fail the entire initialization
+
+        # ============ HOBOLINK HISTORICAL DATA PROCESSING ============
+        hobolink_readings = []
+        if self.hobolink_enabled and self.hobolink_client:
+            # print("DEBUG: Fetching Hobolink historical data")
+            # self.logger.info("Fetching Hobolink historical data")
+            
+            try:
+                # Get Hobolink data for the same time period
+                hobolink_data_list = self.hobolink_client.get_historical_data_bulk(
+                    start_utc=start_utc,
+                    end_utc=current_utc,
+                    out_of_scope=self.out_of_scope,
+                    testing=self.testing
+                )
+                
+                if hobolink_data_list is not None and len(hobolink_data_list) > 0:
+                    # Clean and validate each DataFrame in the list
+                    total_records = 0
+                    for i, data in enumerate(hobolink_data_list):
+                        if data is not None and not data.is_empty():
+                            hobolink_data_list[i] = self.clean_validate_sensors(
+                                sensors=data, step="initialize_database_hobolink"
+                            )
+                            total_records += hobolink_data_list[i].shape[0]
+                    
+                    # Add all DataFrames to readings list
+                    hobolink_readings.extend(hobolink_data_list)
+                    # print(f"DEBUG: Successfully processed {total_records} Hobolink historical records from {len(hobolink_data_list)} DataFrames")
+                    # self.logger.info(
+                    #     f"Successfully processed {total_records} Hobolink historical records from {len(hobolink_data_list)} DataFrames"
+                    # )
+                else:
+                    print("DEBUG: No Hobolink historical data available for the specified period")
+                    self.logger.info(
+                        "No Hobolink historical data available for the specified period"
+                    )
+                    
+            except Exception as e:
+                print(f"DEBUG: Failed to fetch Hobolink historical data: {e}")
+                self.logger.warning(f"Failed to fetch Hobolink historical data: {e}")
+                # Continue without Hobolink data - don't fail the entire initialization
+        else:
+            print(f"DEBUG: Hobolink not enabled or client not initialized. Enabled: {self.hobolink_enabled}, Client: {self.hobolink_client}")
 
         # ============ COMBINE ALL DATA SOURCES ============
-        # Combine Coris and Conserv readings into a single polars DataFrame
-        all_readings = readings + conserv_readings
+        # Combine Coris, Conserv, and Hobolink readings into a single polars DataFrame
+        all_readings = readings + conserv_readings + hobolink_readings
         dt = (
             polars.concat(all_readings, how="diagonal")
             if all_readings
@@ -286,27 +347,14 @@ class EnvironmentData:
         )
 
         if dt.is_empty():
-            self.logger.error(
-                "No data from any source - initialization failed", raise_exception=True
-            )
+            error_msg = "No data from any source - initialization failed"
+            self.logger.error(error_msg)
+            raise RuntimeError(error_msg)
 
-        # Rename columns to match desired schema
-        column_renames = {}
-        if "source" in dt.columns:
-            column_renames["source"] = "Source"
-        if "customer_id" in dt.columns:
-            column_renames["customer_id"] = "ConservCustomerID"
-        
-        if column_renames:
-            dt = dt.rename(column_renames)
-
-        # Remove ConservCustomerID column if Conserv is not enabled
-        if not self.conserv_enabled and "ConservCustomerID" in dt.columns:
-            dt = dt.drop("ConservCustomerID")
-
-        # Apply standard column ordering
-        desired_columns = self.get_sensor_readings_column_order()
-        dt = self.relocate(dt, desired_columns)
+        # Standardize the DataFrame (rename columns, filter, and reorder)
+        # Include QueryUTC for historical data since it's needed for later processing
+        additional_columns = ["QueryUTC"] if "QueryUTC" in dt.columns else []
+        dt = self.standardize_sensor_dataframe(dt, include_additional_columns=additional_columns)
 
         # Write the database file.
         dt.write_parquet(f"{self.data_path}/sensor_readings.parquet")
@@ -699,6 +747,12 @@ class EnvironmentData:
         # Process alerts on combined data
         self.send_alerts(all_sensors, current_utc)
 
+        # Standardize the current readings data (rename columns, filter, and reorder) 
+        if not all_sensors.is_empty():
+            # Include QueryUTC for current readings so it's preserved for later processing
+            additional_columns = ["QueryUTC"] if "QueryUTC" in all_sensors.columns else []
+            all_sensors = self.standardize_sensor_dataframe(all_sensors, include_additional_columns=additional_columns)
+
         # Save the new-readings file. A daily process will pull these later to clean, validate, and consolidate them into the database.
         os.makedirs(f"{self.data_path}/new-readings/", exist_ok=True)
         all_sensors.write_parquet(
@@ -776,25 +830,9 @@ class EnvironmentData:
                 )
             )
 
-        # Rename columns to match desired schema
-        column_renames = {}
-        if "source" in dt.columns:
-            column_renames["source"] = "Source"
-        if "customer_id" in dt.columns:
-            column_renames["customer_id"] = "ConservCustomerID"
-        
-        if column_renames:
-            dt = dt.rename(column_renames)
-
-        # Remove ConservCustomerID column if Conserv is not enabled
-        if not self.conserv_enabled and "ConservCustomerID" in dt.columns:
-            dt = dt.drop("ConservCustomerID")
-
-        # Apply standard column ordering
-        desired_columns = self.get_sensor_readings_column_order()
-        # Include additional columns that exist but aren't in the standard order
+        # Standardize the DataFrame (rename columns, filter, and reorder)
         additional_columns = ["QueryUTC", "SensorReadingUTC_SecondsFromPrior"]
-        dt = self.relocate(dt, desired_columns + additional_columns)
+        dt = self.standardize_sensor_dataframe(dt, include_additional_columns=additional_columns)
 
         # Write the file.
         dt.write_parquet(f"{self.data_path}/sensor_readings.parquet")
@@ -979,6 +1017,51 @@ class EnvironmentData:
 
         return sensors
 
+    def standardize_sensor_dataframe(self, dt: polars.DataFrame, include_additional_columns: list = None) -> polars.DataFrame:
+        """
+        Standardize sensor data DataFrame by renaming columns, filtering, and reordering.
+        
+        Parameters
+        ----------
+        dt : polars.DataFrame
+            Input DataFrame to standardize
+        include_additional_columns : list, optional
+            Additional columns to include after the standard columns
+            
+        Returns
+        -------
+        polars.DataFrame
+            Standardized DataFrame with renamed columns, filtered columns, and proper ordering
+        """
+        # Rename columns to match desired schema
+        column_renames = {}
+        if "source" in dt.columns:
+            column_renames["source"] = "Source"
+        if "customer_id" in dt.columns:
+            column_renames["customer_id"] = "ConservCustomerID"
+        
+        if column_renames:
+            dt = dt.rename(column_renames)
+
+        # Remove ConservCustomerID column if Conserv is not enabled
+        if not self.conserv_enabled and "ConservCustomerID" in dt.columns:
+            dt = dt.drop("ConservCustomerID")
+
+        # Apply standard column ordering and filter to only desired columns
+        desired_columns = self.get_sensor_readings_column_order()
+        
+        # Determine which columns to keep
+        if include_additional_columns:
+            all_columns = desired_columns + include_additional_columns
+        else:
+            all_columns = desired_columns
+            
+        # Only select columns that exist in both the data and the allowed columns
+        available_columns = [col for col in all_columns if col in dt.columns]
+        dt = dt.select(available_columns)
+        
+        return dt
+
     def get_sensor_readings_column_order(self) -> list:
         """
         Get the standard column order for sensor_readings.parquet.
@@ -1086,7 +1169,8 @@ class EnvironmentData:
         missing_count = allnull.shape[0]
         if missing_count > 0:
             self.logger.info(f"{step} validation: at least one non-null value in readings.")
-            errs.append(f"{missing_count} missing values in [{col}].")
+            # Note: Missing values are expected in sensor data (e.g., temperature-only vs humidity-only sensors)
+            # errs.append(f"{missing_count} missing values in [{col}].")
 
         # Are the SensorReadingUTC close to the QueryUTC (the time the data was requested via API)?
         if utc is not None:
@@ -1102,7 +1186,7 @@ class EnvironmentData:
                     f"{step} validation passed: SensorReadingUTC columns close to QueryUTC."
                 )
 
-        # Are there any duplicated SensorReadingUTC?
+        # Are there any duplicated SensorReadingUTC per SensorID?
         if "SensorReadingUTC" in sensors.columns:
             dup_count = (
                 sensors[["SensorID", "SensorReadingUTC"]].is_duplicated().sum()
@@ -1174,10 +1258,11 @@ class EnvironmentData:
         errs = []
 
         # Check for missing values.
-        for col in self.acceptable_range:
-            missing_count = devices[col].is_null().sum()
-            if missing_count > 0:
-                errs.append(f"{missing_count} missing values in [{col}].")
+        # Note: Missing values are expected in sensor data (e.g., temperature-only vs humidity-only sensors)
+        # for col in self.acceptable_range:
+        #     missing_count = devices[col].is_null().sum()
+        #     if missing_count > 0:
+        #         errs.append(f"{missing_count} missing values in [{col}].")
 
         # Log the errors.
         if len(errs) > 0:
@@ -1262,6 +1347,10 @@ class EnvironmentData:
         for sensor in sensors_data:
 
             sensorname = sensor["SensorName"]
+            # Skip processing if SensorName is None/null
+            if sensorname is None:
+                continue
+                
             if sensorname in name_overrides:
                 sensorname = name_overrides[sensorname]
 

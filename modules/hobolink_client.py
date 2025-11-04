@@ -220,6 +220,7 @@ class HobolinkClient:
         return response_data
     
     def transform_to_standardized_schema(self, raw_data: Dict[str, Any], 
+                                       device_serial: str = None,
                                        device_metadata: polars.DataFrame = None) -> polars.DataFrame:
         """
         Transform Hobolink API response data to standardized EnvironmentData schema.
@@ -232,6 +233,8 @@ class HobolinkClient:
         ----------
         raw_data : Dict[str, Any]
             Raw API response from get_sensor_data
+        device_serial : str, optional
+            Device serial number to populate DeviceID field
         device_metadata : polars.DataFrame, optional
             Device metadata to attach to readings
             
@@ -267,14 +270,15 @@ class HobolinkClient:
                     df = df.with_columns([
                         # Convert timestamp from ms to seconds
                         (polars.col("timestamp_ms") / 1000).cast(polars.Int64).alias("SensorReadingUTC"),
-                        polars.lit(f"hobolink:{sensor_serial}").alias("SensorID"),
+                        polars.lit(f"hobolink:{device_serial or 'unknown'}-{sensor_serial}").alias("SensorID"),
                         polars.lit(measurement_type).alias("SensorType"),
                         polars.lit(units).alias("SensorUnits"),
-                        polars.lit(current_utc).alias("QueryUTC"),
                         polars.lit("Hobolink").alias("source"),
+                        # QueryUTC for schema consistency (not used for validation in historical data)
+                        polars.lit(current_utc).alias("QueryUTC"),
                         
-                        # Add schema columns (DeviceID will be added from metadata if available)
-                        polars.lit(None, dtype=polars.String).alias("DeviceID"),
+                        # Add schema columns - populate DeviceID with device serial when available
+                        polars.lit(f"hobolink:{device_serial}" if device_serial else None).alias("DeviceID"),
                         polars.lit(None, dtype=polars.Int32).alias("customer_id"),
                         polars.lit(None, dtype=polars.String).alias("SensorName"),
                         polars.lit(None, dtype=polars.String).alias("DeviceName"),
@@ -401,7 +405,7 @@ class HobolinkClient:
                     device_records.append({
                         "DeviceID": f"hobolink:{device_serial}",
                         "DeviceName": device_name,
-                        "SensorID": f"hobolink:{sensor_serial}",
+                        "SensorID": f"hobolink:{device_serial}-{sensor_serial}",
                         "SensorName": f"{device_name}_{measurement_type}",
                         "SensorType": measurement_type,
                         "SensorUnits": units,
@@ -538,7 +542,9 @@ class HobolinkClient:
             consolidated_device_id = row["DeviceID"]
             device_serial = consolidated_device_id.split(":")[-1]  # Extract serial from hobolink:serial format
             consolidated_sensor_id = row["SensorID"]
-            sensor_serial = consolidated_sensor_id.split(":")[-1]  # Extract serial from hobolink:serial format
+            # Extract sensor serial from new format: hobolink:device-sensor -> sensor
+            sensor_part = consolidated_sensor_id.split(":")[-1]  # Get device-sensor part
+            sensor_serial = sensor_part.split("-", 1)[-1]  # Extract sensor part after first dash
             device_name = row["DeviceName"]
             sensor_type = row["SensorType"]
             
@@ -555,6 +561,7 @@ class HobolinkClient:
                 if raw_data and "sensors" in raw_data and raw_data["sensors"]:
                     transformed_data = self.transform_to_standardized_schema(
                         raw_data, 
+                        device_serial=device_serial,
                         device_metadata=devices_df.filter(
                             polars.col("DeviceID") == f"hobolink:{device_serial}"
                         ).select(["DeviceID", "DeviceName"]).with_columns([
