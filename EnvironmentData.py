@@ -352,9 +352,7 @@ class EnvironmentData:
             raise RuntimeError(error_msg)
 
         # Standardize the DataFrame (rename columns, filter, and reorder)
-        # Include QueryUTC for historical data since it's needed for later processing
-        additional_columns = ["QueryUTC"] if "QueryUTC" in dt.columns else []
-        dt = self.standardize_sensor_dataframe(dt, include_additional_columns=additional_columns)
+        dt = self.standardize_sensor_dataframe(dt)
 
         # Write the database file.
         dt.write_parquet(f"{self.data_path}/sensor_readings.parquet")

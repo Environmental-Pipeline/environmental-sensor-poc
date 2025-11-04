@@ -202,8 +202,6 @@ class CorisClient:
         data = data.with_columns([
             polars.lit("Coris").alias("source"),
             polars.lit(None, dtype=polars.Int32).alias("customer_id"),
-            # QueryUTC for schema consistency (not used for validation in historical data)
-            polars.lit(current_utc).alias("QueryUTC"),
         ])
         
         return data

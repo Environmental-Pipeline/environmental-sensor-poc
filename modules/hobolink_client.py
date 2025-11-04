@@ -274,8 +274,6 @@ class HobolinkClient:
                         polars.lit(measurement_type).alias("SensorType"),
                         polars.lit(units).alias("SensorUnits"),
                         polars.lit("Hobolink").alias("source"),
-                        # QueryUTC for schema consistency (not used for validation in historical data)
-                        polars.lit(current_utc).alias("QueryUTC"),
                         
                         # Add schema columns - populate DeviceID with device serial when available
                         polars.lit(f"hobolink:{device_serial}" if device_serial else None).alias("DeviceID"),
