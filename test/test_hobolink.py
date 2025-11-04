@@ -9,8 +9,13 @@ including API connectivity, data retrieval, transformation, and schema compatibi
 import unittest
 import logging
 import datetime
+import sys
+import os
 from unittest.mock import patch, MagicMock
 import polars as pl
+
+# Add the parent directory to the path to import our modules
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Set up test logging to be less verbose
 logging.basicConfig(level=logging.WARNING)
@@ -60,7 +65,7 @@ class TestHobolinkClient(unittest.TestCase):
         
         # Verify required columns exist
         required_columns = [
-            'DeviceID_Hobolink', 'DeviceName', 'SensorID_Hobolink', 
+            'DeviceID', 'DeviceName', 'SensorID', 
             'SensorName', 'SensorType', 'source'
         ]
         for col in required_columns:
@@ -73,7 +78,7 @@ class TestHobolinkClient(unittest.TestCase):
                         "All records should have source='hobolink'")
         
         # Verify we have actual sensor data
-        sensor_data = devices_df.filter(pl.col('SensorID_Hobolink').is_not_null())
+        sensor_data = devices_df.filter(pl.col('SensorID').is_not_null())
         self.assertGreater(len(sensor_data), 0, 
                           "Should have sensors with valid IDs")
     
@@ -88,7 +93,7 @@ class TestHobolinkClient(unittest.TestCase):
         if len(current_readings) > 0:
             # Verify required columns exist
             required_columns = [
-                'source', 'SensorID_Hobolink', 'DeviceName', 'SensorType', 'SensorReading'
+                'source', 'SensorID', 'DeviceName', 'SensorType', 'SensorReading'
             ]
             for col in required_columns:
                 self.assertIn(col, current_readings.columns, 
@@ -116,12 +121,17 @@ class TestHobolinkClient(unittest.TestCase):
     
     def test_get_historical_data_bulk_basic(self):
         """Test basic historical data retrieval functionality."""
-        # Use a 24-hour range for testing
+        # Use DAYS_BACK environment variable like the successful explore_hobolink.py script
+        # This matches the production configuration and what's known to work
+        days_back = int(os.getenv('DAYS_BACK', 30))  # Default to 30 days for tests (faster)
         end_time = datetime.datetime.now(datetime.timezone.utc)
-        start_time = end_time - datetime.timedelta(hours=24)
+        start_time = end_time - datetime.timedelta(days=days_back)
         
         end_utc = int(end_time.timestamp())
         start_utc = int(start_time.timestamp())
+        
+        self.logger.info(f"Testing with {days_back} days of historical data (DAYS_BACK={os.getenv('DAYS_BACK', 'default')})")
+        self.logger.info(f"Date range: {start_time.strftime('%Y-%m-%d %H:%M:%S')} to {end_time.strftime('%Y-%m-%d %H:%M:%S')} UTC")
         
         # Use actual available data but limit for reasonable test time
         historical_data_list = self.client.get_historical_data_bulk(
@@ -143,7 +153,7 @@ class TestHobolinkClient(unittest.TestCase):
                                     "Each item should be a Polars DataFrame")
                 
                 # Verify required columns
-                required_columns = ['SensorReadingUTC', 'SensorID_Hobolink', 'SensorType', 'source']
+                required_columns = ['SensorReadingUTC', 'SensorID', 'SensorType', 'source']
                 for col in required_columns:
                     self.assertIn(col, df.columns, 
                                  f"Historical DataFrame should contain column '{col}'")
@@ -201,7 +211,7 @@ class TestHobolinkClient(unittest.TestCase):
         
         # Verify required columns
         required_columns = [
-            'SensorReadingUTC', 'SensorID_Hobolink', 'SensorType', 
+            'SensorReadingUTC', 'SensorID', 'SensorType', 
             'source', 'SensorReadingRh'
         ]
         for col in required_columns:
@@ -211,7 +221,7 @@ class TestHobolinkClient(unittest.TestCase):
         # Verify data values
         self.assertEqual(transformed['source'].unique().to_list(), ['hobolink'])
         self.assertEqual(transformed['SensorType'].unique().to_list(), ['RH'])
-        self.assertEqual(transformed['SensorID_Hobolink'].unique().to_list(), ['test-sensor-1'])
+        self.assertEqual(transformed['SensorID'].unique().to_list(), ['hobolink:test-sensor-1'])
         
         # Verify timestamp conversion (ms to seconds)
         expected_timestamps = [1761684300, 1761685200, 1761686100]
@@ -257,9 +267,12 @@ class TestHobolinkClient(unittest.TestCase):
         }
         
         transformed_c = self.client.transform_to_standardized_schema(mock_raw_data_c)
-        # Celsius sensors should be suppressed, so result should be empty
-        self.assertEqual(len(transformed_c), 0, 
-                        "Celsius temperature sensors should be suppressed")
+        # Celsius sensors should be converted to Fahrenheit
+        self.assertEqual(len(transformed_c), 1, 
+                        "Celsius temperature sensors should be converted to Fahrenheit")
+        # Verify the temperature was converted from 22.5°C to Fahrenheit (should be 72.5°F)
+        self.assertAlmostEqual(transformed_c['SensorReadingF'].to_list()[0], 72.5, places=1,
+                              msg="22.5°C should convert to 72.5°F")
     
     def test_timeframe_validation(self):
         """Test that returned data respects the requested timeframe."""
@@ -373,9 +386,11 @@ class TestHobolinkIntegration(unittest.TestCase):
         current_df = self.client.get_current_readings(testing=True, testing_device_limit=1)
         # Note: Current readings might be empty if no sensors have latest values
         
-        # Step 3: Try to get some historical data
+        # Step 3: Try to get some historical data using production configuration
+        # Use DAYS_BACK like explore_hobolink.py which is known to work well
+        days_back = int(os.getenv('DAYS_BACK', 60))  # Default to 60 days for integration test
         end_time = datetime.datetime.now(datetime.timezone.utc)
-        start_time = end_time - datetime.timedelta(hours=48)  # Wider range for integration test
+        start_time = end_time - datetime.timedelta(days=days_back)
         
         # Use reasonable limits for integration testing but allow multiple sensors
         historical_list = self.client.get_historical_data_bulk(

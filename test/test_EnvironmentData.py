@@ -68,7 +68,7 @@ class TestGetReading(unittest.TestCase):
 
         # we should also have device data now. 
         dt = polars.read_parquet('test/data/device_readings.parquet')
-        self.assertTrue(dt.columns == ['DeviceID_Coris', 'DeviceName', 'SensorReadingUTC', 'QueryUTC', 'SensorReadingF', 'SensorReadingRh'], msg = f"Column names: {dt.columns}")
+        self.assertTrue(dt.columns == ['DeviceID', 'DeviceName', 'SensorReadingUTC', 'QueryUTC', 'SensorReadingF', 'SensorReadingRh'], msg = f"Column names: {dt.columns}")
 
 def tearDownModule():
 

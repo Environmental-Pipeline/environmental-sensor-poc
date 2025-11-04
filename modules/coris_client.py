@@ -71,8 +71,8 @@ class CorisClient:
         Returns
         -------
         polars.DataFrame
-            Sensor data with columns: SensorID_Coris, DeviceID_Coris, SensorName, 
-            DeviceName, SensorType, QueryUTC, source, SensorID_Conserv, customer_id
+            Sensor data with columns: SensorID, DeviceID, SensorName, 
+            DeviceName, SensorType, QueryUTC, source, customer_id
         """
         out_of_scope = out_of_scope or []
         testing_sensor_ids = testing_sensor_ids or []
@@ -106,17 +106,22 @@ class CorisClient:
         if testing and len(testing_sensor_ids) > 0:
             sensors = sensors.filter(polars.col("SensorID").is_in(testing_sensor_ids))
         
-        # Rename columns to indicate data source
-        sensors = sensors.rename({
-            "SensorID": "SensorID_Coris", 
-            "DeviceDevID": "DeviceID_Coris"
-        })
+        # Generate SensorID and DeviceID with coris prefix
+        sensors = sensors.with_columns([
+            polars.concat_str([
+                polars.lit("coris:"),
+                polars.col("SensorID").cast(polars.String)
+            ]).alias("SensorID"),
+            polars.concat_str([
+                polars.lit("coris:"),
+                polars.col("DeviceDevID").cast(polars.String)
+            ]).alias("DeviceID")
+        ])
         
         # Add standardized schema columns
         sensors = sensors.with_columns([
             polars.lit(current_utc).alias("QueryUTC"),
             polars.lit("coris").alias("source"),
-            polars.lit(None, dtype=polars.String).alias("SensorID_Conserv"),
             polars.lit(None, dtype=polars.Int32).alias("customer_id"),
         ])
         
@@ -181,11 +186,12 @@ class CorisClient:
         data.columns = ["SensorReadingUTC", reading_type]
         
         # Add sensor metadata
-        data = data.with_columns(polars.lit(sensor_id).alias("SensorID_Coris"))
-        sensor_data = sensor_metadata.filter(polars.col("SensorID_Coris") == sensor_id)
+        consolidated_sensor_id = f"coris:{sensor_id}"
+        data = data.with_columns(polars.lit(consolidated_sensor_id).alias("SensorID"))
+        sensor_data = sensor_metadata.filter(polars.col("SensorID") == consolidated_sensor_id)
         
         if sensor_data.shape[0] > 0:
-            for col in ["SensorName", "DeviceName", "DeviceID_Coris", "SensorType"]:
+            for col in ["SensorName", "DeviceName", "DeviceID", "SensorType"]:
                 if col in sensor_data.columns:
                     data = data.with_columns(
                         polars.lit(sensor_data[col].to_list()[0]).alias(col)
@@ -194,7 +200,6 @@ class CorisClient:
         # Add standardized schema columns
         data = data.with_columns([
             polars.lit("coris").alias("source"),
-            polars.lit(None, dtype=polars.String).alias("SensorID_Conserv"),
             polars.lit(None, dtype=polars.Int32).alias("customer_id"),
         ])
         
@@ -233,9 +238,12 @@ class CorisClient:
         readings = []
         
         for reading_type in acceptable_range:
-            # Get sensor IDs that have this reading type
+            # Get sensor IDs that have this reading type - extract numeric ID from consolidated format
             sensor_ids = (
-                sensors.filter(polars.col(reading_type).is_nan().not_())["SensorID_Coris"]
+                sensors.filter(polars.col(reading_type).is_nan().not_())["SensorID"]
+                .str.split(":")
+                .list.last()
+                .cast(polars.Int32)
                 .unique()
                 .to_list()
             )
@@ -295,7 +303,6 @@ class CorisClient:
         # Add schema columns for compatibility
         sensors = sensors.with_columns([
             polars.lit("coris").cast(polars.String).alias("source"),
-            polars.lit(None, dtype=polars.String).alias("SensorID_Conserv"),
             polars.lit(None, dtype=polars.Int32).alias("customer_id"),
         ])
         

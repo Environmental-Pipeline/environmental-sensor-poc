@@ -267,17 +267,15 @@ class HobolinkClient:
                     df = df.with_columns([
                         # Convert timestamp from ms to seconds
                         (polars.col("timestamp_ms") / 1000).cast(polars.Int64).alias("SensorReadingUTC"),
-                        polars.lit(sensor_serial).alias("SensorID_Hobolink"),
+                        polars.lit(f"hobolink:{sensor_serial}").alias("SensorID"),
                         polars.lit(measurement_type).alias("SensorType"),
                         polars.lit(units).alias("SensorUnits"),
                         polars.lit(current_utc).alias("QueryUTC"),
                         polars.lit("hobolink").alias("source"),
                         
-                        # Standardized schema columns (set to None initially)
-                        polars.lit(None, dtype=polars.Int32).alias("SensorID_Coris"),
-                        polars.lit(None, dtype=polars.String).alias("SensorID_Conserv"),
+                        # Add schema columns (DeviceID will be added from metadata if available)
+                        polars.lit(None, dtype=polars.String).alias("DeviceID"),
                         polars.lit(None, dtype=polars.Int32).alias("customer_id"),
-                        polars.lit(None, dtype=polars.Int32).alias("DeviceID_Coris"),
                         polars.lit(None, dtype=polars.String).alias("SensorName"),
                         polars.lit(None, dtype=polars.String).alias("DeviceName"),
                     ])
@@ -322,28 +320,18 @@ class HobolinkClient:
         # Concatenate all readings
         result = polars.concat(all_readings, how="diagonal")
         
-        # Add device metadata if available
+        # Add device metadata if available 
+        # Note: For historical data, device names will be set to null since the
+        # device serial -> sensor serial mapping is not straightforward in Hobolink API
         if device_metadata is not None and not device_metadata.is_empty():
-            # Try to match by device serial number (extract device part from sensor serial)
-            # Sensor serials are like "22179174-2", device serials are like "22202141"
-            result = result.with_columns([
-                polars.col("SensorID_Hobolink").str.split("-").list.first().alias("DeviceSerial_Temp")
-            ])
-            
-            # Join with device metadata
-            if "deviceSerialNumber" in device_metadata.columns:
-                device_meta_subset = device_metadata.select([
-                    "deviceSerialNumber", "deviceName"
-                ]).unique()
-                
-                result = result.join(
-                    device_meta_subset,
-                    left_on="DeviceSerial_Temp",
-                    right_on="deviceSerialNumber",
-                    how="left"
-                ).with_columns([
-                    polars.col("deviceName").alias("DeviceName")
-                ]).drop(["DeviceSerial_Temp", "deviceName", "deviceSerialNumber"])
+            # For now, we'll rely on the DeviceName being set in the get_devices_as_dataframe method
+            # The device metadata passed here is for a specific device, so we can use that device name
+            if "deviceName" in device_metadata.columns and len(device_metadata) > 0:
+                device_name = device_metadata.select("deviceName").item(0, 0)
+                if device_name:
+                    result = result.with_columns([
+                        polars.lit(device_name).alias("DeviceName")
+                    ])
         
         self.logger.info(f"Transformed {len(result)} readings from Hobolink data")
         return result
@@ -411,9 +399,9 @@ class HobolinkClient:
                         continue
                     
                     device_records.append({
-                        "DeviceID_Hobolink": device_serial,
+                        "DeviceID": f"hobolink:{device_serial}",
                         "DeviceName": device_name,
-                        "SensorID_Hobolink": sensor_serial,
+                        "SensorID": f"hobolink:{sensor_serial}",
                         "SensorName": f"{device_name}_{measurement_type}",
                         "SensorType": measurement_type,
                         "SensorUnits": units,
@@ -427,9 +415,9 @@ class HobolinkClient:
             else:
                 # Create a record for the device only
                 device_records.append({
-                    "DeviceID_Hobolink": device_serial,
+                    "DeviceID": f"hobolink:{device_serial}",
                     "DeviceName": device_name,
-                    "SensorID_Hobolink": None,
+                    "SensorID": None,
                     "SensorName": device_name,
                     "SensorType": None,
                     "SensorUnits": None,
@@ -451,10 +439,7 @@ class HobolinkClient:
         result = result.with_columns([
             polars.lit(current_utc).alias("QueryUTC"),
             polars.lit("hobolink").alias("source"),
-            polars.lit(None, dtype=polars.Int32).alias("SensorID_Coris"),
-            polars.lit(None, dtype=polars.String).alias("SensorID_Conserv"),
             polars.lit(None, dtype=polars.Int32).alias("customer_id"),
-            polars.lit(None, dtype=polars.Int32).alias("DeviceID_Coris"),
         ])
         
         self.logger.info(f"Retrieved {len(result)} device/sensor combinations")
@@ -526,17 +511,17 @@ class HobolinkClient:
         # Get unique device/sensor combinations
         device_sensor_combinations = (
             devices_df
-            .filter(polars.col("SensorID_Hobolink").is_not_null())
-            .select(["DeviceID_Hobolink", "SensorID_Hobolink", "DeviceName", "SensorType"])
+            .filter(polars.col("SensorID").is_not_null())
+            .select(["DeviceID", "SensorID", "DeviceName", "SensorType"])
             .unique()
         )
         
         if testing:
             # Group by device and limit sensors per device
             limited_combinations = []
-            for device_id in device_sensor_combinations["DeviceID_Hobolink"].unique():
+            for device_id in device_sensor_combinations["DeviceID"].unique():
                 device_sensors = device_sensor_combinations.filter(
-                    polars.col("DeviceID_Hobolink") == device_id
+                    polars.col("DeviceID") == device_id
                 ).head(testing_sensors_per_device)
                 limited_combinations.append(device_sensors)
             
@@ -550,8 +535,10 @@ class HobolinkClient:
         pbar = tqdm.tqdm(total=total_combinations, desc="Gathering Hobolink readings")
         
         for row in device_sensor_combinations.iter_rows(named=True):
-            device_serial = row["DeviceID_Hobolink"]
-            sensor_serial = row["SensorID_Hobolink"]
+            consolidated_device_id = row["DeviceID"]
+            device_serial = consolidated_device_id.split(":")[-1]  # Extract serial from hobolink:serial format
+            consolidated_sensor_id = row["SensorID"]
+            sensor_serial = consolidated_sensor_id.split(":")[-1]  # Extract serial from hobolink:serial format
             device_name = row["DeviceName"]
             sensor_type = row["SensorType"]
             
@@ -569,9 +556,10 @@ class HobolinkClient:
                     transformed_data = self.transform_to_standardized_schema(
                         raw_data, 
                         device_metadata=devices_df.filter(
-                            polars.col("DeviceID_Hobolink") == device_serial
-                        ).select(["deviceSerialNumber", "deviceName"]).rename({
-                            "DeviceID_Hobolink": "deviceSerialNumber",
+                            polars.col("DeviceID") == f"hobolink:{device_serial}"
+                        ).select(["DeviceID", "DeviceName"]).with_columns([
+                            polars.col("DeviceID").str.replace("hobolink:", "").alias("deviceSerialNumber")
+                        ]).select(["deviceSerialNumber", "DeviceName"]).rename({
                             "DeviceName": "deviceName"
                         })
                     )
@@ -668,7 +656,7 @@ class HobolinkClient:
         )
         
         if len(celsius_sensors) > 0:
-            for row in celsius_sensors.select(["SensorID_Hobolink", "SensorType", "SensorUnits"]).iter_rows():
+            for row in celsius_sensors.select(["SensorID", "SensorType", "SensorUnits"]).iter_rows():
                 sensor_id, sensor_type, units = row
                 self.logger.info(f"Converting Celsius to Fahrenheit for current reading: {sensor_id} "
                                f"(measurement_type: {sensor_type}, units: {units})")
@@ -676,19 +664,17 @@ class HobolinkClient:
         # Select only the columns that match the standardized schema
         # Note: Only SensorReadingF (no SensorReadingC) to match Coris behavior
         standardized_columns = [
-            "source", "SensorID_Hobolink", "SensorID_Coris", "SensorID_Conserv", 
-            "customer_id", "QueryUTC", "SensorReadingUTC", "DeviceID_Hobolink", 
-            "DeviceID_Coris", "SensorName", "DeviceName", "SensorType", 
-            "SensorReading", "SensorReadingF", "SensorReadingRh"
+            "source", "SensorID", "DeviceID", "customer_id", "QueryUTC", "SensorReadingUTC", 
+            "SensorName", "DeviceName", "SensorType", "SensorReading", "SensorReadingF", "SensorReadingRh"
         ]
         
         # Add missing columns with None values
         for col in standardized_columns:
             if col not in result.columns:
-                if "ID" in col and col.endswith("_Coris"):
+                if col in ["customer_id", "QueryUTC", "SensorReadingUTC"]:
                     result = result.with_columns(polars.lit(None, dtype=polars.Int32).alias(col))
-                elif col in ["customer_id", "QueryUTC", "SensorReadingUTC"]:
-                    result = result.with_columns(polars.lit(None, dtype=polars.Int32).alias(col))
+                elif col in ["SensorReadingF", "SensorReadingRh", "SensorReading"]:
+                    result = result.with_columns(polars.lit(None, dtype=polars.Float32).alias(col))
                 else:
                     result = result.with_columns(polars.lit(None, dtype=polars.String).alias(col))
         

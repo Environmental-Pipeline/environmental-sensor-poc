@@ -661,7 +661,7 @@ class ConservAPIClient:
             "customer_id": polars.Int32,
             "QueryUTC": polars.Int32,
             "SensorReadingUTC": polars.Int64,
-            "DeviceID_Coris": polars.Int32,
+            "DeviceID": polars.String,
             "SensorReadingUTC_SecondsFromPrior": polars.Int64,
             "SensorReadingF": polars.Float32,
             "SensorReadingRh": polars.Float32,

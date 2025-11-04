@@ -8,6 +8,7 @@ import datetime
 import warnings
 from modules.conserv_client import create_conserv_client_from_env
 from modules.coris_client import create_coris_client_from_env
+from modules.hobolink_client import create_hobolink_client_from_env
 
 
 class EnvironmentData:
@@ -21,6 +22,7 @@ class EnvironmentData:
         testing: bool = False,
         coris_enabled: bool = False,
         conserv_enabled: bool = False,
+        hobolink_enabled: bool = False,
     ):
         """
         Initialize resources for managing the environmental readings.
@@ -50,6 +52,9 @@ class EnvironmentData:
         conserv_enabled : bool, default=False
             Enable Conserv API integration for additional sensor data sources.
 
+        hobolink_enabled : bool, default=False
+            Enable Hobolink API integration for additional sensor data sources.
+
         Returns
         -------
         EnvironmentData: EnvironmentData object.
@@ -63,6 +68,14 @@ class EnvironmentData:
         self.out_of_scope = out_of_scope
         self.coris_enabled = coris_enabled
         self.conserv_enabled = conserv_enabled
+        self.hobolink_enabled = hobolink_enabled
+
+        # Check that at least one data source is enabled
+        if not (coris_enabled or conserv_enabled or hobolink_enabled):
+            raise ValueError(
+                "At least one data source must be enabled. "
+                "Set coris_enabled=True, conserv_enabled=True, or hobolink_enabled=True"
+            )
 
         # Create the data folder.
         if not os.path.exists(data_path):
@@ -121,6 +134,16 @@ class EnvironmentData:
             except Exception as e:
                 self.logger.warning(f"Failed to initialize Conserv client: {e}")
                 self.conserv_enabled = False
+
+        # Initialize Hobolink API client if enabled
+        self.hobolink_client = None
+        if self.hobolink_enabled:
+            try:
+                self.hobolink_client = create_hobolink_client_from_env(self.logger)
+                # self.logger.info("Hobolink API client initialized successfully")
+            except Exception as e:
+                self.logger.warning(f"Failed to initialize Hobolink client: {e}")
+                self.hobolink_enabled = False
 
         # Set up the readings data structure that will be used throughout.
         self.acceptable_range = {"SensorReadingF": [], "SensorReadingRh": []}
@@ -305,12 +328,11 @@ class EnvironmentData:
         # Define the master schema based on existing parquet structure
         master_schema = {
             "source": polars.String,
-            "SensorID_Coris": polars.Int32,
-            "SensorID_Conserv": polars.String,
+            "SensorID": polars.String,
+            "DeviceID": polars.String,
             "customer_id": polars.Int32,
             "QueryUTC": polars.Int32,
             "SensorReadingUTC": polars.Int64,
-            "DeviceID_Coris": polars.Int32,
             "SensorReadingUTC_SecondsFromPrior": polars.Int64,
             "SensorReadingF": polars.Float32,
             "SensorReadingRh": polars.Float32,
@@ -454,7 +476,7 @@ class EnvironmentData:
         self, conserv_data: polars.DataFrame, query_utc: int
     ) -> polars.DataFrame:
         """
-        Transform Conserv API data to match Coris schema structure.
+        Transform Conserv API data to standardized schema.
 
         Parameters
         ----------
@@ -466,10 +488,10 @@ class EnvironmentData:
         Returns
         -------
         polars.DataFrame
-            Data transformed to match Coris schema with new columns for multi-source support
+            Data transformed to match standardized schema
         """
 
-        self.logger.info("Transforming Conserv data to Coris schema")
+        self.logger.info("Transforming Conserv data to standardized schema")
 
         # DEBUG: Log incoming data types
         self.logger.info(
@@ -484,12 +506,9 @@ class EnvironmentData:
         # Create a copy to avoid modifying the original
         df = conserv_data.clone()
 
-        # ============ CRITICAL TRANSFORMATIONS ============
+        # ============ COLUMN TRANSFORMATIONS ============
 
-        # ============ BASIC COLUMN TRANSFORMATIONS ============
-        # Note: Schema gate will handle all type conversions, we just do basic mapping
-
-        # 1. Temperature: Convert °C to °F (let schema gate handle final type)
+        # 1. Temperature: Convert °C to °F
         if "Temperature (°C)" in df.columns:
             df = df.with_columns(
                 ((polars.col("Temperature (°C)") * 9 / 5) + 32).alias("SensorReadingF")
@@ -512,30 +531,38 @@ class EnvironmentData:
             else:
                 df = df.rename({"Time": "SensorReadingUTC"})
 
-        # 4. Sensor identification for Conserv
+        # 4. Generate SensorID for Conserv
         if "Sensor Name" in df.columns:
-            df = df.with_columns(
-                polars.col("Sensor Name").alias("SensorID_Conserv"),
+            df = df.with_columns([
+                polars.concat_str([
+                    polars.lit("conserv:"),
+                    polars.col("customer_id").cast(polars.String),
+                    polars.lit(":"),
+                    polars.col("Sensor Name")
+                ]).alias("SensorID"),
                 polars.col("Sensor Name").alias("SensorName"),
-            ).drop("Sensor Name")
+            ]).drop("Sensor Name")
 
-        # 5. Add source identifier
+        # 5. Add source identifier and query timestamp
         df = df.with_columns(polars.lit("conserv").alias("source"))
 
-        # 6. Add query timestamp
+        # 6. Generate DeviceID and add null columns for schema compatibility
         df = df.with_columns(polars.lit(query_utc).alias("QueryUTC"))
 
-        # 7. Add null Coris columns for schema compatibility
+        # 7. Ensure customer_id column exists
         df = df.with_columns(
             [
-                polars.lit(None, dtype=polars.Int32).alias("SensorID_Coris"),
-                polars.lit(None, dtype=polars.Int32).alias("DeviceID_Coris"),
+                polars.concat_str([
+                    polars.lit("conserv:"),
+                    polars.col("customer_id").cast(polars.String),
+                    polars.lit(":device")
+                ]).alias("DeviceID"),
                 polars.lit(None, dtype=polars.String).alias("DeviceName"),
                 polars.lit(None, dtype=polars.String).alias("SensorType"),
             ]
         )
 
-        # 8. Ensure customer_id exists (schema gate will handle final type)
+        # 8. Final schema enforcement
         if "customer_id" not in df.columns:
             df = df.with_columns(
                 polars.lit(None, dtype=polars.Int32).alias("customer_id")
@@ -546,7 +573,7 @@ class EnvironmentData:
             f"TRANSFORMED Conserv data types: {dict(zip(df.columns, [str(dtype) for dtype in df.dtypes]))}"
         )
 
-        # ---- Final schema enforcement (types expected by tests/downstream) ----
+        # Final schema enforcement
         df = df.with_columns(
             [
                 polars.col("SensorReadingF")
@@ -556,14 +583,14 @@ class EnvironmentData:
                 .cast(polars.Float32)
                 .alias("SensorReadingRh"),
                 polars.col("QueryUTC").cast(polars.Int32).alias("QueryUTC"),
-                polars.col("SensorID_Coris").cast(polars.Int32).alias("SensorID_Coris"),
-                polars.col("DeviceID_Coris").cast(polars.Int32).alias("DeviceID_Coris"),
+                polars.col("SensorID").cast(polars.String).alias("SensorID"),
+                polars.col("DeviceID").cast(polars.String).alias("DeviceID"),
                 polars.col("customer_id").cast(polars.Int32).alias("customer_id"),
             ]
         )
 
         self.logger.info(
-            f"Conserv schema transformation complete: {df.shape[0]} records"
+            f"Conserv transformation complete: {df.shape[0]} records"
         )
 
         return df
@@ -583,7 +610,7 @@ class EnvironmentData:
         current_utc = self.get_current_utc()
         # self.logger.info(f"get_current_readings: {current_utc}")
 
-        # ============ CORIS DATA PROCESSING (USING CLIENT) ============
+        # ============ CORIS DATA PROCESSING ============
         coris_sensors = None
         if self.coris_enabled and self.coris_client:
             self.logger.info("Fetching current Coris data")
@@ -616,7 +643,7 @@ class EnvironmentData:
         #     f"CORIS schema types: {dict(zip(coris_sensors.columns, [str(dtype) for dtype in coris_sensors.dtypes]))}"
         # )
 
-        # ============ CONSERV DATA PROCESSING (NEW FUNCTIONALITY) ============
+        # ============ CONSERV DATA PROCESSING ============
         conserv_sensors = None
         if self.conserv_enabled and self.conserv_client:
             self.logger.info("Fetching current Conserv data for all customers")
@@ -686,7 +713,48 @@ class EnvironmentData:
                 )
                 # Continue with Coris data only - don't fail the entire process
 
-        # ============ COMBINE ALL DATA SOURCES WITH SCHEMA GATE ============
+        # ============ HOBOLINK DATA PROCESSING ============
+        hobolink_sensors = None
+        if self.hobolink_enabled and self.hobolink_client:
+            self.logger.info("Fetching current Hobolink data")
+
+            try:
+                # Get current readings from Hobolink API
+                hobolink_sensors = self.hobolink_client.get_current_readings(
+                    out_of_scope=self.out_of_scope,
+                    testing=self.testing,
+                    testing_device_limit=3 if self.testing else None
+                )
+
+                if hobolink_sensors is not None and not hobolink_sensors.is_empty():
+                    self.logger.info(f"Raw Hobolink data shape: {hobolink_sensors.shape}")
+
+                    # Clean and validate Hobolink data
+                    hobolink_sensors = self.clean_validate_sensors(
+                        sensors=hobolink_sensors, step="get_current_readings_hobolink"
+                    )
+
+                    if hobolink_sensors is not None and not hobolink_sensors.is_empty():
+                        self.logger.info(
+                            f"Successfully processed {hobolink_sensors.shape[0]} current Hobolink records"
+                        )
+                    else:
+                        self.logger.warning(
+                            "Hobolink data was cleaned out completely during validation!"
+                        )
+                else:
+                    self.logger.info("No current Hobolink data available")
+
+            except Exception as e:
+                self.logger.warning(f"Failed to fetch current Hobolink data: {e}")
+                import traceback
+
+                self.logger.warning(
+                    f"Hobolink error traceback: {traceback.format_exc()}"
+                )
+                # Continue with other data sources - don't fail the entire process
+
+        # ============ COMBINE ALL DATA SOURCES ============
         # Prepare list of valid data sources for merging
         data_sources = []
         source_info = []
@@ -703,18 +771,26 @@ class EnvironmentData:
             )
             data_sources.append(conserv_sensors)
             source_info.append(f"CONSERV: {conserv_sensors.shape[0]} rows")
+
+        if hobolink_sensors is not None and not hobolink_sensors.is_empty():
+            hobolink_sensors = self.enforce_schema(
+                hobolink_sensors, "Hobolink_Current_Readings"
+            )
+            data_sources.append(hobolink_sensors)
+            source_info.append(f"HOBOLINK: {hobolink_sensors.shape[0]} rows")
+
         # Log merging information and combine data sources
         if len(data_sources) > 1:
-            self.logger.info("MERGING DATA SOURCES:")
+            # self.logger.info("MERGING DATA SOURCES:")
             for info in source_info:
                 self.logger.info(f"  {info}")
 
             try:
                 all_sensors = polars.concat(data_sources, how="diagonal")
-                total_rows = sum(df.shape[0] for df in data_sources)
-                self.logger.info(
-                    f"MERGE SUCCESS: Combined current readings from {len(data_sources)} sources = {all_sensors.shape[0]} total (expected: {total_rows})"
-                )
+                # total_rows = sum(df.shape[0] for df in data_sources)
+                # self.logger.info(
+                #     f"MERGE SUCCESS: Combined current readings from {len(data_sources)} sources = {all_sensors.shape[0]} total (expected: {total_rows})"
+                # )
             except Exception as merge_error:
                 self.logger.error(f"MERGE FAILED even with schema gate: {merge_error}")
                 self.logger.error("Falling back to first available data source")
@@ -792,88 +868,30 @@ class EnvironmentData:
         # Append these to the database.
         dt = polars.concat([historical, dt], how="diagonal")
 
-        # ============ HANDLE MIXED DATA SOURCES ============
-        # Add difference between readings for both Coris and Conserv sensors
-        # For Coris sensors (group by SensorID_Coris)
-        coris_data = dt.filter(polars.col("source") == "coris")
-        conserv_data = dt.filter(polars.col("source") == "conserv")
-
-        if not coris_data.is_empty():
-            coris_data = coris_data.sort(["SensorID_Coris", "SensorReadingUTC"])
-            coris_seconds_from_prior = coris_data.group_by(
-                "SensorID_Coris", maintain_order=True
-            ).map_groups(
-                lambda x: x.with_columns(
-                    (
-                        polars.col("SensorReadingUTC")
-                        - polars.col("SensorReadingUTC").shift(1)
-                    ).alias("SensorReadingUTC_SecondsFromPrior")
-                )
+        # Add time difference between readings for each sensor
+        if not dt.is_empty():
+            dt = dt.sort(["SensorID", "SensorReadingUTC"])
+            dt = dt.with_columns(
+                (
+                    polars.col("SensorReadingUTC")
+                    - polars.col("SensorReadingUTC").shift(1).over("SensorID")
+                ).alias("SensorReadingUTC_SecondsFromPrior")
             )
         else:
-            coris_seconds_from_prior = polars.DataFrame()
-
-        # For Conserv sensors (group by SensorID_Conserv + customer_id)
-        if not conserv_data.is_empty():
-            conserv_data = conserv_data.sort(
-                ["customer_id", "SensorID_Conserv", "SensorReadingUTC"]
-            )
-            try:
-                # Try modern Polars syntax first
-                conserv_seconds_from_prior = conserv_data.group_by(
-                    ["customer_id", "SensorID_Conserv"], maintain_order=True
-                ).map_batches(
-                    lambda x: x.with_columns(
-                        (
-                            polars.col("SensorReadingUTC")
-                            - polars.col("SensorReadingUTC").shift(1)
-                        ).alias("SensorReadingUTC_SecondsFromPrior")
-                    )
-                )
-            except (AttributeError, TypeError):
-                # Fallback to older syntax or alternative approach
-                conserv_seconds_from_prior = conserv_data.sort(
-                    ["customer_id", "SensorID_Conserv", "SensorReadingUTC"]
-                ).with_columns(
-                    (
-                        polars.col("SensorReadingUTC")
-                        - polars.col("SensorReadingUTC")
-                        .shift(1)
-                        .over(["customer_id", "SensorID_Conserv"])
-                    ).alias("SensorReadingUTC_SecondsFromPrior")
-                )
-        else:
-            conserv_seconds_from_prior = polars.DataFrame()
-
-        # Combine the processed data back together
-        if (
-            not coris_seconds_from_prior.is_empty()
-            and not conserv_seconds_from_prior.is_empty()
-        ):
-            dt = polars.concat(
-                [coris_seconds_from_prior, conserv_seconds_from_prior], how="diagonal"
-            )
-        elif not coris_seconds_from_prior.is_empty():
-            dt = coris_seconds_from_prior
-        elif not conserv_seconds_from_prior.is_empty():
-            dt = conserv_seconds_from_prior
-        else:
-            # Fallback: add null column if no data
             dt = dt.with_columns(
                 polars.lit(None, dtype=polars.Int64).alias(
                     "SensorReadingUTC_SecondsFromPrior"
                 )
             )
 
-        # Move the most important columns to the front (updated for mixed sources)
+        # Move the most important columns to the front
         important_columns = [
             "source",
-            "SensorID_Coris",
-            "SensorID_Conserv",
+            "SensorID",
+            "DeviceID",
             "customer_id",
             "QueryUTC",
             "SensorReadingUTC",
-            "DeviceID_Coris",
             "SensorReadingUTC_SecondsFromPrior",
         ] + list(self.acceptable_range.keys())
         dt = self.relocate(dt, important_columns)
@@ -940,29 +958,29 @@ class EnvironmentData:
 
         # Get the data for each of the selected sensors.
         devices = None
-        data = data.filter(polars.col("DeviceID_Coris").is_null().not_())
+        data = data.filter(polars.col("DeviceID").is_null().not_())
         for reading in self.acceptable_range:
             idt = data.filter(polars.col(reading).is_null().not_()).select(
-                ["DeviceID_Coris", "SensorReadingUTC", "QueryUTC", reading]
+                ["DeviceID", "SensorReadingUTC", "QueryUTC", reading]
             )
             if isinstance(devices, polars.DataFrame):
                 devices = devices.join(
                     idt,
                     how="full",
-                    on=["DeviceID_Coris", "SensorReadingUTC", "QueryUTC"],
+                    on=["DeviceID", "SensorReadingUTC", "QueryUTC"],
                 )
             else:
                 devices = idt
             del idt, reading
 
-        # this will result in columns like DeviceID_Coris_right when there is not a perfect match.
+        # this will result in columns like DeviceID_right when there is not a perfect match.
         # coalesce to a single column.
-        cols_DeviceID_Coris = [x for x in devices.columns if "DeviceID_Coris" in x]
+        cols_DeviceID = [x for x in devices.columns if "DeviceID" in x]
         cols_SensorReadingUTC = [x for x in devices.columns if "SensorReadingUTC" in x]
         cols_QueryUTC = [x for x in devices.columns if "QueryUTC" in x]
 
         devices = devices.with_columns(
-            polars.coalesce(cols_DeviceID_Coris).alias("DeviceID_Coris")
+            polars.coalesce(cols_DeviceID).alias("DeviceID")
         )
         devices = devices.with_columns(
             polars.coalesce(cols_SensorReadingUTC).alias("SensorReadingUTC")
@@ -972,29 +990,29 @@ class EnvironmentData:
         devices = devices.drop(
             [
                 x
-                for x in cols_DeviceID_Coris + cols_SensorReadingUTC
-                if x not in ["DeviceID_Coris", "SensorReadingUTC", "QueryUTC"]
+                for x in cols_DeviceID + cols_SensorReadingUTC
+                if x not in ["DeviceID", "SensorReadingUTC", "QueryUTC"]
             ]
         )
 
         # If a device has multiple names, error out:
         device_names = (
-            data.filter(polars.col("DeviceID_Coris").is_null().not_())
-            .select(["DeviceID_Coris", "DeviceName"])
+            data.filter(polars.col("DeviceID").is_null().not_())
+            .select(["DeviceID", "DeviceName"])
             .unique()
         )
         if device_names.shape[0] != device_names["DeviceName"].unique().shape[0]:
             self.error(
-                "DeviceName to DeviceID_Coris is not a 1-1 mapping.",
+                "DeviceName to DeviceID is not a 1-1 mapping.",
                 raise_exception=True,
             )
 
         # Attach the device name.
-        devices = devices.join(device_names, how="left", on="DeviceID_Coris")
+        devices = devices.join(device_names, how="left", on="DeviceID")
 
         # Rearrange columns.
         devices = devices.select(
-            ["DeviceID_Coris", "DeviceName", "SensorReadingUTC", "QueryUTC"]
+            ["DeviceID", "DeviceName", "SensorReadingUTC", "QueryUTC"]
             + list(self.acceptable_range.keys())
         )
 
@@ -1024,13 +1042,10 @@ class EnvironmentData:
 
         # Set data types - MATCH EXISTING SCHEMA EXACTLY
         dtypes = {
-            "SensorID": polars.String,  # this is extracted from the SensorName, it isn't always a number.
-            "SensorID_Coris": polars.Int32,  # Fixed: Match parquet file
-            "DeviceID_Coris": polars.Int32,  # Fixed: Match parquet file
+            "SensorID": polars.String,  # Consolidated sensor ID field with source prefixes
+            "DeviceID": polars.String,  # Consolidated device ID field with source prefixes
             "SensorReadingUTC": polars.Int64,
             "QueryUTC": polars.Int32,  # Fixed: Match parquet file
-            # New Conserv-specific columns
-            "SensorID_Conserv": polars.String,  # Fixed: Use String not Utf8
             "customer_id": polars.Int32,  # Fixed: Match parquet file
             "source": polars.String,  # Fixed: Use String not Utf8
         }
@@ -1047,7 +1062,7 @@ class EnvironmentData:
         # Also ensure validation expected columns are correct type
         validation_types = {
             "SensorReadingUTC": polars.Int64,
-            "SensorID": polars.Int32,
+            "SensorID": polars.String,
             "SensorReadingF": polars.Float32,
             "SensorReadingRh": polars.Float32,
         }
@@ -1091,9 +1106,9 @@ class EnvironmentData:
     ):
         """
         Validate Sensor reading data: column data types, missing values, SensorReadingUTC close to QueryUTC,
-            no duplicated SensorReadingUTC, one SensorName per SensorID_Coris,
+            no duplicated SensorReadingUTC, one SensorName per SensorID,
             SensorReadingUTC_SecondsFromPrior less than 15 minutes,
-            all SensorID_Coris in historical data, no multiple names for SensorID_Coris.
+            all SensorID in historical data, no multiple names for SensorID.
         Can be expanded to add more validation steps.
         Failed validations are printed as errors to the log files, and surfaced as warnings.
 
@@ -1110,8 +1125,8 @@ class EnvironmentData:
         # Is the data format as expected?
         expect_types = {
             "SensorReadingUTC": polars.Int64,
-            "SensorID": polars.Int32,
-        }  # Fixed SensorID type
+            "SensorID": polars.String,
+        }
         for reading in self.acceptable_range:
             if reading in sensors.columns:
                 expect_types[reading] = (
@@ -1157,23 +1172,23 @@ class EnvironmentData:
         # Are there any duplicated SensorReadingUTC?
         if "SensorReadingUTC" in sensors.columns:
             dup_count = (
-                sensors[["SensorID_Coris", "SensorReadingUTC"]].is_duplicated().sum()
+                sensors[["SensorID", "SensorReadingUTC"]].is_duplicated().sum()
             )
             if dup_count > 0:
                 errs.append(f"Count of duplicated SensorReadingUTC: {dup_count}.")
             else:                
                 self.logger.info(
-                    f"{step} validation passed: no duplicated SensorReadingUTC per SensorID_Coris."
+                    f"{step} validation passed: no duplicated SensorReadingUTC per SensorID."
                 )
 
         # Do any sensors have multiple names (indicating a change in name)?
-        name_dups = sensors[["SensorID_Coris", "SensorName"]].unique()
-        name_dups = name_dups.filter(name_dups["SensorID_Coris"].is_duplicated())
-        dup_count = name_dups[["SensorID_Coris"]].unique().shape[0]
+        name_dups = sensors[["SensorID", "SensorName"]].unique()
+        name_dups = name_dups.filter(name_dups["SensorID"].is_duplicated())
+        dup_count = name_dups[["SensorID"]].unique().shape[0]
         if dup_count > 0:
-            errs.append(f"Count of multiple names for SensorID_Coris: {dup_count}.")
+            errs.append(f"Count of multiple names for SensorID: {dup_count}.")
         else:            
-            self.logger.info(f"{step} validation passed: one SensorName per SensorID_Coris.")
+            self.logger.info(f"{step} validation passed: one SensorName per SensorID.")
 
         # Time between readings should be less than ten minutes.
         if "SensorReadingUTC_SecondsFromPrior" in sensors.columns:
@@ -1194,7 +1209,7 @@ class EnvironmentData:
 
             # Did we lose any sensors?
             missing = historical.filter(
-                historical["SensorID_Coris"].is_in(sensors["SensorID_Coris"]).not_()
+                historical["SensorID"].is_in(sensors["SensorID"]).not_()
             )
             if missing.shape[0] > 0:
                 errs.append(
@@ -1202,7 +1217,7 @@ class EnvironmentData:
                 )
             else:
                 self.logger.info(
-                    f"{step} validation passed: all SensorID_Coris in historical data (no dropped SensorID)."
+                    f"{step} validation passed: all SensorID in historical data (no dropped SensorID)."
                 )
 
         # Log the errors.
@@ -1299,11 +1314,10 @@ class EnvironmentData:
             f"{self.data_path}/sensor_readings.parquet",
             columns=[
                 "SensorName",
-                "SensorID_Coris",
-                "DeviceID_Coris",
+                "SensorID",
+                "DeviceID",
                 "SensorType",
                 "source",
-                "SensorID_Conserv",
                 "customer_id",
             ],
         )
@@ -1328,6 +1342,9 @@ class EnvironmentData:
             else:
                 info = sensorname.strip().split(" ")
                 info = info[0:-1] + info[-1].split("_")
+            
+            # Clean up empty strings from consecutive separators (e.g., multiple underscores)
+            info = [part for part in info if part.strip() != ""]
 
             # If the cardinal direction is included, there will be 4 pieces of info.
             if len(info) == 5:
@@ -1335,10 +1352,10 @@ class EnvironmentData:
                     {
                         "SensorName": sensorname,
                         #   'SensorType_fromName': info[0],
-                        "DeviceID": info[4],
+                        "DeviceSerialFromName": info[4],
                         "SensorType": sensor["SensorType"],
-                        "SensorID_Coris": sensor["SensorID_Coris"],
-                        "DeviceID_Coris": sensor["DeviceID_Coris"],
+                        "SensorID": sensor["SensorID"],
+                        "DeviceID": sensor["DeviceID"],
                         "BuildingID": info[1],
                         "Building": (
                             building_name_map[info[1]]
@@ -1360,10 +1377,10 @@ class EnvironmentData:
                     {
                         "SensorName": sensorname,
                         #'SensorType_fromName': info[0],
-                        "DeviceID": info[3],
+                        "DeviceSerialFromName": info[3],
                         "SensorType": sensor["SensorType"],
-                        "SensorID_Coris": sensor["SensorID_Coris"],
-                        "DeviceID_Coris": sensor["DeviceID_Coris"],
+                        "SensorID": sensor["SensorID"],
+                        "DeviceID": sensor["DeviceID"],
                         "BuildingID": info[1],
                         "Building": (
                             building_name_map[info[1]]
@@ -1385,10 +1402,10 @@ class EnvironmentData:
                     {
                         "SensorName": sensorname,
                         # 'SensorType_fromName': info[0],
-                        "DeviceID": info[2],
+                        "DeviceSerialFromName": info[2],
                         "SensorType": sensor["SensorType"],
-                        "SensorID_Coris": sensor["SensorID_Coris"],
-                        "DeviceID_Coris": sensor["DeviceID_Coris"],
+                        "SensorID": sensor["SensorID"],
+                        "DeviceID": sensor["DeviceID"],
                         "BuildingID": "FLOATER",
                         "Building": (
                             building_name_map[info[1]]
@@ -1400,23 +1417,38 @@ class EnvironmentData:
                     }
                 )
             else:
-                raise Exception(
-                    f"Unexpected SensorName format: {sensorname}. Info: {info}. "
+                # Handle malformed sensor names gracefully with NAs
+                self.logger.warning(
+                    f"Malformed SensorName format: {sensorname}. Info: {info}. "
+                    f"Adding with NA values for parsed fields. "
                     f"Valid formats: "
                     f"'Temp ESC Room101 North_1234' (5 parts with cardinal direction), "
                     f"'RH YPM Gallery_2567' (4 parts without cardinal direction), "
                     f"'Temp_Floater ESC_3890' (3 parts for floaters)"
                 )
+                sensors.append(
+                    {
+                        "SensorName": sensorname,
+                        "DeviceSerialFromName": None,  # NA for malformed names
+                        "SensorType": sensor["SensorType"],
+                        "SensorID": sensor["SensorID"], 
+                        "DeviceID": sensor["DeviceID"],
+                        "BuildingID": "MALFORMED",
+                        "Building": "Unknown",
+                        "Room": "Unknown", 
+                        "CardinalDirection": None,
+                    }
+                )
 
         # Write the table to a file.
         sensors = polars.DataFrame(sensors).unique()
         sensors = sensors.sort(
-            ["BuildingID", "Building", "Room", "DeviceID", "SensorName"]
+            ["BuildingID", "Building", "Room", "DeviceSerialFromName", "SensorName"]
         )
         sensors = self.clean_validate_sensors(sensors=sensors, step="update_lookups")
         sensors = self.relocate(
             sensors,
-            ["SensorID_Coris", "BuildingID", "Room", "CardinalDirection", "DeviceID"],
+            ["SensorID", "BuildingID", "Room", "CardinalDirection", "DeviceSerialFromName"],
         )
         sensors.write_parquet(f"{self.data_path}/sensors.parquet")
 
@@ -1424,42 +1456,54 @@ class EnvironmentData:
         # Check for a valid mapping.
         device_info_from_sensors = sensors.select(
             [
-                "DeviceID_Coris",
+                "DeviceID",
                 "BuildingID",
                 "Building",
                 "Room",
                 "CardinalDirection",
-                "DeviceID",
+                "DeviceSerialFromName",
             ]
         ).unique()
 
-        # Exclude Conserv sensors (which have null DeviceID_Coris) from the duplication check
-        # since they use SensorID_Conserv instead and multiple Conserv sensors can have null DeviceID_Coris
-        device_info_from_sensors_coris = device_info_from_sensors.filter(
-            polars.col("DeviceID_Coris").is_not_null()
+        # Check for inconsistent DeviceID mappings (same DeviceID with different Building/Room/CardinalDirection)
+        # Group by DeviceID and check if there are multiple unique combinations of Building/Room/CardinalDirection
+        device_consistency_check = device_info_from_sensors.group_by("DeviceID").agg([
+            polars.col("BuildingID").n_unique().alias("unique_buildings"),
+            polars.col("Room").n_unique().alias("unique_rooms"), 
+            polars.col("CardinalDirection").n_unique().alias("unique_directions")
+        ])
+        
+        inconsistent_devices = device_consistency_check.filter(
+            (polars.col("unique_buildings") > 1) |
+            (polars.col("unique_rooms") > 1) |
+            (polars.col("unique_directions") > 1)
         )
-        bad_values = device_info_from_sensors_coris.filter(
-            device_info_from_sensors_coris.select("DeviceID_Coris").is_duplicated()
-        ).sort("DeviceID_Coris")
 
-        if bad_values.shape[0] > 0:
-            # If there is a bad mapping, log it and remove the duplicates so we can use the data that is properly mapped.
-            # For invalid mappings, Building, Room, and CardinalDirection will be null.
-            self.error(
-                f"DeviceID_Coris to Building, Room, CardinalDirection is not a 1-1 mapping. Invalid mappings will be excluded: \n{bad_values}",
-                raise_exception=True,
+        if inconsistent_devices.shape[0] > 0:
+            # Get the actual inconsistent mappings for logging
+            bad_device_ids = inconsistent_devices.select("DeviceID").to_series().to_list()
+            bad_values = device_info_from_sensors.filter(
+                polars.col("DeviceID").is_in(bad_device_ids)
+            ).sort("DeviceID")
+            
+            self.logger.warning(
+                f"DeviceID has inconsistent Building/Room/CardinalDirection mappings. Using first occurrence: \n{bad_values}"
             )
-            device_info_from_sensors = device_info_from_sensors.filter(
-                polars.col("DeviceID_Coris").is_duplicated().not_()
-            )
+            
+            # Keep only the first occurrence of each DeviceID to maintain consistency
+            device_info_from_sensors = device_info_from_sensors.group_by("DeviceID").first()
+        else:
+            # If all mappings are consistent, we can still have multiple rows per DeviceID (for different sensor types)
+            # Just keep one representative row per DeviceID since Building/Room/CardinalDirection should be the same
+            device_info_from_sensors = device_info_from_sensors.group_by("DeviceID").first()
 
         # Device Info.
         devices = polars.read_parquet(
             f"{self.data_path}/sensor_readings.parquet",
-            columns=["DeviceID_Coris", "DeviceName"],
+            columns=["DeviceID", "DeviceName"],
         ).unique()
         devices = devices.join(
-            device_info_from_sensors, how="left", on="DeviceID_Coris"
+            device_info_from_sensors, how="left", on="DeviceID"
         ).sort(["BuildingID", "Room", "DeviceName"])
         devices = self.relocate(
             devices,
@@ -1539,7 +1583,7 @@ class EnvironmentData:
         )
 
         sensor_readings_daily = (
-            sensor_readings.group_by(["date", "SensorID_Coris"])
+            sensor_readings.group_by(["date", "SensorID"])
             .agg(
                 [
                     polars.len().alias("row_count"),
@@ -1548,7 +1592,7 @@ class EnvironmentData:
                     polars.col(sumcols).max().name.suffix("_max"),
                 ]
             )
-            .sort(["date", "SensorID_Coris"])
+            .sort(["date", "SensorID"])
         )
 
         sensor_readings_daily.write_parquet(
@@ -1569,7 +1613,7 @@ class EnvironmentData:
         )
 
         device_readings_daily = (
-            device_readings.group_by(["date", "DeviceID_Coris"])
+            device_readings.group_by(["date", "DeviceID"])
             .agg(
                 [
                     polars.len().alias("row_count"),
@@ -1578,7 +1622,7 @@ class EnvironmentData:
                     polars.col(sumcols).max().name.suffix("_max"),
                 ]
             )
-            .sort(["date", "DeviceID_Coris"])
+            .sort(["date", "DeviceID"])
         )
 
         device_readings_daily.write_parquet(

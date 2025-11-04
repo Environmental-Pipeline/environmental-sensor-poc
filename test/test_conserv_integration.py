@@ -105,7 +105,7 @@ class TestConservSchemaTransformation(unittest.TestCase):
     def setUp(self):
         """Set up test environment."""
         # Create a minimal EnvironmentData instance for testing
-        with patch('EnvironmentData.EnvironmentData.get_sensors'), \
+        with patch('EnvironmentData.EnvironmentData.initialize_database'), \
              patch('EnvironmentData.EnvironmentData.update_cron_status'), \
              patch('builtins.open'), \
              patch('os.path.exists'):
@@ -152,8 +152,8 @@ class TestConservSchemaTransformation(unittest.TestCase):
         # Check required columns exist
         required_columns = [
             'SensorReadingF', 'SensorReadingRh', 'SensorReadingUTC', 
-            'QueryUTC', 'SensorID_Conserv', 'SensorName', 'source',
-            'SensorID_Coris', 'DeviceID_Coris', 'DeviceName', 'SensorType',
+            'QueryUTC', 'SensorID', 'SensorName', 'source',
+            'DeviceID', 'DeviceName', 'SensorType',
             'customer_id'
         ]
         
@@ -181,11 +181,15 @@ class TestConservSchemaTransformation(unittest.TestCase):
         
         transformed = self.env_data._transform_conserv_to_coris_schema(conserv_data, 1750162500)
         
-        # Check that Coris-specific columns are null
-        self.assertTrue(transformed['SensorID_Coris'].is_null().all())
-        self.assertTrue(transformed['DeviceID_Coris'].is_null().all())
-        self.assertTrue(transformed['DeviceName'].is_null().all())
-        self.assertTrue(transformed['SensorType'].is_null().all())
+        # Check that consolidated SensorID uses conserv prefix
+        sensor_ids = transformed['SensorID'].to_list()
+        for sensor_id in sensor_ids:
+            self.assertTrue(sensor_id.startswith('conserv:'), f"SensorID should start with 'conserv:': {sensor_id}")
+        
+        # Check that DeviceID uses conserv prefix  
+        device_ids = transformed['DeviceID'].drop_nulls().to_list()
+        for device_id in device_ids:
+            self.assertTrue(device_id.startswith('conserv:'), f"DeviceID should start with 'conserv:': {device_id}")
 
 
 class TestDataMerging(unittest.TestCase):
@@ -195,8 +199,8 @@ class TestDataMerging(unittest.TestCase):
         """Test that merged dataframe includes all required fields."""
         # Create mock Coris data with proper schema
         coris_data = polars.DataFrame({
-            'SensorID_Coris': [1, 2],
-            'SensorID_Conserv': [None, None],
+            'SensorID': ['coris:1', 'coris:2'],
+            'DeviceID': ['coris:1', 'coris:2'], 
             'customer_id': [None, None],
             'source': ['coris', 'coris'],
             'SensorReadingUTC': [1750162000, 1750162300],
@@ -205,15 +209,15 @@ class TestDataMerging(unittest.TestCase):
             'SensorReadingRh': [65.0, 67.0],
             'SensorName': ['CorisTemp1', 'CorisTemp2']
         }).with_columns([
-            polars.col('SensorID_Coris').cast(polars.String),
-            polars.col('SensorID_Conserv').cast(polars.String),
+            polars.col('SensorID').cast(polars.String),
+            polars.col('DeviceID').cast(polars.String),
             polars.col('customer_id').cast(polars.Int32)
         ])
         
         # Create mock Conserv data with compatible schema
         conserv_data = polars.DataFrame({
-            'SensorID_Coris': [None, None],
-            'SensorID_Conserv': ['ConservSensor1', 'ConservSensor2'],
+            'SensorID': ['conserv:1545:ConservSensor1', 'conserv:1545:ConservSensor2'],
+            'DeviceID': ['conserv:1545:Device1', 'conserv:1545:Device2'],
             'customer_id': [1545, 1545],
             'source': ['conserv', 'conserv'],
             'SensorReadingUTC': [1750162100, 1750162400],
@@ -222,8 +226,8 @@ class TestDataMerging(unittest.TestCase):
             'SensorReadingRh': [60.2, 62.8],
             'SensorName': ['ConservTemp1', 'ConservTemp2']
         }).with_columns([
-            polars.col('SensorID_Coris').cast(polars.String),
-            polars.col('SensorID_Conserv').cast(polars.String),
+            polars.col('SensorID').cast(polars.String),
+            polars.col('DeviceID').cast(polars.String),
             polars.col('customer_id').cast(polars.Int32)
         ])
         
@@ -239,22 +243,24 @@ class TestDataMerging(unittest.TestCase):
         sources = set(merged['source'].unique().to_list())
         self.assertEqual(sources, {'coris', 'conserv'})
         
-        # Test union logic (one ID populated, other null)
+        # Test consolidated SensorID logic 
         coris_rows = merged.filter(polars.col('source') == 'coris')
         conserv_rows = merged.filter(polars.col('source') == 'conserv')
         
-        # Coris rows should have SensorID_Coris populated, SensorID_Conserv null
-        self.assertTrue(coris_rows['SensorID_Coris'].is_not_null().all())
-        self.assertTrue(coris_rows['SensorID_Conserv'].is_null().all())
+        # Coris rows should have SensorID starting with 'coris:'
+        coris_sensor_ids = coris_rows['SensorID'].to_list()
+        for sensor_id in coris_sensor_ids:
+            self.assertTrue(sensor_id.startswith('coris:'), f"Coris SensorID should start with 'coris:': {sensor_id}")
         
-        # Conserv rows should have SensorID_Conserv populated, SensorID_Coris null
-        self.assertTrue(conserv_rows['SensorID_Conserv'].is_not_null().all())
-        self.assertTrue(conserv_rows['SensorID_Coris'].is_null().all())
+        # Conserv rows should have SensorID starting with 'conserv:'
+        conserv_sensor_ids = conserv_rows['SensorID'].to_list()
+        for sensor_id in conserv_sensor_ids:
+            self.assertTrue(sensor_id.startswith('conserv:'), f"Conserv SensorID should start with 'conserv:': {sensor_id}")
     
     def test_customer_id_mapping(self):
         """Test that customer_id is properly mapped for Conserv data."""
         conserv_data = polars.DataFrame({
-            'SensorID_Conserv': ['Sensor1', 'Sensor2', 'Sensor3'],
+            'SensorID': ['conserv:1545:Sensor1', 'conserv:333:Sensor2', 'conserv:2671:Sensor3'],
             'customer_id': [1545, 333, 2671],
             'source': ['conserv', 'conserv', 'conserv'],
             'SensorReadingF': [70.0, 71.0, 72.0],

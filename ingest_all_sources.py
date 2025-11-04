@@ -5,6 +5,7 @@ Unified Data Ingestion Script for Environmental Sensor Data
 This script integrates data from multiple sources:
 - Coris API (existing functionality)
 - Conserv API (5 customer tenants)
+- Hobolink API (additional sensor data source)
 
 Designed to run in Docker container, completing in <15 minutes.
 """
@@ -14,6 +15,7 @@ import sys
 import logging
 import datetime
 import traceback
+import shutil
 from EnvironmentData import EnvironmentData
 
 
@@ -48,10 +50,35 @@ def read_env_variable(var_name, default=None):
     return os.getenv(var_name, default)
 
 
+def clear_data_folder():
+    """Clear the data folder and logs to ensure fresh start with consolidated schema."""
+    
+    data_dir = "./data"
+    if os.path.exists(data_dir):
+        # Clear everything including logs
+        for item in os.listdir(data_dir):
+            item_path = os.path.join(data_dir, item)
+            if os.path.isdir(item_path):
+                shutil.rmtree(item_path)
+            else:
+                os.remove(item_path)
+        print(f"Cleared data directory: {data_dir}")
+    else:
+        os.makedirs(data_dir, exist_ok=True)
+        print(f"Created data directory: {data_dir}")
+
+
 def main():
     """Main ingestion workflow."""
-    logger = setup_logging()
     start_time = datetime.datetime.now()
+
+    # Clear data folder BEFORE setting up logging to avoid file locks
+    print("Clearing data folder for fresh start...")
+    clear_data_folder()
+    print("Data folder cleared successfully")
+    
+    # Now set up logging after clearing
+    logger = setup_logging()
 
     try:
         logger.info("Starting ingest_all_sources.py")
@@ -74,6 +101,9 @@ def main():
         conserv_enabled = (
             read_env_variable("CONSERV_ENABLED", "False").lower() == "true"
         )
+        hobolink_enabled = (
+            read_env_variable("HOBOLINK_ENABLED", "False").lower() == "true"
+        )
         testing = read_env_variable("TESTING", "False").lower() == "true"
         run_window_hours = int(read_env_variable("RUN_WINDOW_HOURS", "24"))
 
@@ -87,11 +117,16 @@ def main():
             if key:
                 conserv_keys_found.append(customer_id)
 
+        # Debug Hobolink API key availability
+        hobolink_key_found = read_env_variable("HOBOLINK_API_KEY") is not None
+
         # logger.info(f"  CATS_USER_ID: {cats_user_id}")
         # logger.info(f"  CONSERV_ENABLED: {conserv_enabled}")
+        # logger.info(f"  HOBOLINK_ENABLED: {hobolink_enabled}")
         # logger.info(f"  TESTING: {testing}")
         # logger.info(f"  RUN_WINDOW_HOURS: {run_window_hours}")
         # logger.info(f"  Conserv API keys found for customers: {conserv_keys_found}")
+        # logger.info(f"  Hobolink API key found: {hobolink_key_found}")
 
         # Critical validation
         if coris_enabled and not coris_key_found:
@@ -110,12 +145,20 @@ def main():
         elif not conserv_enabled:
             logger.info("Conserv integration is disabled.")
 
+        if hobolink_enabled and not hobolink_key_found:
+            logger.error("HOBOLINK_ENABLED=True but HOBOLINK_API_KEY not found!")
+        elif hobolink_enabled:
+            logger.info("Hobolink integration enabled")
+        elif not hobolink_enabled:
+            logger.info("Hobolink integration is disabled.")
+
         env_data = EnvironmentData(
             CatsUserID=cats_user_id,
             out_of_scope=['-80', 'Cryo tank', 'Water'],
             data_path="./data",
             coris_enabled=coris_enabled,
             conserv_enabled=conserv_enabled,
+            hobolink_enabled=hobolink_enabled,
             testing=testing,
         )
 
@@ -130,7 +173,7 @@ def main():
         # ============ PULL CURRENT READINGS ============
         logger.info("Pulling current readings from all sources")
 
-        # This method now handles both Coris and Conserv APIs
+        # This method now handles Coris, Conserv, and Hobolink APIs
         env_data.get_current_readings()
 
         logger.info("Current readings completed successfully")
