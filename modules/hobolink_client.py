@@ -271,7 +271,7 @@ class HobolinkClient:
                         polars.lit(measurement_type).alias("SensorType"),
                         polars.lit(units).alias("SensorUnits"),
                         polars.lit(current_utc).alias("QueryUTC"),
-                        polars.lit("hobolink").alias("source"),
+                        polars.lit("Hobolink").alias("source"),
                         
                         # Add schema columns (DeviceID will be added from metadata if available)
                         polars.lit(None, dtype=polars.String).alias("DeviceID"),
@@ -438,7 +438,7 @@ class HobolinkClient:
         # Add standardized schema columns
         result = result.with_columns([
             polars.lit(current_utc).alias("QueryUTC"),
-            polars.lit("hobolink").alias("source"),
+            polars.lit("Hobolink").alias("source"),
             polars.lit(None, dtype=polars.Int32).alias("customer_id"),
         ])
         

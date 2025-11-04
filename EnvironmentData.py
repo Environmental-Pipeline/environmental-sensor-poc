@@ -294,6 +294,24 @@ class EnvironmentData:
                 "No data from any source - initialization failed", raise_exception=True
             )
 
+        # Rename columns to match desired schema
+        column_renames = {}
+        if "source" in dt.columns:
+            column_renames["source"] = "Source"
+        if "customer_id" in dt.columns:
+            column_renames["customer_id"] = "ConservCustomerID"
+        
+        if column_renames:
+            dt = dt.rename(column_renames)
+
+        # Remove ConservCustomerID column if Conserv is not enabled
+        if not self.conserv_enabled and "ConservCustomerID" in dt.columns:
+            dt = dt.drop("ConservCustomerID")
+
+        # Apply standard column ordering
+        desired_columns = self.get_sensor_readings_column_order()
+        dt = self.relocate(dt, desired_columns)
+
         # Write the database file.
         dt.write_parquet(f"{self.data_path}/sensor_readings.parquet")
         self.logger.info(
@@ -327,10 +345,9 @@ class EnvironmentData:
 
         # Define the master schema based on existing parquet structure
         master_schema = {
-            "source": polars.String,
+            "Source": polars.String,
             "SensorID": polars.String,
             "DeviceID": polars.String,
-            "customer_id": polars.Int32,
             "QueryUTC": polars.Int32,
             "SensorReadingUTC": polars.Int64,
             "SensorReadingUTC_SecondsFromPrior": polars.Int64,
@@ -385,6 +402,10 @@ class EnvironmentData:
             "SensorEventCount": polars.Int64,
             "SensorState": polars.String,
         }
+
+        # Add ConservCustomerID to schema only if Conserv is enabled
+        if self.conserv_enabled:
+            master_schema["ConservCustomerID"] = polars.Int32
 
         return master_schema
 
@@ -543,10 +564,7 @@ class EnvironmentData:
                 polars.col("Sensor Name").alias("SensorName"),
             ]).drop("Sensor Name")
 
-        # 5. Add source identifier and query timestamp
-        df = df.with_columns(polars.lit("conserv").alias("source"))
-
-        # 6. Generate DeviceID and add null columns for schema compatibility
+        # 5. Generate DeviceID and add null columns for schema compatibility
         df = df.with_columns(polars.lit(query_utc).alias("QueryUTC"))
 
         # 7. Ensure customer_id column exists
@@ -884,17 +902,25 @@ class EnvironmentData:
                 )
             )
 
-        # Move the most important columns to the front
-        important_columns = [
-            "source",
-            "SensorID",
-            "DeviceID",
-            "customer_id",
-            "QueryUTC",
-            "SensorReadingUTC",
-            "SensorReadingUTC_SecondsFromPrior",
-        ] + list(self.acceptable_range.keys())
-        dt = self.relocate(dt, important_columns)
+        # Rename columns to match desired schema
+        column_renames = {}
+        if "source" in dt.columns:
+            column_renames["source"] = "Source"
+        if "customer_id" in dt.columns:
+            column_renames["customer_id"] = "ConservCustomerID"
+        
+        if column_renames:
+            dt = dt.rename(column_renames)
+
+        # Remove ConservCustomerID column if Conserv is not enabled
+        if not self.conserv_enabled and "ConservCustomerID" in dt.columns:
+            dt = dt.drop("ConservCustomerID")
+
+        # Apply standard column ordering
+        desired_columns = self.get_sensor_readings_column_order()
+        # Include additional columns that exist but aren't in the standard order
+        additional_columns = ["QueryUTC", "SensorReadingUTC_SecondsFromPrior"]
+        dt = self.relocate(dt, desired_columns + additional_columns)
 
         # Write the file.
         dt.write_parquet(f"{self.data_path}/sensor_readings.parquet")
@@ -1046,9 +1072,12 @@ class EnvironmentData:
             "DeviceID": polars.String,  # Consolidated device ID field with source prefixes
             "SensorReadingUTC": polars.Int64,
             "QueryUTC": polars.Int32,  # Fixed: Match parquet file
-            "customer_id": polars.Int32,  # Fixed: Match parquet file
-            "source": polars.String,  # Fixed: Use String not Utf8
+            "Source": polars.String,  # Fixed: Use String not Utf8 (renamed from source)
         }
+        
+        # Add ConservCustomerID to dtypes only if Conserv is enabled
+        if self.conserv_enabled:
+            dtypes["ConservCustomerID"] = polars.Int32
         for dtype in dtypes:
             if dtype in sensors.columns:
                 sensors = sensors.with_columns(polars.col(dtype).cast(dtypes[dtype]))
@@ -1075,6 +1104,36 @@ class EnvironmentData:
         self.validate_sensors(sensors=sensors, historical=historical, step=step)
 
         return sensors
+
+    def get_sensor_readings_column_order(self) -> list:
+        """
+        Get the standard column order for sensor_readings.parquet.
+        
+        Returns
+        -------
+        list[str] : Ordered list of column names
+        """
+        # Base columns in the desired order
+        columns = [
+            "SensorReadingUTC",
+            "Source",  # Renamed from 'source' 
+        ]
+        
+        # Add ConservCustomerID only if Conserv is enabled  
+        if self.conserv_enabled:
+            columns.append("ConservCustomerID")  # Renamed from 'customer_id'
+            
+        columns.extend([
+            "DeviceID", 
+            "DeviceName",
+            "SensorID", 
+            "SensorName", 
+            "SensorType",
+            "SensorReadingF", 
+            "SensorReadingRh"
+        ])
+        
+        return columns
 
     def relocate(self, data: polars.DataFrame, columns: list) -> polars.DataFrame:
         """
@@ -1310,16 +1369,19 @@ class EnvironmentData:
         }
 
         # Sensor Info.
+        columns_to_read = [
+            "SensorName",
+            "SensorID",
+            "DeviceID",
+            "SensorType",
+            "Source",
+        ]
+        if self.conserv_enabled:
+            columns_to_read.append("ConservCustomerID")
+            
         sensors_data = polars.read_parquet(
             f"{self.data_path}/sensor_readings.parquet",
-            columns=[
-                "SensorName",
-                "SensorID",
-                "DeviceID",
-                "SensorType",
-                "source",
-                "customer_id",
-            ],
+            columns=columns_to_read,
         )
         sensors_data = sensors_data.unique().to_dicts()
         sensors = []

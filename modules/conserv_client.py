@@ -374,7 +374,7 @@ class ConservAPIClient:
             df = df.with_columns(
                 [
                     polars.lit(customer_id).alias("customer_id"),
-                    polars.lit("conserv").alias("source"),
+                    polars.lit("Conserv").alias("source"),
                 ]
             )
 
