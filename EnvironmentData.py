@@ -256,11 +256,7 @@ class EnvironmentData:
                 )
 
                 if conserv_data is not None and not conserv_data.is_empty():
-                    # Transform Conserv data to match Coris schema
-                    conserv_data = self._transform_conserv_to_coris_schema(
-                        conserv_data, current_utc
-                    )
-
+                    # Conserv data is already transformed by modules/conserv_client.py
                     # Clean and validate Conserv data
                     conserv_data = self.clean_validate_sensors(
                         sensors=conserv_data, step="initialize_database_conserv"
@@ -493,126 +489,6 @@ class EnvironmentData:
 
         return df
 
-    def _transform_conserv_to_coris_schema(
-        self, conserv_data: polars.DataFrame, query_utc: int
-    ) -> polars.DataFrame:
-        """
-        Transform Conserv API data to standardized schema.
-
-        Parameters
-        ----------
-        conserv_data : polars.DataFrame
-            Raw data from Conserv API with columns: Sensor Name, Time, Temperature (°C), Humidity (%), customer_id
-        query_utc : int
-            UTC timestamp when the query was made
-
-        Returns
-        -------
-        polars.DataFrame
-            Data transformed to match standardized schema
-        """
-
-        self.logger.info("Transforming Conserv data to standardized schema")
-
-        # DEBUG: Log incoming data types
-        self.logger.info(
-            f"INCOMING Conserv data types: {dict(zip(conserv_data.columns, [str(dtype) for dtype in conserv_data.dtypes]))}"
-        )
-        self.logger.info(f"INCOMING Conserv data shape: {conserv_data.shape}")
-        if not conserv_data.is_empty():
-            self.logger.info(
-                f"INCOMING Conservv sample data: {conserv_data.head(1).to_dicts()}"
-            )
-
-        # Create a copy to avoid modifying the original
-        df = conserv_data.clone()
-
-        # ============ COLUMN TRANSFORMATIONS ============
-
-        # 1. Temperature: Convert °C to °F
-        if "Temperature (°C)" in df.columns:
-            df = df.with_columns(
-                ((polars.col("Temperature (°C)") * 9 / 5) + 32).alias("SensorReadingF")
-            ).drop("Temperature (°C)")
-
-        # 2. Humidity: Map directly
-        if "Humidity (%)" in df.columns:
-            df = df.rename({"Humidity (%)": "SensorReadingRh"})
-
-        # 3. Time: Map to SensorReadingUTC
-        if "Time" in df.columns:
-            # Handle string time if needed
-            if df["Time"].dtype == polars.String:
-                df = df.with_columns(
-                    polars.col("Time")
-                    .str.strptime(polars.Datetime, "%Y-%m-%d %H:%M:%S%.f")
-                    .dt.timestamp("s")
-                    .alias("SensorReadingUTC")
-                ).drop("Time")
-            else:
-                df = df.rename({"Time": "SensorReadingUTC"})
-
-        # 4. Generate SensorID for Conserv
-        if "Sensor Name" in df.columns:
-            df = df.with_columns([
-                polars.concat_str([
-                    polars.lit("conserv:"),
-                    polars.col("customer_id").cast(polars.String),
-                    polars.lit(":"),
-                    polars.col("Sensor Name")
-                ]).alias("SensorID"),
-                polars.col("Sensor Name").alias("SensorName"),
-            ]).drop("Sensor Name")
-
-        # 5. Generate DeviceID and add null columns for schema compatibility
-        df = df.with_columns(polars.lit(query_utc).alias("QueryUTC"))
-
-        # 7. Ensure customer_id column exists
-        df = df.with_columns(
-            [
-                polars.concat_str([
-                    polars.lit("conserv:"),
-                    polars.col("customer_id").cast(polars.String),
-                    polars.lit(":device")
-                ]).alias("DeviceID"),
-                polars.lit(None, dtype=polars.String).alias("DeviceName"),
-                polars.lit(None, dtype=polars.String).alias("SensorType"),
-            ]
-        )
-
-        # 8. Final schema enforcement
-        if "customer_id" not in df.columns:
-            df = df.with_columns(
-                polars.lit(None, dtype=polars.Int32).alias("customer_id")
-            )
-
-        # DEBUG: Log transformed data types BEFORE final return
-        self.logger.info(
-            f"TRANSFORMED Conserv data types: {dict(zip(df.columns, [str(dtype) for dtype in df.dtypes]))}"
-        )
-
-        # Final schema enforcement
-        df = df.with_columns(
-            [
-                polars.col("SensorReadingF")
-                .cast(polars.Float32)
-                .alias("SensorReadingF"),
-                polars.col("SensorReadingRh")
-                .cast(polars.Float32)
-                .alias("SensorReadingRh"),
-                polars.col("QueryUTC").cast(polars.Int32).alias("QueryUTC"),
-                polars.col("SensorID").cast(polars.String).alias("SensorID"),
-                polars.col("DeviceID").cast(polars.String).alias("DeviceID"),
-                polars.col("customer_id").cast(polars.Int32).alias("customer_id"),
-            ]
-        )
-
-        self.logger.info(
-            f"Conserv transformation complete: {df.shape[0]} records"
-        )
-
-        return df
-
     def get_current_readings(self) -> dict:
         """
         Get current readings from the API. Validate the data. Send alerts.
@@ -691,12 +567,10 @@ class EnvironmentData:
                 )
 
                 if conserv_data is not None and not conserv_data.is_empty():
-                    self.logger.info(f"Raw Conserv data shape: {conserv_data.shape}")
+                    self.logger.info(f"Conserv data shape: {conserv_data.shape}")
 
-                    # Transform Conserv data to match Coris schema
-                    conserv_sensors = self._transform_conserv_to_coris_schema(
-                        conserv_data, current_utc
-                    )
+                    # Conserv data is already transformed by modules/conserv_client.py
+                    conserv_sensors = conserv_data
 
                     if conserv_sensors is not None and not conserv_sensors.is_empty():
                         # Clean and validate Conserv data

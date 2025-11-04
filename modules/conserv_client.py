@@ -378,6 +378,10 @@ class ConservAPIClient:
                 ]
             )
 
+            # Transform to standardized schema
+            current_utc = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
+            df = self._transform_to_standard_schema(df, customer_id, current_utc)
+
             self.logger.info(
                 f"Successfully exported {df.shape[0]} rows for customer {customer_id}"
             )
@@ -785,6 +789,103 @@ class ConservAPIClient:
             self.logger.info(
                 f"CONSERV MASTER SCHEMA [{step_name}]: No conversions needed, schema already correct"
             )
+
+        return df
+
+    def _transform_to_standard_schema(
+        self, df: polars.DataFrame, customer_id: int, query_utc: int = None
+    ) -> polars.DataFrame:
+        """
+        Transform Conserv API data to standardized schema.
+
+        Parameters
+        ----------
+        df : polars.DataFrame
+            Raw Conserv data with columns: Sensor Name, Time, Temperature (°C), Humidity (%), customer_id, source
+        customer_id : int
+            Customer ID for generating SensorID and DeviceID
+
+        Returns
+        -------
+        polars.DataFrame
+            Data transformed to match standardized schema
+        """
+        if self.logger:
+            self.logger.info("Transforming Conserv data to standardized schema")
+
+        # Create a copy to avoid modifying the original
+        df = df.clone()
+
+        # ============ COLUMN TRANSFORMATIONS ============
+
+        # 1. Temperature: Convert °C to °F
+        if "Temperature (°C)" in df.columns:
+            df = df.with_columns(
+                ((polars.col("Temperature (°C)") * 9 / 5) + 32).alias("SensorReadingF")
+            ).drop("Temperature (°C)")
+
+        # 2. Humidity: Map directly
+        if "Humidity (%)" in df.columns:
+            df = df.rename({"Humidity (%)": "SensorReadingRh"})
+
+        # 3. Time: Map to SensorReadingUTC
+        if "Time" in df.columns:
+            # Handle string time if needed
+            if df["Time"].dtype == polars.String:
+                df = df.with_columns(
+                    polars.col("Time")
+                    .str.strptime(polars.Datetime, "%Y-%m-%d %H:%M:%S%.f")
+                    .dt.timestamp("s")
+                    .alias("SensorReadingUTC")
+                ).drop("Time")
+            else:
+                df = df.rename({"Time": "SensorReadingUTC"})
+
+        # 4. Generate SensorID for Conserv
+        if "Sensor Name" in df.columns:
+            df = df.with_columns([
+                polars.concat_str([
+                    polars.lit("conserv:"),
+                    polars.col("customer_id").cast(polars.String),
+                    polars.lit(":"),
+                    polars.col("Sensor Name")
+                ]).alias("SensorID"),
+                polars.col("Sensor Name").alias("SensorName"),
+            ]).drop("Sensor Name")
+
+        # 5. Generate DeviceID and add null columns for schema compatibility
+        df = df.with_columns([
+            polars.concat_str([
+                polars.lit("conserv:"),
+                polars.col("customer_id").cast(polars.String),
+                polars.lit(":device")
+            ]).alias("DeviceID"),
+            polars.lit(None, dtype=polars.String).alias("DeviceName"),
+            polars.lit(None, dtype=polars.String).alias("SensorType"),
+        ])
+
+        # 6. Add QueryUTC if provided
+        if query_utc is not None:
+            df = df.with_columns(polars.lit(query_utc).alias("QueryUTC"))
+
+        # 7. Final schema enforcement for common columns
+        cast_columns = [
+            polars.col("SensorReadingF").cast(polars.Float32).alias("SensorReadingF"),
+            polars.col("SensorReadingRh").cast(polars.Float32).alias("SensorReadingRh"),
+            polars.col("SensorReadingUTC").cast(polars.Int64).alias("SensorReadingUTC"),
+            polars.col("SensorID").cast(polars.String).alias("SensorID"),
+            polars.col("DeviceID").cast(polars.String).alias("DeviceID"),
+            polars.col("customer_id").cast(polars.Int32).alias("customer_id"),
+        ]
+        
+        # Add QueryUTC casting if column exists
+        if "QueryUTC" in df.columns:
+            cast_columns.append(polars.col("QueryUTC").cast(polars.Int32).alias("QueryUTC"))
+            
+        df = df.with_columns(cast_columns)
+
+        if self.logger:
+            self.logger.info(f"Conserv transformation complete: {df.shape[0]} records")
 
         return df
 
