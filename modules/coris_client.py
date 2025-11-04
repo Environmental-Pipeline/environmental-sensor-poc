@@ -246,7 +246,7 @@ class CorisClient:
                     testing_sensor_ids.extend(sensor_ids)
             
             # Query API for each sensor
-            # pbar = tqdm.tqdm(total=len(sensor_ids), desc=f"Gather readings: {reading_type}")
+            pbar = tqdm.tqdm(total=len(sensor_ids), desc=f"Gather readings: {reading_type}")
             
             for sensor_id in sensor_ids:
                 data = self.get_historical_data(
@@ -260,9 +260,9 @@ class CorisClient:
                 if not data.is_empty():
                     readings.append(data)
                 
-                # pbar.update(1)
+                pbar.update(1)
             
-            # pbar.close()
+            pbar.close()
         
         return readings
     

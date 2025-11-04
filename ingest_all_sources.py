@@ -68,11 +68,17 @@ def main():
 
         # Required configuration
         cats_user_id = int(read_env_variable("CATS_USER_ID"))
+        coris_enabled = (
+            read_env_variable("CORIS_ENABLED", "True").lower() == "true"
+        )
         conserv_enabled = (
             read_env_variable("CONSERV_ENABLED", "False").lower() == "true"
         )
         testing = read_env_variable("TESTING", "False").lower() == "true"
         run_window_hours = int(read_env_variable("RUN_WINDOW_HOURS", "24"))
+
+        # Debug Coris API key availability
+        coris_key_found = read_env_variable("CORIS_API_KEY") is not None
 
         # Debug Conserv API keys availability
         conserv_keys_found = []
@@ -88,6 +94,13 @@ def main():
         # logger.info(f"  Conserv API keys found for customers: {conserv_keys_found}")
 
         # Critical validation
+        if coris_enabled and not coris_key_found:
+            logger.error("CORIS_ENABLED=True but CORIS_API_KEY not found!")
+        elif coris_enabled:
+            logger.info("Coris integration enabled")
+        elif not coris_enabled:
+            logger.info("Coris integration is disabled.")
+
         if conserv_enabled and not conserv_keys_found:
             logger.error("CONSERV_ENABLED=True but no Conserv API keys found!")
         elif conserv_enabled:
@@ -101,6 +114,7 @@ def main():
             CatsUserID=cats_user_id,
             out_of_scope=['-80', 'Cryo tank', 'Water'],
             data_path="./data",
+            coris_enabled=coris_enabled,
             conserv_enabled=conserv_enabled,
             testing=testing,
         )

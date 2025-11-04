@@ -19,6 +19,7 @@ class EnvironmentData:
         days_back: int = int(365 * 2),
         out_of_scope: list = [],
         testing: bool = False,
+        coris_enabled: bool = False,
         conserv_enabled: bool = False,
     ):
         """
@@ -43,6 +44,9 @@ class EnvironmentData:
         testing : bool, default=False
             Create a class in "testing mode". Only a few sensors will be included so that tests can run quickly and use fewer API calls.
 
+        coris_enabled : bool, default=True
+            Enable Coris API integration for primary sensor data source.
+
         conserv_enabled : bool, default=False
             Enable Conserv API integration for additional sensor data sources.
 
@@ -57,6 +61,7 @@ class EnvironmentData:
         self.testing = testing
         self.testing_sensor_ids = []
         self.out_of_scope = out_of_scope
+        self.coris_enabled = coris_enabled
         self.conserv_enabled = conserv_enabled
 
         # Create the data folder.
@@ -95,13 +100,15 @@ class EnvironmentData:
         else:
             self.update_cron_status("not-initialized")
 
-        # Initialize Coris API client
-        try:
-            self.coris_client = create_coris_client_from_env(self.logger)
-            # self.logger.info("Coris API client initialized successfully")
-        except Exception as e:
-            self.logger.error(f"Failed to initialize Coris client: {e}")
-            raise Exception(f"Coris API client is required but failed to initialize: {e}")
+        # Initialize Coris API client if enabled
+        self.coris_client = None
+        if self.coris_enabled:
+            try:
+                self.coris_client = create_coris_client_from_env(self.logger)
+                # self.logger.info("Coris API client initialized successfully")
+            except Exception as e:
+                self.logger.warning(f"Failed to initialize Coris client: {e}")
+                self.coris_enabled = False
 
         # Initialize Conserv API client if enabled
         self.conserv_client = None
@@ -577,24 +584,32 @@ class EnvironmentData:
         # self.logger.info(f"get_current_readings: {current_utc}")
 
         # ============ CORIS DATA PROCESSING (USING CLIENT) ============
-        # Get the current status from the Coris API using the client
-        coris_sensors = self.coris_client.get_current_readings(
-            out_of_scope=self.out_of_scope,
-            testing=self.testing,
-            testing_sensor_ids=self.testing_sensor_ids
-        )
-        
-        # Convert data types to match expected schema before validation
-        if not coris_sensors.is_empty():
-            for reading in self.acceptable_range:
-                if reading in coris_sensors.columns:
-                    coris_sensors = coris_sensors.with_columns(
-                        polars.col(reading).cast(polars.Float32)
-                    )
-        
-        self.validate_sensors(
-            sensors=coris_sensors, utc=current_utc, step="get_current_readings_coris"
-        )
+        coris_sensors = None
+        if self.coris_enabled and self.coris_client:
+            self.logger.info("Fetching current Coris data")
+            
+            # Get the current status from the Coris API using the client
+            coris_sensors = self.coris_client.get_current_readings(
+                out_of_scope=self.out_of_scope,
+                testing=self.testing,
+                testing_sensor_ids=self.testing_sensor_ids
+            )
+            
+            # Convert data types to match expected schema before validation
+            if not coris_sensors.is_empty():
+                for reading in self.acceptable_range:
+                    if reading in coris_sensors.columns:
+                        coris_sensors = coris_sensors.with_columns(
+                            polars.col(reading).cast(polars.Float32)
+                        )
+            
+            self.validate_sensors(
+                sensors=coris_sensors, utc=current_utc, step="get_current_readings_coris"
+            )
+        else:
+            # Create empty DataFrame with required schema when Coris is disabled
+            coris_sensors = polars.DataFrame()
+            self.logger.info("Coris integration is disabled")
 
         # DEBUG: Log Coris schema types
         # self.logger.info(
@@ -672,32 +687,45 @@ class EnvironmentData:
                 # Continue with Coris data only - don't fail the entire process
 
         # ============ COMBINE ALL DATA SOURCES WITH SCHEMA GATE ============
-        # Apply schema enforcement before merging
-        coris_sensors = self.enforce_schema(coris_sensors, "Coris_Current_Readings")
+        # Prepare list of valid data sources for merging
+        data_sources = []
+        source_info = []
+
+        # Add Coris data if enabled and available
+        if coris_sensors is not None and not coris_sensors.is_empty():
+            coris_sensors = self.enforce_schema(coris_sensors, "Coris_Current_Readings")
+            data_sources.append(coris_sensors)
+            source_info.append(f"CORIS: {coris_sensors.shape[0]} rows")
 
         if conserv_sensors is not None and not conserv_sensors.is_empty():
             conserv_sensors = self.enforce_schema(
                 conserv_sensors, "Conserv_Current_Readings"
             )
-
+            data_sources.append(conserv_sensors)
+            source_info.append(f"CONSERV: {conserv_sensors.shape[0]} rows")
+        # Log merging information and combine data sources
+        if len(data_sources) > 1:
             self.logger.info("MERGING DATA SOURCES:")
-            self.logger.info(f"  CORIS: {coris_sensors.shape[0]} rows")
-            self.logger.info(f"  CONSERV: {conserv_sensors.shape[0]} rows")
+            for info in source_info:
+                self.logger.info(f"  {info}")
 
             try:
-                all_sensors = polars.concat(
-                    [coris_sensors, conserv_sensors], how="diagonal"
-                )
+                all_sensors = polars.concat(data_sources, how="diagonal")
+                total_rows = sum(df.shape[0] for df in data_sources)
                 self.logger.info(
-                    f"MERGE SUCCESS: Combined current readings: {coris_sensors.shape[0]} Coris + {conserv_sensors.shape[0]} Conserv = {all_sensors.shape[0]} total"
+                    f"MERGE SUCCESS: Combined current readings from {len(data_sources)} sources = {all_sensors.shape[0]} total (expected: {total_rows})"
                 )
             except Exception as merge_error:
                 self.logger.error(f"MERGE FAILED even with schema gate: {merge_error}")
-                self.logger.error("Falling back to Coris-only data")
-                all_sensors = coris_sensors
+                self.logger.error("Falling back to first available data source")
+                all_sensors = data_sources[0] if data_sources else polars.DataFrame()
+        elif len(data_sources) == 1:
+            all_sensors = data_sources[0]
+            self.logger.info(f"Current readings: {source_info[0]} only")
         else:
-            all_sensors = coris_sensors
-            self.logger.info(f"Current readings: {all_sensors.shape[0]} Coris only")
+            # No data sources available
+            all_sensors = polars.DataFrame()
+            self.logger.warning("No data sources enabled or available - creating empty dataset")
 
         # ============ PROCESS ALERTS AND SAVE ============
         # Process alerts on combined data
