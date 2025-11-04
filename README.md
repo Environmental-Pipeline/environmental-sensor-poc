@@ -1,5 +1,12 @@
 # Environmental Sensor Proof-of-Concept
 
+## Common Commands
+
+```bash
+.venv/Scripts/activate
+python ingest_all_sources.py
+```
+
 ## Python Setup
 
 You may want to first get the project running in Python, in order to better understand it.

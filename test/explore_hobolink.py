@@ -38,7 +38,7 @@ import argparse
 # Add parent directory to path to import hobolink_client
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from hobolink_client import create_hobolink_client_from_env
+from modules.hobolink_client import create_hobolink_client_from_env
 
 
 def diagnose_api_endpoints_unlimited(client, save_samples: bool = True, all_devices_mode: bool = False):

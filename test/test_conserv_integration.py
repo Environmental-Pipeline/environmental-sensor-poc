@@ -16,7 +16,7 @@ import os
 # Add the parent directory to the path to import our modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from conserv_client import ConservAPIClient, ConservCustomer
+from modules.conserv_client import ConservAPIClient, ConservCustomer
 from EnvironmentData import EnvironmentData
 
 

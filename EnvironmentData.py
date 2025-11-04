@@ -6,8 +6,8 @@ import tqdm
 import logging
 import datetime
 import warnings
-from conserv_client import create_conserv_client_from_env
-from coris_client import create_coris_client_from_env
+from modules.conserv_client import create_conserv_client_from_env
+from modules.coris_client import create_coris_client_from_env
 
 
 class EnvironmentData:

@@ -16,7 +16,7 @@ import polars as pl
 logging.basicConfig(level=logging.WARNING)
 
 try:
-    from hobolink_client import HobolinkClient, create_hobolink_client_from_env
+    from modules.hobolink_client import HobolinkClient, create_hobolink_client_from_env
     HOBOLINK_AVAILABLE = True
 except ImportError as e:
     print(f"Hobolink client not available: {e}")
