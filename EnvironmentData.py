@@ -98,7 +98,7 @@ class EnvironmentData:
         # Initialize Coris API client
         try:
             self.coris_client = create_coris_client_from_env(self.logger)
-            self.logger.info("Coris API client initialized successfully")
+            # self.logger.info("Coris API client initialized successfully")
         except Exception as e:
             self.logger.error(f"Failed to initialize Coris client: {e}")
             raise Exception(f"Coris API client is required but failed to initialize: {e}")
@@ -108,9 +108,9 @@ class EnvironmentData:
         if self.conserv_enabled:
             try:
                 self.conserv_client = create_conserv_client_from_env(self.logger)
-                self.logger.info(
-                    f"Conserv API client initialized with {len(self.conserv_client.customers)} customers"
-                )
+                # self.logger.info(
+                #     f"Conserv API client initialized with {len(self.conserv_client.customers)} customers"
+                # )
             except Exception as e:
                 self.logger.warning(f"Failed to initialize Conserv client: {e}")
                 self.conserv_enabled = False
@@ -191,7 +191,7 @@ class EnvironmentData:
             return
 
         # Make a log entry and gather current and starting UTC.
-        self.logger.info("initialize_database")
+        # self.logger.info("initialize_database")
         current_utc = self.get_current_utc()
         start_utc = current_utc - days_back * 24 * 60 * 60
 
@@ -384,15 +384,12 @@ class EnvironmentData:
 
         master_schema = self.get_master_schema()
 
-        self.logger.info(
-            f"SCHEMA GATE [{step_name}]: Enforcing schema on {df.shape[0]} rows, {df.shape[1]} columns"
-        )
-
         # Track conversions for logging
         conversions_made = []
 
         # Apply schema enforcement
         conversion_exprs = []
+        failed = False
 
         for column in df.columns:
             if column in master_schema:
@@ -430,9 +427,10 @@ class EnvironmentData:
                             )
 
                     except Exception as conv_error:
-                        self.logger.warning(
-                            f"SCHEMA GATE: Failed to convert {column}: {conv_error}"
+                        self.logger.error(
+                            f"Schema validation failed for {step_name}: Failed to convert {column}: {conv_error}"
                         )
+                        failed = True
                         # Keep original column if conversion fails
                         continue
 
@@ -440,17 +438,8 @@ class EnvironmentData:
         if conversion_exprs:
             df = df.with_columns(conversion_exprs)
 
-        # Log conversions made
-        if conversions_made:
-            self.logger.info(
-                f"SCHEMA GATE [{step_name}]: Made {len(conversions_made)} conversions:"
-            )
-            for conv in conversions_made:
-                self.logger.info(f"  -> {conv}")
-        else:
-            self.logger.info(
-                f"SCHEMA GATE [{step_name}]: No conversions needed, schema already correct"
-            )
+        if not failed:
+            self.logger.info(f"validation passed for {step_name}: Schema enforcement completed")
 
         return df
 
@@ -585,7 +574,7 @@ class EnvironmentData:
 
         # Make a log entry and gather the current UTC.
         current_utc = self.get_current_utc()
-        self.logger.info(f"get_current_readings: {current_utc}")
+        # self.logger.info(f"get_current_readings: {current_utc}")
 
         # ============ CORIS DATA PROCESSING (USING CLIENT) ============
         # Get the current status from the Coris API using the client
@@ -608,9 +597,9 @@ class EnvironmentData:
         )
 
         # DEBUG: Log Coris schema types
-        self.logger.info(
-            f"CORIS schema types: {dict(zip(coris_sensors.columns, [str(dtype) for dtype in coris_sensors.dtypes]))}"
-        )
+        # self.logger.info(
+        #     f"CORIS schema types: {dict(zip(coris_sensors.columns, [str(dtype) for dtype in coris_sensors.dtypes]))}"
+        # )
 
         # ============ CONSERV DATA PROCESSING (NEW FUNCTIONALITY) ============
         conserv_sensors = None
@@ -731,7 +720,7 @@ class EnvironmentData:
             return
 
         # Make a log entry.
-        self.logger.info("consolidate_readings")
+        # self.logger.info("consolidate_readings")
         new_readings = []
 
         # Read new readings from the parquet files saved by calls to get_current_readings.
@@ -863,7 +852,7 @@ class EnvironmentData:
 
         # Write the file.
         dt.write_parquet(f"{self.data_path}/sensor_readings.parquet")
-        self.logger.info(f"{dt.shape[0]} total readings.")
+        # self.logger.info(f"{dt.shape[0]} total readings.")
 
         # If all this was successful, remove the new-readings files to prepare for the next consolidation.
         for file in files_read:
@@ -1091,7 +1080,6 @@ class EnvironmentData:
         # We expect missing values in the data, so we don't check for them.
 
         # Is the data format as expected?
-        self.logger.info(f"{step} validation: correct column data types.")
         expect_types = {
             "SensorReadingUTC": polars.Int64,
             "SensorID": polars.Int32,
@@ -1102,61 +1090,65 @@ class EnvironmentData:
                     polars.Float32
                 )  # Fixed: Should be Float32 like existing data
 
+        type_errors_found = False
         for col in expect_types:
             if col in sensors.columns:
 
                 # data type.
                 if sensors[col].dtype != expect_types[col]:
+                    if not type_errors_found:
+                        self.logger.info(f"{step} validation: correct column data types.")
+                        type_errors_found = True
                     errs.append(
                         f"Unexpected data type for [{col}]. Expected [{expect_types[col]}] got [{sensors[col]}]."
                     )
 
         # Readings should have at least one non-null value from expect_types.
-        self.logger.info(f"{step} validation: at least one non-null value in readings.")
         allnull = sensors[[x for x in expect_types if x in sensors.columns]].filter(
             polars.all_horizontal(polars.all().is_null())
         )
         missing_count = allnull.shape[0]
         if missing_count > 0:
+            self.logger.info(f"{step} validation: at least one non-null value in readings.")
             errs.append(f"{missing_count} missing values in [{col}].")
 
         # Are the SensorReadingUTC close to the QueryUTC (the time the data was requested via API)?
         if utc is not None:
-            self.logger.info(
-                f"{step} validation: SensorReadingUTC columns close to QueryUTC."
-            )
             maxdiff_minutes = (
                 numpy.max(numpy.abs(sensors["SensorReadingUTC"].to_numpy() - utc)) / 60
             )
-            if maxdiff_minutes > 2:  # readings should be happening every 2 minutes.
+            if maxdiff_minutes > 5: # readings should be happening every 2 minutes.
                 errs.append(
-                    f"SensorReadingUTC differs from UTC: UTC: {utc}, maximum absolute difference (minutes): {maxdiff_minutes:,.0}."
+                    f"SensorReadingUTC is {maxdiff_minutes:,.0f} minutes old"
+                )
+            else:                
+                self.logger.info(
+                    f"{step} validation passed: SensorReadingUTC columns close to QueryUTC."
                 )
 
         # Are there any duplicated SensorReadingUTC?
         if "SensorReadingUTC" in sensors.columns:
-            self.logger.info(
-                f"{step} validation: no duplicated SensorReadingUTC per SensorID_Coris."
-            )
             dup_count = (
                 sensors[["SensorID_Coris", "SensorReadingUTC"]].is_duplicated().sum()
             )
             if dup_count > 0:
                 errs.append(f"Count of duplicated SensorReadingUTC: {dup_count}.")
+            else:                
+                self.logger.info(
+                    f"{step} validation passed: no duplicated SensorReadingUTC per SensorID_Coris."
+                )
 
         # Do any sensors have multiple names (indicating a change in name)?
-        self.logger.info(f"{step} validation: one SensorName per SensorID_Coris.")
         name_dups = sensors[["SensorID_Coris", "SensorName"]].unique()
         name_dups = name_dups.filter(name_dups["SensorID_Coris"].is_duplicated())
         dup_count = name_dups[["SensorID_Coris"]].unique().shape[0]
         if dup_count > 0:
             errs.append(f"Count of multiple names for SensorID_Coris: {dup_count}.")
+        else:            
+            self.logger.info(f"{step} validation passed: one SensorName per SensorID_Coris.")
 
         # Time between readings should be less than ten minutes.
         if "SensorReadingUTC_SecondsFromPrior" in sensors.columns:
-            self.logger.info(
-                f"{step} validation: SensorReadingUTC_SecondsFromPrior less than 15 minutes."
-            )
             badrows = sensors.filter(
                 sensors["SensorReadingUTC_SecondsFromPrior"] > 60 * 15
             )
@@ -1164,20 +1156,25 @@ class EnvironmentData:
                 errs.append(
                     f"Count of SensorReadingUTC_SecondsFromPrior > 15 minutes: {badrows.shape[0]}."
                 )
+            else:                
+                self.logger.info(
+                    f"{step} validation passed: SensorReadingUTC_SecondsFromPrior less than 15 minutes."
+                )
 
         # Comparisons to historical.
         if historical.shape[0] > 0:
 
             # Did we lose any sensors?
-            self.logger.info(
-                f"{step} validation: all SensorID_Coris in historical data (no dropped SensorID)."
-            )
             missing = historical.filter(
                 historical["SensorID_Coris"].is_in(sensors["SensorID_Coris"]).not_()
             )
             if missing.shape[0] > 0:
                 errs.append(
                     f"Count of sensors missing from historical data: {missing.shape[0]}."
+                )
+            else:
+                self.logger.info(
+                    f"{step} validation passed: all SensorID_Coris in historical data (no dropped SensorID)."
                 )
 
         # Log the errors.

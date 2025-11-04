@@ -24,12 +24,12 @@ _Commands should be run from the project root, possibly by using the terminal af
 * Install Docker Desktop from https://docs.docker.com/engine/install/. 
 * Run Docker Desktop to start the docker daemon running in the background. 
 * Request the .env file from the developer and place it in the project root.
-* Build the Docker image by running `docker build . -t environment`. This will read the Dockerfile and use it to build an image, which we'll use to initiate a container later on.
-* Initiate the container with `docker run --name environment-run -p 8888:8888 environment`.
+* Build the Docker image by running `docker build . -t sensorpull`. This will read the Dockerfile and use it to build an image, which we'll use to initiate a container later on.
+* Initiate the container with `docker run --name sensorpull-run -p 8888:8888 sensorpull`.
 * Once it is running, there are a few ways you can interact with it:
     - Logs will print to terminal. At the start of every minute, you'll see it run `get_current_readings`. Every ten minutes, it'll run `consolidate_readings`.
     - The terminal will print a Jupyter URL you can access, starting with http://127.0.0.1:8888. Ctrl + click it to open an interactive Jupyter Notebook. You can then open examples.ipynb and execute code. The data may look the same, but it's actually reading from data populated by cron!
-    - You can open an interactive session in a new terminal with `docker exec -it environment-run /bin/bash` and watch the logs with `tail -f data/EnvironmentData.log`, or run any other Linux command in the container. 
+    - You can open an interactive session in a new terminal with `docker exec -it sensorpull-run /bin/bash` and watch the logs with `tail -f data/EnvironmentData.log`, or run any other Linux command in the container. 
     - Open the container in Docker Desktop and navigate to Files > src to view the project files like `sensor_readings.parquet` and `device_readings.parquet`.
 * When you are done, remove any running containers by clicking the trash button on Docker Desktop. You can also do it with the CLI: `docker stop $(docker ps -a -q)` and then `docker rm $(docker ps -a -q)`.
 * Docker has been set up with `testing = False` and `days_back = int(365 * 2)` (2 years). If you want to change this for testing purposes, modify the settings at .env, rebuild the image, and re-run the container. 

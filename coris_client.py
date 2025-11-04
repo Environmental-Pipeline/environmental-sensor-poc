@@ -78,7 +78,7 @@ class CorisClient:
         testing_sensor_ids = testing_sensor_ids or []
         
         # Build the URL and call the API
-        self.logger.info("get_sensors")
+        # self.logger.info("get_sensors")
         url = f'{self.base_url}/cats/user/?ApiKey={self.api_key}&CatsUserID={self.cats_user_id}'
         
         # Log sanitized URL for security
@@ -246,7 +246,7 @@ class CorisClient:
                     testing_sensor_ids.extend(sensor_ids)
             
             # Query API for each sensor
-            pbar = tqdm.tqdm(total=len(sensor_ids), desc=f"Gather readings: {reading_type}")
+            # pbar = tqdm.tqdm(total=len(sensor_ids), desc=f"Gather readings: {reading_type}")
             
             for sensor_id in sensor_ids:
                 data = self.get_historical_data(
@@ -260,9 +260,9 @@ class CorisClient:
                 if not data.is_empty():
                     readings.append(data)
                 
-                pbar.update(1)
+                # pbar.update(1)
             
-            pbar.close()
+            # pbar.close()
         
         return readings
     
@@ -353,7 +353,7 @@ def create_coris_client_from_env(logger: Optional[logging.Logger] = None) -> Cor
     except ValueError:
         raise ValueError(f"CATS_USER_ID must be an integer, got: {cats_user_id_str}")
     
-    if logger:
-        logger.info(f"Created Coris client for user ID: {cats_user_id}")
+    # if logger:
+    #     logger.info(f"Created Coris client for user ID: {cats_user_id}")
     
     return CorisClient(api_key=api_key, cats_user_id=cats_user_id, logger=logger)

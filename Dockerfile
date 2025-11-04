@@ -6,7 +6,7 @@ WORKDIR /src
 COPY requirements.txt  ./
 RUN python3 -m pip install --no-cache-dir -r requirements.txt
 
-COPY EnvironmentData.py conserv_client.py ingest_all_sources.py .env examples-cron.ipynb examples-analysis.ipynb ./
+COPY EnvironmentData.py coris_client.py conserv_client.py ingest_all_sources.py .env examples-cron.ipynb examples-analysis.ipynb ./
 COPY jobs jobs/
 
 COPY jobs/cronjobs /etc/cron.d/cronjobs

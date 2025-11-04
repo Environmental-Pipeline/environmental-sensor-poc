@@ -54,26 +54,17 @@ def main():
     start_time = datetime.datetime.now()
 
     try:
-        logger.info("=" * 60)
-        logger.info("STARTING UNIFIED DATA INGESTION")
-        logger.info(f"Start time: {start_time}")
-        logger.info("=" * 60)
-
-        # ============ READ CONFIGURATION ============
-        logger.info("Reading configuration...")
-
-        # Debug environment access
-        logger.info("Environment debugging:")
-        logger.info(f"  Current working directory: {os.getcwd()}")
-        logger.info(f"  .env file exists: {os.path.exists('.env')}")
-        if os.path.exists(".env"):
-            with open(".env") as f:
-                env_lines = f.readlines()
-                logger.info(f"  .env file has {len(env_lines)} lines")
+        logger.info("Starting ingest_all_sources.py")
+        # logger.info(f"  Current working directory: {os.getcwd()}")
+        # logger.info(f"  .env file exists: {os.path.exists('.env')}")
+        # if os.path.exists(".env"):
+        #     with open(".env") as f:
+        #         env_lines = f.readlines()
+                # logger.info(f"  .env file has {len(env_lines)} lines")
                 # Log non-sensitive config lines
-                for line in env_lines[:5]:  # Only first 5 lines to avoid API keys
-                    if not any(key in line for key in ["API_KEY", "KEY"]):
-                        logger.info(f"    {line.strip()}")
+                # for line in env_lines[:5]:  # Only first 5 lines to avoid API keys
+                #     if not any(key in line for key in ["API_KEY", "KEY"]):
+                #         logger.info(f"    {line.strip()}")
 
         # Required configuration
         cats_user_id = int(read_env_variable("CATS_USER_ID"))
@@ -90,23 +81,21 @@ def main():
             if key:
                 conserv_keys_found.append(customer_id)
 
-        logger.info("Configuration:")
-        logger.info(f"  CATS_USER_ID: {cats_user_id}")
-        logger.info(f"  CONSERV_ENABLED: {conserv_enabled}")
-        logger.info(f"  TESTING: {testing}")
-        logger.info(f"  RUN_WINDOW_HOURS: {run_window_hours}")
-        logger.info(f"  Conserv API keys found for customers: {conserv_keys_found}")
+        # logger.info(f"  CATS_USER_ID: {cats_user_id}")
+        # logger.info(f"  CONSERV_ENABLED: {conserv_enabled}")
+        # logger.info(f"  TESTING: {testing}")
+        # logger.info(f"  RUN_WINDOW_HOURS: {run_window_hours}")
+        # logger.info(f"  Conserv API keys found for customers: {conserv_keys_found}")
 
         # Critical validation
         if conserv_enabled and not conserv_keys_found:
             logger.error("CONSERV_ENABLED=True but no Conserv API keys found!")
         elif conserv_enabled:
             logger.info(
-                f"Conserv integration active with {len(conserv_keys_found)} customers"
+                f"{len(conserv_keys_found)} Conserv customers"
             )
-
-        # ============ INITIALIZE ENVIRONMENT DATA ============
-        logger.info("Initializing EnvironmentData...")
+        elif not conserv_enabled:
+            logger.info("Conserv integration is disabled.")
 
         env_data = EnvironmentData(
             CatsUserID=cats_user_id,
@@ -116,16 +105,16 @@ def main():
             testing=testing,
         )
 
-        logger.info("EnvironmentData initialized successfully")
-        logger.info(f"  Conserv enabled: {env_data.conserv_enabled}")
-        if env_data.conserv_client:
-            logger.info(
-                f"  Conserv customers: {len(env_data.conserv_client.customers)}"
-            )
-        logger.info(f"  Cron status: {env_data.cron_status}")
+        # logger.info("EnvironmentData initialized successfully")
+        # logger.info(f"  Conserv enabled: {env_data.conserv_enabled}")
+        # if env_data.conserv_client:
+        #     logger.info(
+        #         f"  Conserv customers: {len(env_data.conserv_client.customers)}"
+        #     )
+        # logger.info(f"  Cron status: {env_data.cron_status}")
 
         # ============ PULL CURRENT READINGS ============
-        logger.info("Pulling current readings from all sources...")
+        logger.info("Pulling current readings from all sources")
 
         # This method now handles both Coris and Conserv APIs
         env_data.get_current_readings()
@@ -138,26 +127,27 @@ def main():
         # This method now handles mixed Coris/Conserv data
         env_data.consolidate_readings()
 
-        logger.info("Data consolidation completed successfully")
+        # logger.info("Data consolidation completed successfully")
 
         # ============ SUCCESS SUMMARY ============
         end_time = datetime.datetime.now()
         duration = end_time - start_time
+        logger.info(f"Completed ingest_all_sources.py in {duration.total_seconds() / 60:.2f} minutes")
 
-        logger.info("=" * 60)
-        logger.info("UNIFIED DATA INGESTION COMPLETED SUCCESSFULLY")
-        logger.info(f"Start time: {start_time}")
-        logger.info(f"End time: {end_time}")
-        logger.info(f"Total duration: {duration}")
-        logger.info(f"Duration in minutes: {duration.total_seconds() / 60:.2f}")
+        # logger.info("=" * 60)
+        # logger.info("UNIFIED DATA INGESTION COMPLETED SUCCESSFULLY")
+        # logger.info(f"Start time: {start_time}")
+        # logger.info(f"End time: {end_time}")
+        # logger.info(f"Total duration: {duration}")
+        # logger.info(f"Duration in minutes: {duration.total_seconds() / 60:.2f}")
 
         # Check if we're under the 15-minute target
-        if duration.total_seconds() > 900:  # 15 minutes = 900 seconds
-            logger.warning(f"WARNING: DURATION EXCEEDED 15 MINUTES: {duration}")
-        else:
-            logger.info("SUCCESS: COMPLETED WITHIN 15-MINUTE TARGET")
+        # if duration.total_seconds() > 900:  # 15 minutes = 900 seconds
+        #     logger.warning(f"WARNING: DURATION EXCEEDED 15 MINUTES: {duration}")
+        # else:
+        #     logger.info("SUCCESS: COMPLETED WITHIN 15-MINUTE TARGET")
 
-        logger.info("=" * 60)
+        # logger.info("=" * 60)
 
         # Clean up
         env_data.close()
