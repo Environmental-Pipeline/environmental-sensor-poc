@@ -1473,7 +1473,7 @@ class EnvironmentData:
         sensors = self.clean_validate_sensors(sensors=sensors, step="update_lookups")
         sensors = self.relocate(
             sensors,
-            ["SensorID", "BuildingID", "Room", "CardinalDirection", "DeviceSerialFromName"],
+            ["SensorID", "SensorName", "SensorType", "DeviceID", "DeviceSerialFromName", "BuildingID", "Building", "Room", "CardinalDirection"],
         )
         sensors.write_parquet(f"{self.data_path}/sensors.parquet")
 
@@ -1532,7 +1532,7 @@ class EnvironmentData:
         ).sort(["BuildingID", "Room", "DeviceName"])
         devices = self.relocate(
             devices,
-            ["DeviceID", "BuildingID", "Room", "CardinalDirection", "DeviceName"],
+            ["DeviceID", "DeviceName", "DeviceSerialFromName", "BuildingID", "Building", "Room", "CardinalDirection"],
         )
         devices.write_parquet(f"{self.data_path}/devices.parquet")
 
