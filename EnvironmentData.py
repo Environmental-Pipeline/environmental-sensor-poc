@@ -1647,8 +1647,9 @@ class EnvironmentData:
             f"{self.data_path}/sensor_readings.parquet"
         )
         sensor_readings = sensor_readings.filter(
-            (polars.col("SensorReadingUTC") - polars.col("QueryUTC")).abs() < 60 * 5
-        )  # remove old readings coming in with new data.
+            polars.col("QueryUTC").is_null() | 
+            ((polars.col("SensorReadingUTC") - polars.col("QueryUTC")).abs() < 60 * 5)
+        )  # include historical data (QueryUTC=null) and recent readings within 5min window
         sensor_readings = sensor_readings.join(
             utcs[["UTC", "date"]],
             how="left",
@@ -1677,8 +1678,9 @@ class EnvironmentData:
             f"{self.data_path}/device_readings.parquet"
         )
         device_readings = device_readings.filter(
-            (polars.col("SensorReadingUTC") - polars.col("QueryUTC")).abs() < 60 * 5
-        )  # remove old readings coming in with new data.
+            polars.col("QueryUTC").is_null() | 
+            ((polars.col("SensorReadingUTC") - polars.col("QueryUTC")).abs() < 60 * 5)
+        )  # include historical data (QueryUTC=null) and recent readings within 5min window
         device_readings = device_readings.join(
             utcs[["UTC", "date"]],
             how="left",

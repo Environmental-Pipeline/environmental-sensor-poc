@@ -19,7 +19,22 @@ def main():
     current_script = Path(__file__).name
     
     # Find all Python files in the test directory
-    python_files = [f for f in os.listdir(test_dir) if f.endswith('.py') and f != current_script]
+    all_python_files = [f for f in os.listdir(test_dir) if f.endswith('.py') and f != current_script]
+    
+    # Define test order - some tests need to run after others
+    ordered_tests = [
+        'test_conserv_integration.py',  # This needs to run first to create data
+        'test_multiple_days.py',        # This needs data to exist first
+    ]
+    
+    # Add remaining tests in alphabetical order
+    remaining_tests = [f for f in all_python_files if f not in ordered_tests]
+    remaining_tests.sort()
+    
+    python_files = ordered_tests + remaining_tests
+    
+    # Filter to only include files that actually exist
+    python_files = [f for f in python_files if f in all_python_files]
     
     if not python_files:
         print("No test scripts found to run.")
