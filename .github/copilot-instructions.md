@@ -10,5 +10,9 @@
 
 # If You Run PowerShell
 
-- `head -3` won't work. Use `Get-Content "c:\Users\super\Documents\savii\plan-search\src\data\files\MNRates05062025.csv" | Select-Object -First 3`, etc. instead.
-- Don't use `&&`, it will error out. Instead, use `;`.
+- Try to avoid PowerShell in general and create temporary Python scripts instead.
+- Do not use a pattern like `print(f'{county[\"name\"]}` or `\"service_area_id\"`. This will error out. Use ` print(f'{county[""name""]}` or `""service_area_id""` instead.
+- Don't use `&&`, it will error out. Instead, use `;`. 
+- To escape `"`, use `""`, not `\"`.
+- I use Windows so don't use Linux commands.
+- Don't forget to activate the virtual environment at .venv before running python scripts.
