@@ -15,6 +15,8 @@ EnvironmentData(
     CatsUserID = 2496, 
     out_of_scope = ['-80', 'Cryo tank', 'Water'], 
     days_back = int(read_env_variable('DAYS_BACK')),
-    testing = read_env_variable('TESTING') == 'True'
+    testing = read_env_variable('TESTING') == 'True',
+    coris_enabled = read_env_variable('CORIS_ENABLED').lower() == 'true',
+    conserv_enabled = read_env_variable('CONSERV_ENABLED').lower() == 'true',
+    hobolink_enabled = read_env_variable('HOBOLINK_ENABLED').lower() == 'true',
 ).get_current_readings()
-

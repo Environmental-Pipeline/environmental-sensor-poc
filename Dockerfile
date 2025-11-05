@@ -6,7 +6,9 @@ WORKDIR /src
 COPY requirements.txt  ./
 RUN python3 -m pip install --no-cache-dir -r requirements.txt
 
-COPY EnvironmentData.py ingest_all_sources.py .env examples-cron.ipynb examples-analysis.ipynb ./
+# Copy necessary files. We leave out 1-examples-cron.ipynb since it could interfere with cron jobs.
+# To use 2-examples-analysis.ipynb, wait until the first consolidation (after 10 minutes) has run to ensure data files exist.
+COPY EnvironmentData.py ingest_all_sources.py .env 2-examples-analysis.ipynb ./
 COPY modules modules/
 COPY jobs jobs/
 
@@ -17,15 +19,9 @@ RUN crontab /etc/cron.d/cronjobs
 # Expose Jupyter port
 EXPOSE 8888
 
-# Create unified entry point that can run in different modes
-# Default: run unified ingestion script once (for cron)
-# Alternative: set JUPYTER_MODE=true for development/monitoring mode
-CMD if [ "$JUPYTER_MODE" = "true" ]; then \
-        jupyter notebook --ip 0.0.0.0 --port 8888 --no-browser --allow-root & \
-        python3 jobs/0-init.py && \
-        cron && \
-        crontab -l && \
-        tail -f data/EnvironmentData.log; \
-    else \
-        python3 ingest_all_sources.py; \
-    fi
+# Run init script, start cron, monitor the log file.
+CMD jupyter notebook --ip 0.0.0.0 --port 8888 --no-browser --allow-root & \
+    python3 jobs/0-init.py && \
+    cron && \
+    crontab -l && \    
+    tail -f data/EnvironmentData.log

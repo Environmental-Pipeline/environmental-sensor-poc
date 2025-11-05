@@ -36,6 +36,7 @@ _Commands should be run from the project root, possibly by using the terminal af
 * Once it is running, there are a few ways you can interact with it:
     - Logs will print to terminal. At the start of every minute, you'll see it run `get_current_readings`. Every ten minutes, it'll run `consolidate_readings`.
     - The terminal will print a Jupyter URL you can access, starting with http://127.0.0.1:8888. Ctrl + click it to open an interactive Jupyter Notebook. You can then open examples.ipynb and execute code. The data may look the same, but it's actually reading from data populated by cron!
+    - Make sure you aren't running any other jupyter notebooks or jupyter will say you have the wrong token.
     - You can open an interactive session in a new terminal with `docker exec -it sensorpull-run /bin/bash` and watch the logs with `tail -f data/EnvironmentData.log`, or run any other Linux command in the container. 
     - Open the container in Docker Desktop and navigate to Files > src to view the project files like `sensor_readings.parquet` and `device_readings.parquet`.
 * When you are done, remove any running containers by clicking the trash button on Docker Desktop. You can also do it with the CLI: `docker stop $(docker ps -a -q)` and then `docker rm $(docker ps -a -q)`.
