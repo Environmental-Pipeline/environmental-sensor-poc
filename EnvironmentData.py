@@ -897,13 +897,13 @@ class EnvironmentData:
         data = data.filter(polars.col("DeviceID").is_null().not_())
         for reading in self.acceptable_range:
             idt = data.filter(polars.col(reading).is_null().not_()).select(
-                ["DeviceID", "SensorReadingUTC", "QueryUTC", reading]
+                ["Source", "DeviceID", "SensorReadingUTC", "QueryUTC", reading]
             )
             if isinstance(devices, polars.DataFrame):
                 devices = devices.join(
                     idt,
                     how="full",
-                    on=["DeviceID", "SensorReadingUTC", "QueryUTC"],
+                    on=["Source", "DeviceID", "SensorReadingUTC", "QueryUTC"],
                 )
             else:
                 devices = idt
@@ -911,10 +911,14 @@ class EnvironmentData:
 
         # this will result in columns like DeviceID_right when there is not a perfect match.
         # coalesce to a single column.
+        cols_Source = [x for x in devices.columns if "Source" in x]
         cols_DeviceID = [x for x in devices.columns if "DeviceID" in x]
         cols_SensorReadingUTC = [x for x in devices.columns if "SensorReadingUTC" in x]
         cols_QueryUTC = [x for x in devices.columns if "QueryUTC" in x]
 
+        devices = devices.with_columns(
+            polars.coalesce(cols_Source).alias("Source")
+        )
         devices = devices.with_columns(
             polars.coalesce(cols_DeviceID).alias("DeviceID")
         )
@@ -926,8 +930,8 @@ class EnvironmentData:
         devices = devices.drop(
             [
                 x
-                for x in cols_DeviceID + cols_SensorReadingUTC
-                if x not in ["DeviceID", "SensorReadingUTC", "QueryUTC"]
+                for x in cols_Source + cols_DeviceID + cols_SensorReadingUTC + cols_QueryUTC
+                if x not in ["Source", "DeviceID", "SensorReadingUTC", "QueryUTC"]
             ]
         )
 
@@ -948,7 +952,7 @@ class EnvironmentData:
 
         # Rearrange columns.
         devices = devices.select(
-            ["DeviceID", "DeviceName", "SensorReadingUTC", "QueryUTC"]
+            ["Source", "DeviceID", "DeviceName", "SensorReadingUTC", "QueryUTC"]
             + list(self.acceptable_range.keys())
         )
 
@@ -1373,6 +1377,7 @@ class EnvironmentData:
             if len(info) == 5:
                 sensors.append(
                     {
+                        "Source": sensor["Source"],
                         "SensorName": sensorname,
                         #   'SensorType_fromName': info[0],
                         "DeviceSerialFromName": info[4],
@@ -1398,6 +1403,7 @@ class EnvironmentData:
 
                 sensors.append(
                     {
+                        "Source": sensor["Source"],
                         "SensorName": sensorname,
                         #'SensorType_fromName': info[0],
                         "DeviceSerialFromName": info[3],
@@ -1423,6 +1429,7 @@ class EnvironmentData:
             elif len(info) == 3:
                 sensors.append(
                     {
+                        "Source": sensor["Source"],
                         "SensorName": sensorname,
                         # 'SensorType_fromName': info[0],
                         "DeviceSerialFromName": info[2],
@@ -1451,6 +1458,7 @@ class EnvironmentData:
                 )
                 sensors.append(
                     {
+                        "Source": sensor["Source"],
                         "SensorName": sensorname,
                         "DeviceSerialFromName": None,  # NA for malformed names
                         "SensorType": sensor["SensorType"],
@@ -1471,7 +1479,7 @@ class EnvironmentData:
         sensors = self.clean_validate_sensors(sensors=sensors, step="update_lookups")
         sensors = self.relocate(
             sensors,
-            ["SensorID", "SensorName", "SensorType", "DeviceID", "DeviceSerialFromName", "BuildingID", "Building", "Room", "CardinalDirection"],
+            ["Source", "SensorID", "SensorName", "SensorType", "DeviceID", "DeviceSerialFromName", "BuildingID", "Building", "Room", "CardinalDirection"],
         )
         sensors.write_parquet(f"{self.data_path}/sensors.parquet")
 
@@ -1523,14 +1531,14 @@ class EnvironmentData:
         # Device Info.
         devices = polars.read_parquet(
             f"{self.data_path}/sensor_readings.parquet",
-            columns=["DeviceID", "DeviceName"],
+            columns=["Source", "DeviceID", "DeviceName"],
         ).unique()
         devices = devices.join(
             device_info_from_sensors, how="left", on="DeviceID"
         ).sort(["BuildingID", "Room", "DeviceName"])
         devices = self.relocate(
             devices,
-            ["DeviceID", "DeviceName", "DeviceSerialFromName", "BuildingID", "Building", "Room", "CardinalDirection"],
+            ["Source", "DeviceID", "DeviceName", "DeviceSerialFromName", "BuildingID", "Building", "Room", "CardinalDirection"],
         )
         devices.write_parquet(f"{self.data_path}/devices.parquet")
 
@@ -1606,7 +1614,7 @@ class EnvironmentData:
         )
 
         sensor_readings_daily = (
-            sensor_readings.group_by(["date", "SensorID"])
+            sensor_readings.group_by(["Source", "date", "SensorID"])
             .agg(
                 [
                     polars.len().alias("row_count"),
@@ -1615,7 +1623,7 @@ class EnvironmentData:
                     polars.col(sumcols).max().name.suffix("_max"),
                 ]
             )
-            .sort(["date", "SensorID"])
+            .sort(["Source", "date", "SensorID"])
         )
 
         sensor_readings_daily.write_parquet(
@@ -1636,7 +1644,7 @@ class EnvironmentData:
         )
 
         device_readings_daily = (
-            device_readings.group_by(["date", "DeviceID"])
+            device_readings.group_by(["Source", "date", "DeviceID"])
             .agg(
                 [
                     polars.len().alias("row_count"),
@@ -1645,7 +1653,7 @@ class EnvironmentData:
                     polars.col(sumcols).max().name.suffix("_max"),
                 ]
             )
-            .sort(["date", "DeviceID"])
+            .sort(["Source", "date", "DeviceID"])
         )
 
         device_readings_daily.write_parquet(

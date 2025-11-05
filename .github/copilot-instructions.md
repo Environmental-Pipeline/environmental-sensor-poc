@@ -4,7 +4,7 @@
 - NEVER ADD DUMMY/ESTIMATED/DEFAULT VALUES to the data. If a field is not available in the raw data or calling script, it should not be included in the output, or an error should register.
 - If you add printing for testing, remove it when you are done. Too much printing clutters the output and makes it hard to read.
 - Use polars instead of pandas whenever possible. 
-- If you are going to run python code, create a script to avoid syntax errors. Make sure to activate the virtual environment at .venv before running python scripts; `& "C:\Users\super\Documents\savii\Analysis Tool\savii-data-scripts\.venv\Scripts\Activate.ps1"; python my_script.py`
+- If you are going to run python code, create a script to avoid syntax errors. Remove any test scripts you create. Make sure to activate the virtual environment at .venv before running python scripts; `& "C:\Users\super\Documents\savii\Analysis Tool\savii-data-scripts\.venv\Scripts\Activate.ps1"; python my_script.py`
 - To escape `"`, use `""`, not `\"`.
 
 
