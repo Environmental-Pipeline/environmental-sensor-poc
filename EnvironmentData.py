@@ -950,9 +950,25 @@ class EnvironmentData:
         # Attach the device name.
         devices = devices.join(device_names, how="left", on="DeviceID")
 
+        # Get sensor information for each device
+        device_sensors = (
+            data.filter(polars.col("DeviceID").is_null().not_())
+            .select(["DeviceID", "SensorID", "SensorName", "SensorType"])
+            .unique()
+            .group_by("DeviceID")
+            .agg([
+                polars.col("SensorID").str.concat(", ").alias("Sensors"),
+                polars.col("SensorName").str.concat(", ").alias("SensorNames"), 
+                polars.col("SensorType").str.concat(", ").alias("SensorTypes")
+            ])
+        )
+        
+        # Join sensor information to devices
+        devices = devices.join(device_sensors, how="left", on="DeviceID")
+
         # Rearrange columns.
         devices = devices.select(
-            ["Source", "DeviceID", "DeviceName", "SensorReadingUTC", "QueryUTC"]
+            ["Source", "DeviceID", "DeviceName", "Sensors", "SensorNames", "SensorTypes", "SensorReadingUTC", "QueryUTC"]
             + list(self.acceptable_range.keys())
         )
 
@@ -1536,9 +1552,20 @@ class EnvironmentData:
         devices = devices.join(
             device_info_from_sensors, how="left", on="DeviceID"
         ).sort(["BuildingID", "Room", "DeviceName"])
+        
+        # Get sensor information for each device from the sensors lookup table
+        device_sensors_lookup = sensors.group_by("DeviceID").agg([
+            polars.col("SensorID").str.concat(", ").alias("Sensors"),
+            polars.col("SensorName").str.concat(", ").alias("SensorNames"),
+            polars.col("SensorType").str.concat(", ").alias("SensorTypes")
+        ])
+        
+        # Join sensor information to devices
+        devices = devices.join(device_sensors_lookup, how="left", on="DeviceID")
+        
         devices = self.relocate(
             devices,
-            ["Source", "DeviceID", "DeviceName", "DeviceSerialFromName", "BuildingID", "Building", "Room", "CardinalDirection"],
+            ["Source", "DeviceID", "DeviceName", "Sensors", "SensorNames", "SensorTypes", "DeviceSerialFromName", "BuildingID", "Building", "Room", "CardinalDirection"],
         )
         devices.write_parquet(f"{self.data_path}/devices.parquet")
 
