@@ -1570,17 +1570,33 @@ class EnvironmentData:
         devices.write_parquet(f"{self.data_path}/devices.parquet")
 
         # UTC info.
-        # Start with the timestamps and datetime in UTC.
-        utc_timestamps = (
-            polars.read_parquet(
-                f"{self.data_path}/sensor_readings.parquet", columns="SensorReadingUTC"
-            )["SensorReadingUTC"]
+        # Get all UTC timestamps from sensor_readings: both SensorReadingUTC and QueryUTC
+        # sensor_readings is the primary source since all other data derives from it
+        
+        # Read both SensorReadingUTC and QueryUTC columns
+        utc_data = polars.read_parquet(
+            f"{self.data_path}/sensor_readings.parquet", 
+            columns=["SensorReadingUTC", "QueryUTC"]
+        )
+        
+        # Get SensorReadingUTC values (remove nulls)
+        sensor_reading_utcs = (
+            utc_data.filter(polars.col("SensorReadingUTC").is_not_null())
+            ["SensorReadingUTC"]
             .unique()
             .to_list()
         )
-
-        # Filter out None/null values that can't be converted to datetime
-        utc_timestamps = [x for x in utc_timestamps if x is not None]
+        
+        # Get QueryUTC values (remove nulls) 
+        query_utcs = (
+            utc_data.filter(polars.col("QueryUTC").is_not_null())
+            ["QueryUTC"]
+            .unique()
+            .to_list()
+        )
+        
+        # Combine all UTC timestamps and get unique values
+        utc_timestamps = list(set(sensor_reading_utcs + query_utcs))
 
         utcs = polars.DataFrame(
             {
