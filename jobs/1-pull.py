@@ -18,5 +18,5 @@ EnvironmentData(
     testing = read_env_variable('TESTING') == 'True',
     coris_enabled = read_env_variable('CORIS_ENABLED').lower() == 'true',
     conserv_enabled = read_env_variable('CONSERV_ENABLED').lower() == 'true',
-    hobolink_enabled = read_env_variable('HOBOLINK_ENABLED').lower() == 'true',
+    licor_enabled = read_env_variable('LICOR_ENABLED').lower() == 'true',
 ).get_current_readings()

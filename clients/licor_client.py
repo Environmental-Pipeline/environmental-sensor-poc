@@ -1,17 +1,17 @@
 """
-# Hobolink API Client
+# LI-COR API Client
 
 This module provides a client interface that handles sensor data retrieval, 
 historical data queries, and data transformation
 to maintain compatibility with the EnvironmentData schema.
 
 ## Commands:
-- Create HTML documentation in `docs/modules`: `pdoc modules/hobolink_client.py -o docs/ --no-search` 
-- Save API output to `samples/` folder: `python -c "from modules.hobolink_client import HobolinkClient; HobolinkClient().sample_raw_data()"`
+- Create HTML documentation in `docs/modules`: `pdoc modules/licor_client.py -o docs/ --no-search` 
+- Save API output to `samples/` folder: `python -c "from modules.licor_client import LicorClient; LicorClient().sample_raw_data()"`
 
 ## API Endpoints
 
-The client queries available sensors and then loops over them to get readings. APIs return JSON data. Authentication uses a Bearer Token from .env variable HOBOLINK_API_KEY.
+The client queries available sensors and then loops over them to get readings. APIs return JSON data. Authentication uses a Bearer Token from .env variable LICOR_API_KEY.
 
 ### Identify available devices and sensors.
 
@@ -87,11 +87,11 @@ import json
 from pathlib import Path
 from typing import List, Dict, Optional, Any
 
-class HobolinkClient:
+class LicorClient:
     
     def __init__(self, logger: Optional[logging.Logger] = None):
         """
-        Initialize the Hobolink API client.
+        Initialize the LI-COR API client.
         
         Parameters
         ----------
@@ -102,14 +102,14 @@ class HobolinkClient:
         try:
             with open(".env") as f:
                 for line in f:
-                    if line.startswith("HOBOLINK_API_KEY"):
+                    if line.startswith("LICOR_API_KEY"):
                         api_key = line.split("=", 1)[1].strip()
                         break
         except FileNotFoundError:
             pass
         
         if not api_key:
-            raise ValueError("HOBOLINK_API_KEY not found in .env file.")
+            raise ValueError("LICOR_API_KEY not found in .env file.")
         
         self.api_key = api_key
         self.logger = logger or logging.getLogger(__name__)
@@ -168,7 +168,7 @@ class HobolinkClient:
     
     def get_devices(self) -> Dict[str, Any]:
         """
-        Get the list of all devices from the Hobolink API.
+        Get the list of all devices from the LI-COR API.
             
         Returns
         -------
@@ -193,7 +193,7 @@ class HobolinkClient:
         """
         Get sensor data for a specific device and sensor.
         
-        Note: Hobolink API limits historical data queries to maximum 1 year (365 days).
+        Note: LI-COR API limits historical data queries to maximum 1 year (365 days).
         If the requested date range exceeds this limit, it will be automatically capped.
         
         Parameters
@@ -212,7 +212,7 @@ class HobolinkClient:
         Dict[str, Any]
             Raw sensor data from API for inspection
         """
-        # Validate and cap date range - Hobolink API limits to less than 1 year maximum
+        # Validate and cap date range - LI-COR API limits to less than 1 year maximum
         max_days = 364  # Use 364 days to be safe with API limitations
         max_milliseconds = max_days * 24 * 60 * 60 * 1000
         date_range_ms = end_time_ms - start_time_ms
@@ -220,7 +220,7 @@ class HobolinkClient:
         if date_range_ms > max_milliseconds:
             start_time_ms = end_time_ms - max_milliseconds
             self.logger.warning(
-                f"Date range ({date_range_ms // (24 * 60 * 60 * 1000)} days) exceeds Hobolink API limit of {max_days} days. "
+                f"Date range ({date_range_ms // (24 * 60 * 60 * 1000)} days) exceeds LI-COR API limit of {max_days} days. "
                 f"Capping to most recent {max_days} days for {device_serial}/{sensor_serial}."
             )
         
@@ -262,7 +262,7 @@ class HobolinkClient:
                                        device_serial: str = None,
                                        device_metadata: polars.DataFrame = None) -> polars.DataFrame:
         """
-        Transform Hobolink API response data to standardized EnvironmentData schema.
+        Transform LI-COR API response data to standardized EnvironmentData schema.
         
         Note: This method assumes moreResults=false (complete data). If moreResults=true
         is ever encountered, get_sensor_data() will raise an exception since pagination
@@ -308,13 +308,13 @@ class HobolinkClient:
                     df = df.with_columns([
                         # Convert timestamp from ms to seconds
                         (polars.col("timestamp_ms") / 1000).cast(polars.Int64).alias("SensorReadingUTC"),
-                        polars.lit(f"hobolink:{device_serial or 'unknown'}-{sensor_serial}").alias("SensorID"),
+                        polars.lit(f"licor:{device_serial or 'unknown'}-{sensor_serial}").alias("SensorID"),
                         polars.lit(measurement_type).alias("SensorType"),
                         polars.lit(units).alias("SensorUnits"),
-                        polars.lit("Hobolink").alias("source"),
+                        polars.lit("LI-COR").alias("source"),
                         
                         # Add schema columns - populate DeviceID with device serial when available
-                        polars.lit(f"hobolink:{device_serial}" if device_serial else None).alias("DeviceID"),
+                        polars.lit(f"licor:{device_serial}" if device_serial else None).alias("DeviceID"),
                         polars.lit(None, dtype=polars.Int32).alias("customer_id"),
                         polars.lit(None, dtype=polars.String).alias("SensorName"),
                         polars.lit(None, dtype=polars.String).alias("DeviceName"),
@@ -362,7 +362,7 @@ class HobolinkClient:
         
         # Add device metadata if available 
         # Note: For historical data, device names will be set to null since the
-        # device serial -> sensor serial mapping is not straightforward in Hobolink API
+        # device serial -> sensor serial mapping is not straightforward in LI-COR API
         if device_metadata is not None and not device_metadata.is_empty():
             # For now, we'll rely on the DeviceName being set in the get_devices_as_dataframe method
             # The device metadata passed here is for a specific device, so we can use that device name
@@ -373,7 +373,7 @@ class HobolinkClient:
                         polars.lit(device_name).alias("DeviceName")
                     ])
         
-        self.logger.info(f"Transformed {len(result)} readings from Hobolink data")
+        self.logger.info(f"Transformed {len(result)} readings from LI-COR data")
         return result
     
     def get_devices_as_dataframe(self, out_of_scope: List[str] = None,
@@ -436,9 +436,9 @@ class HobolinkClient:
                         continue
                     
                     device_records.append({
-                        "DeviceID": f"hobolink:{device_serial}",
+                        "DeviceID": f"licor:{device_serial}",
                         "DeviceName": device_name,
-                        "SensorID": f"hobolink:{device_serial}-{sensor_serial}",
+                        "SensorID": f"licor:{device_serial}-{sensor_serial}",
                         "SensorName": f"{device_name}_{measurement_type}",
                         "SensorType": measurement_type,
                         "SensorUnits": units,
@@ -459,7 +459,7 @@ class HobolinkClient:
         # Add standardized schema columns
         result = result.with_columns([
             polars.lit(current_utc).alias("QueryUTC"),
-            polars.lit("Hobolink").alias("source"),
+            polars.lit("LI-COR").alias("source"),
             polars.lit(None, dtype=polars.Int32).alias("customer_id"),
         ])
         
@@ -474,7 +474,7 @@ class HobolinkClient:
         """
         Get historical data for all devices and sensors in bulk.
         
-        Note: Hobolink API limits historical data queries to maximum 1 year (365 days).
+        Note: LI-COR API limits historical data queries to maximum 1 year (365 days).
         If the requested date range exceeds this limit, it will be automatically capped.
         
         Parameters
@@ -497,7 +497,7 @@ class HobolinkClient:
         List[polars.DataFrame]
             List of DataFrames containing historical readings
         """
-        # Validate and cap date range - Hobolink API limits to less than 1 year maximum
+        # Validate and cap date range - LI-COR API limits to less than 1 year maximum
         max_days = 364  # Use 364 days to be safe with API limitations
         max_seconds = max_days * 24 * 60 * 60
         date_range_seconds = end_utc - start_utc
@@ -506,7 +506,7 @@ class HobolinkClient:
             original_start = start_utc
             start_utc = end_utc - max_seconds
             self.logger.warning(
-                f"Date range ({date_range_seconds // 86400} days) exceeds Hobolink API limit of {max_days} days. "
+                f"Date range ({date_range_seconds // 86400} days) exceeds LI-COR API limit of {max_days} days. "
                 f"Capping to most recent {max_days} days."
             )
             self.logger.info(f"Adjusted start_utc from {original_start} to {start_utc}")
@@ -552,13 +552,13 @@ class HobolinkClient:
         self.logger.info(f"Retrieving historical data for {total_combinations} device/sensor combinations")
         
         # Use progress bar for bulk operations
-        pbar = tqdm.tqdm(total=total_combinations, desc="Gathering Hobolink readings")
+        pbar = tqdm.tqdm(total=total_combinations, desc="Gathering LI-COR readings")
         
         for row in device_sensor_combinations.iter_rows(named=True):
             consolidated_device_id = row["DeviceID"]
-            device_serial = consolidated_device_id.split(":")[-1]  # Extract serial from hobolink:serial format
+            device_serial = consolidated_device_id.split(":")[-1]  # Extract serial from licor:serial format
             consolidated_sensor_id = row["SensorID"]
-            # Extract sensor serial from new format: hobolink:device-sensor -> sensor
+            # Extract sensor serial from new format: licor:device-sensor -> sensor
             sensor_part = consolidated_sensor_id.split(":")[-1]  # Get device-sensor part
             sensor_serial = sensor_part.split("-", 1)[-1]  # Extract sensor part after first dash
             device_name = row["DeviceName"]
@@ -579,9 +579,9 @@ class HobolinkClient:
                         raw_data, 
                         device_serial=device_serial,
                         device_metadata=devices_df.filter(
-                            polars.col("DeviceID") == f"hobolink:{device_serial}"
+                            polars.col("DeviceID") == f"licor:{device_serial}"
                         ).select(["DeviceID", "DeviceName"]).with_columns([
-                            polars.col("DeviceID").str.replace("hobolink:", "").alias("deviceSerialNumber")
+                            polars.col("DeviceID").str.replace("licor:", "").alias("deviceSerialNumber")
                         ]).select(["deviceSerialNumber", "DeviceName"]).rename({
                             "DeviceName": "deviceName"
                         })
@@ -605,7 +605,7 @@ class HobolinkClient:
                            testing: bool = False,
                            testing_device_limit: int = 3) -> polars.DataFrame:
         """
-        Get current sensor readings from the Hobolink API.
+        Get current sensor readings from the LI-COR API.
         
         Parameters
         ----------
@@ -702,21 +702,21 @@ class HobolinkClient:
         
         result = result.select([col for col in standardized_columns if col in result.columns])
         
-        self.logger.info(f"Retrieved {len(result)} current readings from Hobolink")
+        self.logger.info(f"Retrieved {len(result)} current readings from LI-COR")
         return result
 
     def sample_raw_data(self, save_to_samples: bool = True) -> Dict[str, Any]:
         """
         Generate sample raw API data for testing and exploration.
         
-        This method fetches raw data from the Hobolink API and optionally saves it
+        This method fetches raw data from the LI-COR API and optionally saves it
         to the samples directory with timestamps. Fetches sensor data from multiple
         sensors across different devices for comprehensive testing.
         
         Parameters
         ----------
         save_to_samples : bool, default=True
-            Whether to save the raw responses to samples/hobolink/ directory
+            Whether to save the raw responses to samples/licor/ directory
             
         Returns
         -------
@@ -738,7 +738,7 @@ class HobolinkClient:
             if save_to_samples:
                 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
                 filename = f"raw_devices_response_{timestamp}.json"
-                filepath = Path(__file__).parent.parent / "samples" / "hobolink" / filename
+                filepath = Path(__file__).parent.parent / "samples" / "licor" / filename
                 filepath.parent.mkdir(parents=True, exist_ok=True)
                 with open(filepath, 'w') as f:
                     json.dump(raw_devices, f, indent=2, default=str)
@@ -807,7 +807,7 @@ class HobolinkClient:
                                 if save_to_samples:
                                     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
                                     filename = f"raw_sensor_data_{device_serial}_{sensor_serial}_{timestamp}.json"
-                                    filepath = Path(__file__).parent.parent / "samples" / "hobolink" / filename
+                                    filepath = Path(__file__).parent.parent / "samples" / "licor" / filename
                                     filepath.parent.mkdir(parents=True, exist_ok=True)
                                     with open(filepath, 'w') as f:
                                         json.dump(raw_sensor_data, f, indent=2, default=str)
@@ -835,7 +835,7 @@ class HobolinkClient:
                     print(f"     {i}. {sample['device_name']} - {sample['sensor_type']} ({sample['sensor_serial']})")
             
             if save_to_samples:
-                print(f"   • Files saved to: samples/hobolink/")
+                print(f"   • Files saved to: samples/licor/")
             
             return results
             

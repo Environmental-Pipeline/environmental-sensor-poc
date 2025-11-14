@@ -5,7 +5,7 @@ Unified Data Ingestion Script for Environmental Sensor Data
 This script integrates data from multiple sources:
 - Coris API (existing functionality)
 - Conserv API (5 customer tenants)
-- Hobolink API (additional sensor data source)
+- LI-COR API (additional sensor data source)
 
 Designed to run in Docker container, completing in <15 minutes.
 """
@@ -101,8 +101,8 @@ def main():
         conserv_enabled = (
             read_env_variable("CONSERV_ENABLED", "False").lower() == "true"
         )
-        hobolink_enabled = (
-            read_env_variable("HOBOLINK_ENABLED", "False").lower() == "true"
+        licor_enabled = (
+            read_env_variable("LICOR_ENABLED", "False").lower() == "true"
         )
         testing = read_env_variable("TESTING", "False").lower() == "true"
         run_window_hours = int(read_env_variable("RUN_WINDOW_HOURS", "24"))
@@ -117,16 +117,16 @@ def main():
             if key:
                 conserv_keys_found.append(customer_id)
 
-        # Debug Hobolink API key availability
-        hobolink_key_found = read_env_variable("HOBOLINK_API_KEY") is not None
+        # Debug LI-COR API key availability
+        licor_key_found = read_env_variable("LICOR_API_KEY") is not None
 
         # logger.info(f"  CATS_USER_ID: {cats_user_id}")
         # logger.info(f"  CONSERV_ENABLED: {conserv_enabled}")
-        # logger.info(f"  HOBOLINK_ENABLED: {hobolink_enabled}")
+        # logger.info(f"  LICOR_ENABLED: {licor_enabled}")
         # logger.info(f"  TESTING: {testing}")
         # logger.info(f"  RUN_WINDOW_HOURS: {run_window_hours}")
         # logger.info(f"  Conserv API keys found for customers: {conserv_keys_found}")
-        # logger.info(f"  Hobolink API key found: {hobolink_key_found}")
+        # logger.info(f"  LI-COR API key found: {licor_key_found}")
 
         # Critical validation
         if coris_enabled and not coris_key_found:
@@ -145,12 +145,12 @@ def main():
         elif not conserv_enabled:
             logger.info("Conserv integration is disabled.")
 
-        if hobolink_enabled and not hobolink_key_found:
-            logger.error("HOBOLINK_ENABLED=True but HOBOLINK_API_KEY not found!")
-        elif hobolink_enabled:
-            logger.info("Hobolink integration enabled")
-        elif not hobolink_enabled:
-            logger.info("Hobolink integration is disabled.")
+        if licor_enabled and not licor_key_found:
+            logger.error("LICOR_ENABLED=True but LICOR_API_KEY not found!")
+        elif licor_enabled:
+            logger.info("LI-COR integration enabled")
+        elif not licor_enabled:
+            logger.info("LI-COR integration is disabled.")
 
         env_data = EnvironmentData(
             CatsUserID=cats_user_id,
@@ -158,7 +158,7 @@ def main():
             data_path="./data",
             coris_enabled=coris_enabled,
             conserv_enabled=conserv_enabled,
-            hobolink_enabled=hobolink_enabled,
+            licor_enabled=licor_enabled,
             testing=testing,
         )
 
@@ -173,7 +173,7 @@ def main():
         # ============ PULL CURRENT READINGS ============
         logger.info("Pulling current readings from all sources")
 
-        # This method now handles Coris, Conserv, and Hobolink APIs
+        # This method now handles Coris, Conserv, and LI-COR APIs
         env_data.get_current_readings()
 
         logger.info("Current readings completed successfully")

@@ -6,7 +6,7 @@
 
 * Request the .env file from the developer and place it in the project root. Use https://onetimesecret.com to share the contents, create a new .env file and paste the contents into it.
 
-* You can enable/disable different APIs (Conserv, Coris, Hobolink) by changing the enable setting in .env. _Conserv does not currently work with any script except `ingest_all_sources.py`._ You can also enable TESTING mode (pulls limited data for faster testing) and set DAYS_BACK which determines how many days back the historical data pull will attempt.
+* You can enable/disable different APIs (Conserv, Coris, LI-COR) by changing the enable setting in .env. _Conserv does not currently work with any script except `ingest_all_sources.py`._ You can also enable TESTING mode (pulls limited data for faster testing) and set DAYS_BACK which determines how many days back the historical data pull will attempt.
 
 **Python**
 
@@ -22,6 +22,19 @@ pip install -r requirements.txt
 **Docker**
 
 * Install Docker Desktop from https://docs.docker.com/engine/install/. 
+
+## Repo Organization
+
+- root: 
+    - `EnvironmentData.py` is the main class for running combined data pulls.
+    - `Dockerfile` for creating the container and running repeated daily pulls.
+    - `requirements.txt` listing Python package dependencies.
+- clients: Python classes for interacting with the various data sources.
+- docs: Additional documentation for the repo and for Python classes. 
+- experiments: Code examples for working with the classes and data. 
+- jobs: Files for the Docker container to call during initialization and then scheduled via cron
+- tests: Automated tests, see the README.md there for more information about automated testing.
+- unused: Old code files that are no longer actively used. 
 
 ## How To
 
@@ -53,7 +66,7 @@ docker rm $(docker ps -a -q)
 ## APIs
 
 See documentation in each client file:
-- `modules/hobolink_client.py`
+- `modules/licor_client.py`
 
 **Coris** 
 
@@ -88,6 +101,43 @@ Other APIs can be implemented following the established pattern:
 3. Create schema transformation method to map to existing column structure
 4. Add unit tests for the new integration
 
+## Testing
+
+The project includes automated tests to validate API clients and data processing functionality.
+
+**Running Tests**
+
+```bash
+# Activate virtual environment first
+.venv/Scripts/activate
+
+# Install pytest
+pip install pytest
+
+# Run all tests
+python test/run.py
+
+# Or run individual test files
+python -m pytest test/test_licor.py -v
+python -m pytest test/ -v
+```
+
+**Test Coverage**
+
+Tests are located in the `./test` directory and cover:
+- API client functionality (LI-COR, Coris, Conserv)
+- Data transformation and schema validation
+- Error handling and edge cases
+- Integration testing with sample data
+
+**Writing Tests**
+
+When adding new functionality:
+1. Create test files in `./test` directory following the `test_*.py` naming convention
+2. Use existing test files as templates for API client testing
+3. Include both unit tests and integration tests where applicable
+4. Test error conditions and edge cases
+
 ## Other Commands
 
 * All APIs including Conserv are processed through a unified entry point (`ingest_all_sources.py`) that:
@@ -116,5 +166,5 @@ See ./html/EnvironmentData.html for the EnvironmentData class documentation. To 
 
 **Automated Testing**
 
-Tests are saved in ./test and can by run with `python test/run.py`.
+Tests are saved in ./test and can be run with `python test/run.py`. See the [Testing](#testing) section above for more details on running and writing tests.
 

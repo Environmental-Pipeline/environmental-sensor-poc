@@ -4,9 +4,9 @@ import numpy
 import logging
 import datetime
 import warnings
-from modules.conserv_client import create_conserv_client_from_env
-from modules.coris_client import create_coris_client_from_env
-from modules.hobolink_client import HobolinkClient
+from clients.conserv_client import create_conserv_client_from_env
+from clients.coris_client import create_coris_client_from_env
+from clients.licor_client import LicorClient
 
 
 class EnvironmentData:
@@ -20,7 +20,7 @@ class EnvironmentData:
         testing: bool = False,
         coris_enabled: bool = False,
         conserv_enabled: bool = False,
-        hobolink_enabled: bool = False,
+        licor_enabled: bool = False,
     ):
         """
         Initialize resources for managing the environmental readings.
@@ -50,8 +50,8 @@ class EnvironmentData:
         conserv_enabled : bool, default=False
             Enable Conserv API integration for additional sensor data sources.
 
-        hobolink_enabled : bool, default=False
-            Enable Hobolink API integration for additional sensor data sources.
+        licor_enabled : bool, default=False
+            Enable LI-COR API integration for additional sensor data sources.
 
         Returns
         -------
@@ -66,13 +66,13 @@ class EnvironmentData:
         self.out_of_scope = out_of_scope
         self.coris_enabled = coris_enabled
         self.conserv_enabled = conserv_enabled
-        self.hobolink_enabled = hobolink_enabled
+        self.licor_enabled = licor_enabled
 
         # Check that at least one data source is enabled
-        if not (coris_enabled or conserv_enabled or hobolink_enabled):
+        if not (coris_enabled or conserv_enabled or licor_enabled):
             raise ValueError(
                 "At least one data source must be enabled. "
-                "Set coris_enabled=True, conserv_enabled=True, or hobolink_enabled=True"
+                "Set coris_enabled=True, conserv_enabled=True, or licor_enabled=True"
             )
 
         # Create the data folder.
@@ -133,16 +133,16 @@ class EnvironmentData:
                 self.logger.warning(f"Failed to initialize Conserv client: {e}")
                 self.conserv_enabled = False
 
-        # Initialize Hobolink API client if enabled
-        self.hobolink_client = None
-        if self.hobolink_enabled:
+        # Initialize LI-COR API client if enabled
+        self.licor_client = None
+        if self.licor_enabled:
             try:
-                self.hobolink_client = HobolinkClient(self.logger)
-                # self.logger.info("Hobolink API client initialized successfully")
+                self.licor_client = LicorClient(self.logger)
+                # self.logger.info("LI-COR API client initialized successfully")
             except Exception as e:
-                self.logger.warning(f"Failed to initialize Hobolink client: {e}")
-                print(f"DEBUG: Failed to initialize Hobolink client: {e}")
-                self.hobolink_enabled = False
+                self.logger.warning(f"Failed to initialize LI-COR client: {e}")
+                print(f"DEBUG: Failed to initialize LI-COR client: {e}")
+                self.licor_enabled = False
 
         # Set up the readings data structure that will be used throughout.
         self.acceptable_range = {"SensorReadingF": [], "SensorReadingRh": []}
@@ -153,8 +153,8 @@ class EnvironmentData:
             enabled_sources.append("Coris")
         if self.conserv_enabled and self.conserv_client:
             enabled_sources.append("Conserv") 
-        if self.hobolink_enabled and self.hobolink_client:
-            enabled_sources.append("Hobolink")
+        if self.licor_enabled and self.licor_client:
+            enabled_sources.append("LI-COR")
         
         print(f"DEBUG: Enabled data sources: {enabled_sources}")
         self.logger.info(f"Enabled data sources: {enabled_sources}")
@@ -291,53 +291,53 @@ class EnvironmentData:
                 self.logger.warning(f"Failed to fetch Conserv historical data: {e}")
                 # Continue without Conserv data - don't fail the entire initialization
 
-        # ============ HOBOLINK HISTORICAL DATA PROCESSING ============
-        hobolink_readings = []
-        if self.hobolink_enabled and self.hobolink_client:
-            # print("DEBUG: Fetching Hobolink historical data")
-            # self.logger.info("Fetching Hobolink historical data")
+        # ============ LI-COR HISTORICAL DATA PROCESSING ============
+        licor_readings = []
+        if self.licor_enabled and self.licor_client:
+            # print("DEBUG: Fetching LI-COR historical data")
+            # self.logger.info("Fetching LI-COR historical data")
             
             try:
-                # Get Hobolink data for the same time period
-                hobolink_data_list = self.hobolink_client.get_historical_data(
+                # Get LI-COR data for the same time period
+                licor_data_list = self.licor_client.get_historical_data(
                     start_utc=start_utc,
                     end_utc=current_utc,
                     out_of_scope=self.out_of_scope,
                     testing=self.testing
                 )
                 
-                if hobolink_data_list is not None and len(hobolink_data_list) > 0:
+                if licor_data_list is not None and len(licor_data_list) > 0:
                     # Clean and validate each DataFrame in the list
                     total_records = 0
-                    for i, data in enumerate(hobolink_data_list):
+                    for i, data in enumerate(licor_data_list):
                         if data is not None and not data.is_empty():
-                            hobolink_data_list[i] = self.clean_validate_sensors(
-                                sensors=data, step="initialize_database_hobolink"
+                            licor_data_list[i] = self.clean_validate_sensors(
+                                sensors=data, step="initialize_database_licor"
                             )
-                            total_records += hobolink_data_list[i].shape[0]
+                            total_records += licor_data_list[i].shape[0]
                     
                     # Add all DataFrames to readings list
-                    hobolink_readings.extend(hobolink_data_list)
-                    # print(f"DEBUG: Successfully processed {total_records} Hobolink historical records from {len(hobolink_data_list)} DataFrames")
+                    licor_readings.extend(licor_data_list)
+                    # print(f"DEBUG: Successfully processed {total_records} LI-COR historical records from {len(licor_data_list)} DataFrames")
                     # self.logger.info(
-                    #     f"Successfully processed {total_records} Hobolink historical records from {len(hobolink_data_list)} DataFrames"
+                    #     f"Successfully processed {total_records} LI-COR historical records from {len(licor_data_list)} DataFrames"
                     # )
                 else:
-                    print("DEBUG: No Hobolink historical data available for the specified period")
+                    print("DEBUG: No LI-COR historical data available for the specified period")
                     self.logger.info(
-                        "No Hobolink historical data available for the specified period"
+                        "No LI-COR historical data available for the specified period"
                     )
                     
             except Exception as e:
-                print(f"DEBUG: Failed to fetch Hobolink historical data: {e}")
-                self.logger.warning(f"Failed to fetch Hobolink historical data: {e}")
-                # Continue without Hobolink data - don't fail the entire initialization
+                print(f"DEBUG: Failed to fetch LI-COR historical data: {e}")
+                self.logger.warning(f"Failed to fetch LI-COR historical data: {e}")
+                # Continue without LI-COR data - don't fail the entire initialization
         else:
-            print(f"DEBUG: Hobolink not enabled or client not initialized. Enabled: {self.hobolink_enabled}, Client: {self.hobolink_client}")
+            print(f"DEBUG: LI-COR not enabled or client not initialized. Enabled: {self.licor_enabled}, Client: {self.licor_client}")
 
         # ============ COMBINE ALL DATA SOURCES ============
-        # Combine Coris, Conserv, and Hobolink readings into a single polars DataFrame
-        all_readings = readings + conserv_readings + hobolink_readings
+        # Combine Coris, Conserv, and LI-COR readings into a single polars DataFrame
+        all_readings = readings + conserv_readings + licor_readings
         dt = (
             polars.concat(all_readings, how="diagonal")
             if all_readings
@@ -649,44 +649,44 @@ class EnvironmentData:
                 )
                 # Continue with Coris data only - don't fail the entire process
 
-        # ============ HOBOLINK DATA PROCESSING ============
-        hobolink_sensors = None
-        if self.hobolink_enabled and self.hobolink_client:
-            self.logger.info("Fetching current Hobolink data")
+        # ============ LI-COR DATA PROCESSING ============
+        licor_sensors = None
+        if self.licor_enabled and self.licor_client:
+            self.logger.info("Fetching current LI-COR data")
 
             try:
-                # Get current readings from Hobolink API
-                hobolink_sensors = self.hobolink_client.get_current_readings(
+                # Get current readings from LI-COR API
+                licor_sensors = self.licor_client.get_current_readings(
                     out_of_scope=self.out_of_scope,
                     testing=self.testing,
                     testing_device_limit=3 if self.testing else None
                 )
 
-                if hobolink_sensors is not None and not hobolink_sensors.is_empty():
-                    self.logger.info(f"Raw Hobolink data shape: {hobolink_sensors.shape}")
+                if licor_sensors is not None and not licor_sensors.is_empty():
+                    self.logger.info(f"Raw LI-COR data shape: {licor_sensors.shape}")
 
-                    # Clean and validate Hobolink data
-                    hobolink_sensors = self.clean_validate_sensors(
-                        sensors=hobolink_sensors, step="get_current_readings_hobolink"
+                    # Clean and validate LI-COR data
+                    licor_sensors = self.clean_validate_sensors(
+                        sensors=licor_sensors, step="get_current_readings_licor"
                     )
 
-                    if hobolink_sensors is not None and not hobolink_sensors.is_empty():
+                    if licor_sensors is not None and not licor_sensors.is_empty():
                         self.logger.info(
-                            f"Successfully processed {hobolink_sensors.shape[0]} current Hobolink records"
+                            f"Successfully processed {licor_sensors.shape[0]} current LI-COR records"
                         )
                     else:
                         self.logger.warning(
-                            "Hobolink data was cleaned out completely during validation!"
+                            "LI-COR data was cleaned out completely during validation!"
                         )
                 else:
-                    self.logger.info("No current Hobolink data available")
+                    self.logger.info("No current LI-COR data available")
 
             except Exception as e:
-                self.logger.warning(f"Failed to fetch current Hobolink data: {e}")
+                self.logger.warning(f"Failed to fetch current LI-COR data: {e}")
                 import traceback
 
                 self.logger.warning(
-                    f"Hobolink error traceback: {traceback.format_exc()}"
+                    f"LI-COR error traceback: {traceback.format_exc()}"
                 )
                 # Continue with other data sources - don't fail the entire process
 
@@ -708,12 +708,12 @@ class EnvironmentData:
             data_sources.append(conserv_sensors)
             source_info.append(f"CONSERV: {conserv_sensors.shape[0]} rows")
 
-        if hobolink_sensors is not None and not hobolink_sensors.is_empty():
-            hobolink_sensors = self.enforce_schema(
-                hobolink_sensors, "Hobolink_Current_Readings"
+        if licor_sensors is not None and not licor_sensors.is_empty():
+            licor_sensors = self.enforce_schema(
+                licor_sensors, "LI-COR_Current_Readings"
             )
-            data_sources.append(hobolink_sensors)
-            source_info.append(f"HOBOLINK: {hobolink_sensors.shape[0]} rows")
+            data_sources.append(licor_sensors)
+            source_info.append(f"LI-COR: {licor_sensors.shape[0]} rows")
 
         # Log merging information and combine data sources
         if len(data_sources) > 1:

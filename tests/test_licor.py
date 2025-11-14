@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Test suite for Hobolink API client integration.
+Test suite for LI-COR API client integration.
 
-This module contains comprehensive tests for the HobolinkClient class,
+This module contains comprehensive tests for the LicorClient class,
 including API connectivity, data retrieval, transformation, and schema compatibility.
 """
 
@@ -20,32 +20,32 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 logging.basicConfig(level=logging.WARNING)
 
 try:
-    from modules.hobolink_client import HobolinkClient
-    HOBOLINK_AVAILABLE = True
+    from clients.licor_client import LicorClient
+    LICOR_AVAILABLE = True
 except ImportError as e:
-    print(f"Hobolink client not available: {e}")
-    HOBOLINK_AVAILABLE = False
+    print(f"LI-COR client not available: {e}")
+    LICOR_AVAILABLE = False
 
 
-@unittest.skipUnless(HOBOLINK_AVAILABLE, "Hobolink client not available")
-class TestHobolinkClient(unittest.TestCase):
-    """Test cases for HobolinkClient functionality."""
+@unittest.skipUnless(LICOR_AVAILABLE, "LI-COR client not available")
+class TestLicorClient(unittest.TestCase):
+    """Test cases for LicorClient functionality."""
     
     @classmethod
     def setUpClass(cls):
         """Set up test fixtures for the entire test class."""
         cls.logger = logging.getLogger(__name__)
         try:
-            cls.client = HobolinkClient(logger=cls.logger)
+            cls.client = LicorClient(logger=cls.logger)
             cls.client_available = True
         except Exception as e:
-            cls.logger.warning(f"Could not create Hobolink client: {e}")
+            cls.logger.warning(f"Could not create LI-COR client: {e}")
             cls.client_available = False
     
     def setUp(self):
         """Set up test fixtures for each test method."""
         if not self.client_available:
-            self.skipTest("Hobolink client not available - check HOBOLINK_API_KEY environment variable")
+            self.skipTest("LI-COR client not available - check LICOR_API_KEY environment variable")
     
     def test_get_devices_as_dataframe(self):
         """Test device and sensor discovery functionality."""
@@ -68,8 +68,8 @@ class TestHobolinkClient(unittest.TestCase):
         
         # Verify source column is correct
         sources = devices_df['source'].unique().to_list()
-        self.assertEqual(sources, ['Hobolink'], 
-                        "All records should have source='Hobolink'")
+        self.assertEqual(sources, ['LI-COR'], 
+                        "All records should have source='LI-COR'")
         
         # Verify we have actual sensor data
         sensor_data = devices_df.filter(pl.col('SensorID').is_not_null())
@@ -95,8 +95,8 @@ class TestHobolinkClient(unittest.TestCase):
             
             # Verify source column is correct
             sources = current_readings['source'].unique().to_list()
-            self.assertEqual(sources, ['Hobolink'],
-                            "All records should have source='Hobolink'")            # Check that we have actual readings
+            self.assertEqual(sources, ['LI-COR'],
+                            "All records should have source='LI-COR'")            # Check that we have actual readings
             non_null_readings = current_readings.filter(
                 pl.col('SensorReading').is_not_null()
             )
@@ -113,7 +113,7 @@ class TestHobolinkClient(unittest.TestCase):
     
     def test_get_historical_data_basic(self):
         """Test basic historical data retrieval functionality."""
-        # Use DAYS_BACK environment variable like the successful explore_hobolink.py script
+        # Use DAYS_BACK environment variable like the successful explore_licor.py script
         # This matches the production configuration and what's known to work
         days_back = int(os.getenv('DAYS_BACK', 30))  # Default to 30 days for tests (faster)
         end_time = datetime.datetime.now(datetime.timezone.utc)
@@ -152,8 +152,8 @@ class TestHobolinkClient(unittest.TestCase):
                 
                 # Verify source
                 sources = df['source'].unique().to_list()
-                self.assertEqual(sources, ['Hobolink'],
-                                "All historical records should have source='Hobolink'")                # Verify timeframe - all timestamps should be within requested range
+                self.assertEqual(sources, ['LI-COR'],
+                                "All historical records should have source='LI-COR'")                # Verify timeframe - all timestamps should be within requested range
                 timestamps = df['SensorReadingUTC'].to_list()
                 for timestamp in timestamps:
                     self.assertGreaterEqual(timestamp, start_utc, 
@@ -170,7 +170,7 @@ class TestHobolinkClient(unittest.TestCase):
     
     def test_transform_to_standardized_schema(self):
         """Test data transformation to standardized schema."""
-        # Create mock raw data that matches Hobolink API response format
+        # Create mock raw data that matches LI-COR API response format
         mock_raw_data = {
             "moreResults": False,
             "sensors": [{
@@ -209,9 +209,9 @@ class TestHobolinkClient(unittest.TestCase):
                          f"Transformed DataFrame should contain column '{col}'")
         
         # Verify data values
-        self.assertEqual(transformed['source'].unique().to_list(), ['Hobolink'])
+        self.assertEqual(transformed['source'].unique().to_list(), ['LI-COR'])
         self.assertEqual(transformed['SensorType'].unique().to_list(), ['RH'])
-        self.assertEqual(transformed['SensorID'].unique().to_list(), ['hobolink:test-test-sensor-1'])
+        self.assertEqual(transformed['SensorID'].unique().to_list(), ['licor:test-test-sensor-1'])
         
         # Verify timestamp conversion (ms to seconds)
         expected_timestamps = [1761684300, 1761685200, 1761686100]
@@ -337,25 +337,25 @@ class TestHobolinkClient(unittest.TestCase):
     
     def test_client_creation_from_env(self):
         """Test client creation from environment variables."""
-        # This test assumes HOBOLINK_API_KEY is set
-        client = HobolinkClient()
-        self.assertIsInstance(client, HobolinkClient, 
-                            "Should create a HobolinkClient instance")
+        # This test assumes LICOR_API_KEY is set
+        client = LicorClient()
+        self.assertIsInstance(client, LicorClient, 
+                            "Should create a LicorClient instance")
         self.assertTrue(hasattr(client, 'api_key'), 
                        "Client should have api_key attribute")
         self.assertEqual(client.base_url, "https://api.licor.cloud/v2", 
                         "Client should have correct base URL")
 
 
-class TestHobolinkIntegration(unittest.TestCase):
-    """Integration tests for Hobolink client with real API calls."""
+class TestLicorIntegration(unittest.TestCase):
+    """Integration tests for LI-COR client with real API calls."""
     
     @classmethod
     def setUpClass(cls):
         """Set up integration test fixtures."""
         cls.logger = logging.getLogger(__name__)
         try:
-            cls.client = HobolinkClient(logger=cls.logger)
+            cls.client = LicorClient(logger=cls.logger)
             cls.integration_available = True
         except Exception as e:
             cls.logger.warning(f"Integration tests not available: {e}")
@@ -364,7 +364,7 @@ class TestHobolinkIntegration(unittest.TestCase):
     def setUp(self):
         """Set up integration test fixtures for each test method."""
         if not self.integration_available:
-            self.skipTest("Integration tests not available - check HOBOLINK_API_KEY")
+            self.skipTest("Integration tests not available - check LICOR_API_KEY")
     
     def test_end_to_end_data_pipeline(self):
         """Test complete data pipeline from API to standardized format."""
@@ -377,7 +377,7 @@ class TestHobolinkIntegration(unittest.TestCase):
         # Note: Current readings might be empty if no sensors have latest values
         
         # Step 3: Try to get some historical data using production configuration
-        # Use DAYS_BACK like explore_hobolink.py which is known to work well
+        # Use DAYS_BACK like explore_licor.py which is known to work well
         days_back = int(os.getenv('DAYS_BACK', 60))  # Default to 60 days for integration test
         end_time = datetime.datetime.now(datetime.timezone.utc)
         start_time = end_time - datetime.timedelta(days=days_back)
@@ -402,7 +402,7 @@ class TestHobolinkIntegration(unittest.TestCase):
             self.assertGreater(len(combined_df), 0, 
                               "Combined historical data should have readings")
             self.assertIn('source', combined_df.columns)
-            self.assertEqual(combined_df['source'].unique().to_list(), ['Hobolink'])
+            self.assertEqual(combined_df['source'].unique().to_list(), ['LI-COR'])
             
             # Verify timeframe for integration test
             start_utc = int(start_time.timestamp())

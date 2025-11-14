@@ -27,7 +27,7 @@ def initialize_environment_data():
         days_back=365 * 2,
         out_of_scope=['-80', 'Cryo tank', 'Water'],
         coris_enabled=True,
-        hobolink_enabled=True,
+        licor_enabled=True,
         conserv_enabled=False,  # out of scope for this project
         testing=True
     )
@@ -61,16 +61,16 @@ def check_historical_data():
     except Exception as e:
         print(f"Error reading Coris data: {e}")
     
-    # Check Hobolink data
+    # Check LI-COR data
     try:
-        hobolink_data = polars.read_parquet('data/sensor_readings.parquet').filter(
-            polars.col("Source") == "Hobolink"
-        ).head()
-        print(f"\nHobolink data shape: {hobolink_data.shape}")
-        print("Sample Hobolink data:")
-        print(hobolink_data)
+        licor_data = polars.read_parquet('data/sensor_readings.parquet').filter(
+            polars.col("Source") == "LI-COR"
+        )
+        print(f"\nLI-COR data shape: {licor_data.shape}")
+        print("Sample LI-COR data:")
+        print(licor_data)
     except Exception as e:
-        print(f"Error reading Hobolink data: {e}")
+        print(f"Error reading LI-COR data: {e}")
 
 
 def get_current_readings(envdt):
