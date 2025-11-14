@@ -271,7 +271,7 @@ class EnvironmentData:
                 )
 
                 if conserv_data is not None and not conserv_data.is_empty():
-                    # Conserv data is already transformed by modules/conserv_client.py
+                    # Conserv data is already transformed by clients/conserv_client.py
                     # Clean and validate Conserv data
                     conserv_data = self.clean_validate_sensors(
                         sensors=conserv_data, step="initialize_database_conserv"
@@ -613,7 +613,7 @@ class EnvironmentData:
                 if conserv_data is not None and not conserv_data.is_empty():
                     self.logger.info(f"Conserv data shape: {conserv_data.shape}")
 
-                    # Conserv data is already transformed by modules/conserv_client.py
+                    # Conserv data is already transformed by clients/conserv_client.py
                     conserv_sensors = conserv_data
 
                     if conserv_sensors is not None and not conserv_sensors.is_empty():

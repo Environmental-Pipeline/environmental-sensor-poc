@@ -2,16 +2,14 @@
 """
 LI-COR API Explorer
 
-This script runs comprehensive diagnostics on the LI-COR API endpoints
-and saves sample responses for analysis and development purposes.
-Now includes unlimited historical data pulls without date restrictions.
+Create formatted output to understand the data available via the LI-COR API.
 
 Usage:
     # Sample run (first 3 devices only)
-    python test/explore_licor.py
+    python experiments/explore_licor.py
     
     # Full run (all devices - comprehensive analysis)
-    python test/explore_licor.py --all-devices
+    python experiments/explore_licor.py --all-devices
 
 Arguments:
     --all-devices    Run comprehensive analysis on all available devices
@@ -26,7 +24,7 @@ Features:
 
 Requirements:
     - LICOR_API_KEY environment variable must be set
-    - Creates samples/ directory for storing API responses and CSV exports
+    - Createsn samples/ directory for storing API responses and CSV exports
 """
 
 import os
@@ -38,7 +36,7 @@ import argparse
 # Add parent directory to path to import licor_client
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from clients.licor_client import create_licor_client_from_env
+from clients.licor_client import LicorClient
 
 
 def diagnose_api_endpoints_unlimited(client, save_samples: bool = True, all_devices_mode: bool = False):
@@ -63,7 +61,7 @@ def diagnose_api_endpoints_unlimited(client, save_samples: bool = True, all_devi
         print("-" * 30)
         print("Endpoint: GET /devices?includeSensors=true")
         
-        devices_response = client.get_devices(include_sensors=True)
+        devices_response = client.get_devices()
         
         # Save devices response to file
         if save_samples and samples_dir:
@@ -521,7 +519,7 @@ def main():
     try:
         # Create client
         print("Creating LI-COR client...")
-        client = create_licor_client_from_env()
+        client = LicorClient()
         
         # Run historical diagnostics with sample saving
         print(f"Running {days_back}-day historical data exploration...")

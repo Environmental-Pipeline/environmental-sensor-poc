@@ -13,7 +13,7 @@ import datetime
 import sys
 import os
 
-# Add the parent directory to the path to import our modules
+# Add the parent directory to the path to import our clients
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from clients.conserv_client import ConservAPIClient, ConservCustomer

@@ -9,7 +9,7 @@ RUN python3 -m pip install --no-cache-dir -r requirements.txt
 # Copy necessary files. We leave out 1-examples-cron.ipynb since it could interfere with cron jobs.
 # To use 2-examples-analysis.ipynb, wait until the first consolidation (after 10 minutes) has run to ensure data files exist.
 COPY EnvironmentData.py ingest_all_sources.py .env 2-examples-analysis.ipynb ./
-COPY modules modules/
+COPY clients clients/
 COPY jobs jobs/
 
 COPY jobs/cronjobs /etc/cron.d/cronjobs

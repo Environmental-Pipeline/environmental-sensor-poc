@@ -66,7 +66,7 @@ docker rm $(docker ps -a -q)
 ## APIs
 
 See documentation in each client file:
-- `modules/licor_client.py`
+- `clients/licor_client.py`
 
 **Coris** 
 

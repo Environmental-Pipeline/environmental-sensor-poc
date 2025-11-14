@@ -6,8 +6,8 @@ historical data queries, and data transformation
 to maintain compatibility with the EnvironmentData schema.
 
 ## Commands:
-- Create HTML documentation in `docs/modules`: `pdoc modules/licor_client.py -o docs/ --no-search` 
-- Save API output to `samples/` folder: `python -c "from modules.licor_client import LicorClient; LicorClient().sample_raw_data()"`
+- Create HTML documentation in `docs/clients`: `pdoc clients/licor_client.py -o docs/ --no-search` 
+- Save API output to `samples/` folder: `python -c "from clients.licor_client import LicorClient; LicorClient().sample_raw_data()"`
 
 ## API Endpoints
 

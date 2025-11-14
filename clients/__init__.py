@@ -1,7 +1,7 @@
 """
-Environmental Sensor API Client Modules
+Environmental Sensor API Client Clients
 
-This package contains client modules for various environmental monitoring APIs:
+This package contains clients for various environmental monitoring APIs:
 - coris_client: Coris API client for environmental sensor data
 - conserv_client: Conserv API client for environmental sensor data
 - licor_client: LI-COR API client for environmental sensor data
