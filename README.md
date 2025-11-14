@@ -52,6 +52,9 @@ docker rm $(docker ps -a -q)
 
 ## APIs
 
+See documentation in each client file:
+- `modules/hobolink_client.py`
+
 **Coris** 
 
 The project reads `SensorType` = "Temperature", "Humidity" from the Coris API. New types can be brought in by adding a new entry to the `readings` object in the `EnvironmentData` class. 
@@ -76,17 +79,6 @@ The Conserv API supports multiple customer tenants. _Conserv does not currently 
   - `POST /v1/sensors/export/{uuid}/download` - Get download URL
 * Error handling: Individual customer failures don't break the entire process ("No data found" handled gracefully)
 * New schema columns: `SensorID_Conserv`, `customer_id`, `source` (preserves backward compatibility)
-
-**Hobolink**
-
-* API Endpoints:
-  - GET https://api.licor.cloud/v2/devices?includeSensors=true Identify available sensors.
-  - GET https://api.licor.cloud/v2/data?deviceSerialNumber=X&sensorSerialNumber=Y&startTime=Z&endTime=W Get sensor data.
-* Data format: JSON. Query devices then loop over devices and sensors to get readings. Run `python test/explore_hobolink.py` to save sample output to `samples/`.
-* Only allows data within the last year. 
-* The data API response has a property "moreResults" that is always False. The code will error out if it is ever true, in which case this would need to be handled. It isn't possible to handle it now since I can't find any data that has it true, so I'm not sure what that data would look like. It is either an unused property or only comes into play when there is too much data in one record, which didn't happen when I searched the max duration (one year) across all sensors.
-* Most readings come in Fahrenheit, but some do come through in Celsius, in which case we convert to Fahrenheit for consistency.
-* The same Sensor number can be used in multiple devices, so we create a combo ID of device and sensor serial numbers for Sensor ID.
 
 **Adding New APIs**
 
@@ -120,7 +112,7 @@ Polars/parquet was selected as our data framework because it is faster and more 
 
 **EnvironmentData Documentation**
 
-See ./html/EnvironmentData.html for the EnvironmentData class documentation. To update this documentation, run `pdoc --html EnvironmentData.py --force`
+See ./html/EnvironmentData.html for the EnvironmentData class documentation. To update this documentation, run `pdoc EnvironmentData.py -o docs/ --no-search` after installing [pandoc](https://pypi.org/project/pdoc/).
 
 **Automated Testing**
 

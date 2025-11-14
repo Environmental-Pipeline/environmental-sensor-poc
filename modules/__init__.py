@@ -9,7 +9,7 @@ This package contains client modules for various environmental monitoring APIs:
 
 from .coris_client import CorisClient, create_coris_client_from_env
 from .conserv_client import ConservAPIClient, ConservCustomer, create_conserv_client_from_env
-from .hobolink_client import HobolinkClient, create_hobolink_client_from_env
+from .hobolink_client import HobolinkClient
 
 __all__ = [
     'CorisClient',
@@ -18,5 +18,4 @@ __all__ = [
     'ConservCustomer',
     'create_conserv_client_from_env',
     'HobolinkClient',
-    'create_hobolink_client_from_env'
 ]

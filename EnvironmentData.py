@@ -1,14 +1,12 @@
 import os
-import requests
 import polars
 import numpy
-import tqdm
 import logging
 import datetime
 import warnings
 from modules.conserv_client import create_conserv_client_from_env
 from modules.coris_client import create_coris_client_from_env
-from modules.hobolink_client import create_hobolink_client_from_env
+from modules.hobolink_client import HobolinkClient
 
 
 class EnvironmentData:
@@ -139,7 +137,7 @@ class EnvironmentData:
         self.hobolink_client = None
         if self.hobolink_enabled:
             try:
-                self.hobolink_client = create_hobolink_client_from_env(self.logger)
+                self.hobolink_client = HobolinkClient(self.logger)
                 # self.logger.info("Hobolink API client initialized successfully")
             except Exception as e:
                 self.logger.warning(f"Failed to initialize Hobolink client: {e}")
@@ -242,7 +240,7 @@ class EnvironmentData:
         readings = []
         if self.coris_enabled and self.coris_client:
             # Get historical data from Coris API using the client
-            coris_readings = self.coris_client.get_historical_data_bulk(
+            coris_readings = self.coris_client.get_historical_data(
                 acceptable_range=self.acceptable_range,
                 start_utc=start_utc,
                 end_utc=current_utc,
@@ -301,7 +299,7 @@ class EnvironmentData:
             
             try:
                 # Get Hobolink data for the same time period
-                hobolink_data_list = self.hobolink_client.get_historical_data_bulk(
+                hobolink_data_list = self.hobolink_client.get_historical_data(
                     start_utc=start_utc,
                     end_utc=current_utc,
                     out_of_scope=self.out_of_scope,

@@ -1,47 +1,116 @@
 """
-Hobolink API Client Module
+# Hobolink API Client
 
-This module provides a client interface for the Hobolink/LI-COR environmental monitoring API.
-It handles sensor data retrieval, historical data queries, and data transformation
+This module provides a client interface that handles sensor data retrieval, 
+historical data queries, and data transformation
 to maintain compatibility with the EnvironmentData schema.
 
-API Endpoints:
-- GET https://api.licor.cloud/v2/devices?includeSensors=true Identify available sensors.
-- GET https://api.licor.cloud/v2/data?deviceSerialNumber=X&sensorSerialNumber=Y&startTime=Z&endTime=W Get sensor data.
-Authentication: Bearer Token via HOBOLINK_API_KEY environment variable
+## Commands:
+- Create HTML documentation in `docs/modules`: `pdoc modules/hobolink_client.py -o docs/ --no-search` 
+- Save API output to `samples/` folder: `python -c "from modules.hobolink_client import HobolinkClient; HobolinkClient().sample_raw_data()"`
+
+## API Endpoints
+
+The client queries available sensors and then loops over them to get readings. APIs return JSON data. Authentication uses a Bearer Token from .env variable HOBOLINK_API_KEY.
+
+### Identify available devices and sensors.
+
+- GET https://api.licor.cloud/v2/devices?includeSensors=true 
+- The same sensorSerialNumber number can be used in multiple devices, so we create a combo ID of device and sensor serial numbers for Sensor ID.
+
+```json
+{
+  "total": 16,
+  "devices": [
+    {
+      "deviceName": "RX Station 1",
+      "deviceSerialNumber": "22202142", 
+      "productCode": "RX2100",
+      "lastConnectionTime": "2025-11-14T21:31:12.022Z",
+      "loggingState": "LOGGING",
+      "alarmed": true,
+      "unitSystem": "US",
+      "sensors": [
+        {
+          "sensorSerialNumber": "22179174-2",
+          "measurementType": "RH",
+          "units": "%",
+          "latest": 47.115281910429545
+        },
+        ...
+      ]
+    },
+    ...
+  ]
+}
+```
+
+### Sensor data.
+
+- GET https://api.licor.cloud/v2/data?deviceSerialNumber=X&sensorSerialNumber=Y&startTime=Z&endTime=W
+- Only allows data within the last year. 
+- Property "moreResults" is always False. The code will error out if it is ever true, in which case this would need to be handled. It isn't possible to handle it now since I can't find any data that has it true, so I'm not sure what that data would look like. It is either an unused property or only comes into play when there is too much data in one record, which didn't happen when I searched the max duration (one year) across all sensors.
+- Most readings come in Fahrenheit, but some do come through in Celsius, in which case we convert to Fahrenheit for consistency.
+
+```json
+{
+  "moreResults": false,
+  "sensors": [
+    {
+      "totalRecords": 19,
+      "sensorSerialNumber": "22179174-2",
+      "latestTimestamp": 1763155800000,
+      "data": [
+        {
+          "measurementType": "RH",
+          "dataType": "CURRENT", 
+          "units": "%",
+          "records": [
+            [1763139600000, 38.1353475242237],
+            [1763140500000, 46.08224612802319],
+            ...
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
 """
 
-import os
 import requests
 import polars
 import datetime
 import logging
 import tqdm
+import json
+from pathlib import Path
 from typing import List, Dict, Optional, Any
 
-
 class HobolinkClient:
-    """
-    Client for interacting with the Hobolink/LI-COR environmental monitoring API.
     
-    This client handles:
-    - Device and sensor metadata retrieval
-    - Historical sensor data queries
-    - Current sensor readings
-    - Data transformation to standardized schema
-    """
-    
-    def __init__(self, api_key: str, logger: Optional[logging.Logger] = None):
+    def __init__(self, logger: Optional[logging.Logger] = None):
         """
         Initialize the Hobolink API client.
         
         Parameters
         ----------
-        api_key : str
-            Hobolink API key for Bearer token authentication
         logger : Optional[logging.Logger]
             Logger instance for recording API interactions
         """
+        # Read API key from environment
+        try:
+            with open(".env") as f:
+                for line in f:
+                    if line.startswith("HOBOLINK_API_KEY"):
+                        api_key = line.split("=", 1)[1].strip()
+                        break
+        except FileNotFoundError:
+            pass
+        
+        if not api_key:
+            raise ValueError("HOBOLINK_API_KEY not found in .env file.")
+        
         self.api_key = api_key
         self.logger = logger or logging.getLogger(__name__)
         self.base_url = "https://api.licor.cloud/v2"
@@ -53,26 +122,6 @@ class HobolinkClient:
         # Configure logging for detailed API response inspection
         if self.logger.level == logging.NOTSET:
             self.logger.setLevel(logging.INFO)
-    
-    def get_current_utc(self) -> int:
-        """
-        Get the current UTC timestamp in seconds.
-        
-        Returns
-        -------
-        int : Current UTC timestamp
-        """
-        return int(datetime.datetime.now(datetime.timezone.utc).timestamp())
-    
-    def get_current_utc_ms(self) -> int:
-        """
-        Get the current UTC timestamp in milliseconds (for Hobolink API).
-        
-        Returns
-        -------
-        int : Current UTC timestamp in milliseconds
-        """
-        return int(datetime.datetime.now(datetime.timezone.utc).timestamp() * 1000)
     
     def _make_api_request(self, endpoint: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
         """
@@ -117,14 +166,9 @@ class HobolinkClient:
             self.logger.error(error_msg)
             raise Exception(error_msg)
     
-    def get_devices(self, include_sensors: bool = True) -> Dict[str, Any]:
+    def get_devices(self) -> Dict[str, Any]:
         """
         Get the list of all devices from the Hobolink API.
-        
-        Parameters
-        ----------
-        include_sensors : bool, default=True
-            Whether to include sensor information with devices
             
         Returns
         -------
@@ -133,11 +177,7 @@ class HobolinkClient:
         """
         self.logger.info("get_devices")
         
-        params = {}
-        if include_sensors:
-            params["includeSensors"] = "true"
-        
-        response_data = self._make_api_request("devices", params)
+        response_data = self._make_api_request("devices", {"includeSensors": "true"})
         
         # Log basic device count for tracking
         if isinstance(response_data, list):
@@ -178,7 +218,6 @@ class HobolinkClient:
         date_range_ms = end_time_ms - start_time_ms
         
         if date_range_ms > max_milliseconds:
-            original_start = start_time_ms
             start_time_ms = end_time_ms - max_milliseconds
             self.logger.warning(
                 f"Date range ({date_range_ms // (24 * 60 * 60 * 1000)} days) exceeds Hobolink API limit of {max_days} days. "
@@ -248,7 +287,6 @@ class HobolinkClient:
             return polars.DataFrame()
         
         all_readings = []
-        current_utc = self.get_current_utc()
         
         for sensor_info in raw_data["sensors"]:
             sensor_serial = sensor_info.get("sensorSerialNumber", "unknown")
@@ -283,7 +321,7 @@ class HobolinkClient:
                     ])
                     
                     # Map measurement types to standardized reading columns
-                    # Focus on temperature and humidity only (matching Coris behavior)
+                    # Focus on temperature and humidity only
                     if measurement_type.lower() in ["temperature", "temp"]:
                         if "°F" in units or "F" in units:
                             # Already in Fahrenheit - keep this sensor
@@ -338,17 +376,14 @@ class HobolinkClient:
         self.logger.info(f"Transformed {len(result)} readings from Hobolink data")
         return result
     
-    def get_devices_as_dataframe(self, include_sensors: bool = True, 
-                               out_of_scope: List[str] = None,
+    def get_devices_as_dataframe(self, out_of_scope: List[str] = None,
                                testing: bool = False,
                                testing_device_limit: int = 3) -> polars.DataFrame:
         """
-        Get devices and sensors as a standardized DataFrame similar to Coris client.
+        Get devices and sensors as a standardized DataFrame.
         
         Parameters
         ----------
-        include_sensors : bool, default=True
-            Whether to include sensor information
         out_of_scope : List[str], optional
             List of device name prefixes to exclude
         testing : bool, default=False
@@ -362,10 +397,10 @@ class HobolinkClient:
             Device and sensor data with standardized schema
         """
         out_of_scope = out_of_scope or []
-        current_utc = self.get_current_utc()
+        current_utc = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
         
         self.logger.info("get_devices_as_dataframe")
-        devices_response = self.get_devices(include_sensors=include_sensors)
+        devices_response = self.get_devices()
         
         if not isinstance(devices_response, dict) or "devices" not in devices_response:
             self.logger.error("Invalid device response format")
@@ -388,7 +423,7 @@ class HobolinkClient:
             device_serial = device.get("deviceSerialNumber")
             device_name = device.get("deviceName", "Unknown Device")
             
-            if include_sensors and "sensors" in device:
+            if "sensors" in device:
                 # Create a record for each sensor (temperature and humidity only)
                 for sensor in device["sensors"]:
                     sensor_serial = sensor.get("sensorSerialNumber")
@@ -396,7 +431,7 @@ class HobolinkClient:
                     units = sensor.get("units", "")
                     latest_value = sensor.get("latest")
                     
-                    # Filter to only temperature and humidity sensors (matching Coris behavior)
+                    # Filter to only temperature and humidity sensors
                     if measurement_type.lower() not in ["temperature", "temp", "rh", "humidity", "relative humidity"]:
                         continue
                     
@@ -414,22 +449,6 @@ class HobolinkClient:
                         "Alarmed": device.get("alarmed", False),
                         "UnitSystem": device.get("unitSystem"),
                     })
-            else:
-                # Create a record for the device only
-                device_records.append({
-                    "DeviceID": f"hobolink:{device_serial}",
-                    "DeviceName": device_name,
-                    "SensorID": None,
-                    "SensorName": device_name,
-                    "SensorType": None,
-                    "SensorUnits": None,
-                    "LatestReading": None,
-                    "ProductCode": device.get("productCode"),
-                    "LastConnectionTime": device.get("lastConnectionTime"),
-                    "LoggingState": device.get("loggingState"),
-                    "Alarmed": device.get("alarmed", False),
-                    "UnitSystem": device.get("unitSystem"),
-                })
         
         if not device_records:
             return polars.DataFrame()
@@ -447,7 +466,7 @@ class HobolinkClient:
         self.logger.info(f"Retrieved {len(result)} device/sensor combinations")
         return result
     
-    def get_historical_data_bulk(self, start_utc: int, end_utc: int,
+    def get_historical_data(self, start_utc: int, end_utc: int,
                                out_of_scope: List[str] = None,
                                testing: bool = False,
                                testing_device_limit: int = 2,
@@ -494,7 +513,6 @@ class HobolinkClient:
         
         self.logger.info(f"Using date range: {(end_utc - start_utc) // 86400} days of historical data")
         devices_df = self.get_devices_as_dataframe(
-            include_sensors=True, 
             out_of_scope=out_of_scope,
             testing=testing,
             testing_device_limit=testing_device_limit
@@ -604,7 +622,6 @@ class HobolinkClient:
             Current sensor readings with standardized schema
         """
         devices_df = self.get_devices_as_dataframe(
-            include_sensors=True,
             out_of_scope=out_of_scope,
             testing=testing,
             testing_device_limit=testing_device_limit
@@ -624,7 +641,7 @@ class HobolinkClient:
             return polars.DataFrame()
         
         # Transform latest readings to match historical data format
-        current_utc = self.get_current_utc()
+        current_utc = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
         
         # Create standardized current readings
         result = current_readings.with_columns([
@@ -667,7 +684,7 @@ class HobolinkClient:
                                f"(measurement_type: {sensor_type}, units: {units})")
         
         # Select only the columns that match the standardized schema
-        # Note: Only SensorReadingF (no SensorReadingC) to match Coris behavior
+        # Note: Only SensorReadingF (no SensorReadingC)
         standardized_columns = [
             "source", "SensorID", "DeviceID", "customer_id", "QueryUTC", "SensorReadingUTC", 
             "SensorName", "DeviceName", "SensorType", "SensorReading", "SensorReadingF", "SensorReadingRh"
@@ -687,486 +704,142 @@ class HobolinkClient:
         
         self.logger.info(f"Retrieved {len(result)} current readings from Hobolink")
         return result
-    
-    def test_api_connection(self) -> bool:
+
+    def sample_raw_data(self, save_to_samples: bool = True) -> Dict[str, Any]:
         """
-        Test the API connection and log response structure.
+        Generate sample raw API data for testing and exploration.
         
+        This method fetches raw data from the Hobolink API and optionally saves it
+        to the samples directory with timestamps. Fetches sensor data from multiple
+        sensors across different devices for comprehensive testing.
+        
+        Parameters
+        ----------
+        save_to_samples : bool, default=True
+            Whether to save the raw responses to samples/hobolink/ directory
+            
         Returns
         -------
-        bool
-            True if connection successful, False otherwise
+        Dict[str, Any]
+            Dictionary containing the raw API responses:
+            {
+                'devices': raw_devices_response,
+                'sensor_data_samples': [list of raw sensor data responses]
+            }
         """
+        results = {}
+        
         try:
-            self.logger.info("Testing API connection...")
-            devices = self.get_devices(include_sensors=True)
-            self.logger.info("API connection test successful!")
-            return True
-        except Exception as e:
-            self.logger.error(f"API connection test failed: {str(e)}")
-            return False
-    
-    def explore_device_structure(self) -> None:
-        """
-        Explore and log the structure of devices and sensors.
-        """
-        try:
-            self.logger.info("Exploring device structure...")
-            devices_response = self.get_devices(include_sensors=True)
+            print("🔍 Fetching raw device data...")
+            # Get raw devices data
+            raw_devices = self.get_devices()
+            results['devices'] = raw_devices
             
-            if isinstance(devices_response, dict) and "devices" in devices_response:
-                devices = devices_response["devices"]
-                self.logger.info(f"Total devices available: {devices_response.get('total', 'unknown')}")
+            if save_to_samples:
+                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"raw_devices_response_{timestamp}.json"
+                filepath = Path(__file__).parent.parent / "samples" / "hobolink" / filename
+                filepath.parent.mkdir(parents=True, exist_ok=True)
+                with open(filepath, 'w') as f:
+                    json.dump(raw_devices, f, indent=2, default=str)
+                print(f"Saved JSON data to: {filepath}")
+            
+            devices_data = raw_devices.get('devices', []) if isinstance(raw_devices, dict) else raw_devices
+            print(f"✅ Retrieved {len(devices_data) if isinstance(devices_data, list) else 'N/A'} devices")
+            
+            # Try to get sample sensor data from multiple devices/sensors
+            sensor_data_samples = []
+            max_devices = 3  # Sample up to 3 devices
+            max_sensors_per_device = 2  # Sample up to 2 sensors per device
+            devices_sampled = 0
+            
+            if isinstance(devices_data, list) and len(devices_data) > 0:
+                print(f"🔍 Fetching sensor data from up to {max_devices} devices with {max_sensors_per_device} sensors each...")
                 
-                # Examine first few devices in detail
-                for i, device in enumerate(devices[:3]):  # First 3 devices
-                    self.logger.info(f"\n--- Device {i+1} Structure ---")
-                    self.logger.info(f"Device keys: {list(device.keys())}")
-                    
-                    # Log key device properties
-                    for key in ["serialNumber", "serial", "id", "name", "deviceName", "location", "status", "deviceSerialNumber"]:
-                        if key in device:
-                            self.logger.info(f"Device {key}: {device[key]}")
-                    
-                    # Examine sensors if present
-                    for sensor_key in ["sensors", "sensorData", "measurements"]:
-                        if sensor_key in device and device[sensor_key]:
-                            sensors = device[sensor_key]
-                            self.logger.info(f"Found {len(sensors)} items in '{sensor_key}'")
-                            
-                            # Examine first few sensors
-                            for j, sensor in enumerate(sensors[:2]):  # First 2 sensors per device
-                                self.logger.info(f"  Sensor {j+1} keys: {list(sensor.keys())}")
-                                for s_key in ["serialNumber", "serial", "id", "name", "sensorName", "type", "unit", "sensorSerialNumber", "measurementType", "units", "latest"]:
-                                    if s_key in sensor:
-                                        self.logger.info(f"  Sensor {s_key}: {sensor[s_key]}")
-                            break
+                # Get last 6 hours for quick sample
+                end_time = datetime.datetime.now()
+                start_time = end_time - datetime.timedelta(hours=6)
+                start_ms = int(start_time.timestamp() * 1000)
+                end_ms = int(end_time.timestamp() * 1000)
+                
+                for device in devices_data:
+                    if devices_sampled >= max_devices:
+                        break
                         
-        except Exception as e:
-            self.logger.error(f"Error exploring device structure: {str(e)}")
-    
-    def diagnose_api_endpoints(self, save_samples: bool = True) -> None:
-        """
-        Diagnostic function to examine raw API responses from each endpoint.
-        
-        This function calls each API endpoint and prints sample output to help
-        understand the data format and structure returned by the Hobolink API.
-        
-        Parameters
-        ----------
-        save_samples : bool, default=True
-            Whether to save sample responses to files in samples/ directory
-        """
-        import json
-        
-        # Create samples directory if saving is enabled
-        samples_dir = None
-        if save_samples:
-            samples_dir = os.path.join(os.getcwd(), "samples")
-            os.makedirs(samples_dir, exist_ok=True)
-            print(f"Samples will be saved to: {samples_dir}")
-        
-        try:
-            print("=" * 60)
-            print("HOBOLINK API ENDPOINT DIAGNOSTICS")
-            print("=" * 60)
-            
-            # 1. Devices endpoint
-            print("\n1. DEVICES ENDPOINT")
-            print("-" * 30)
-            print("Endpoint: GET /devices?includeSensors=true")
-            
-            devices_response = self.get_devices(include_sensors=True)
-            
-            # Save devices response to file
-            if save_samples and samples_dir:
-                devices_file = os.path.join(samples_dir, "hobolink_devices_response.json")
-                try:
-                    with open(devices_file, 'w', encoding='utf-8') as f:
-                        json.dump(devices_response, f, indent=2, default=str)
-                    print(f"✓ Saved devices response to: {devices_file}")
-                except Exception as e:
-                    print(f"✗ Failed to save devices response: {e}")
-            
-            print(f"Raw devices response type: {type(devices_response)}")
-            if isinstance(devices_response, dict):
-                print(f"Raw devices response keys: {list(devices_response.keys())}")
-            
-            # Handle different response formats
-            devices = None
-            if isinstance(devices_response, list) and len(devices_response) > 0:
-                devices = devices_response
-            elif isinstance(devices_response, dict) and "devices" in devices_response:
-                devices = devices_response["devices"]
-                print(f"Found devices array with {len(devices)} items")
-            
-            if devices and len(devices) > 0:
-                first_device = devices[0]
-                print(f"Response type: {type(devices)} with {len(devices)} devices")
-                print(f"First device keys: {list(first_device.keys())}")
-                print(f"First device sample:")
-                
-                # Print key device info
-                for key in ["deviceSerialNumber", "deviceName", "productCode", "unitSystem", "loggingState"]:
-                    if key in first_device:
-                        print(f"  {key}: {first_device[key]}")
-                
-                # Show sensors structure
-                if "sensors" in first_device and first_device["sensors"]:
-                    sensors = first_device["sensors"]
-                    print(f"  sensors: array with {len(sensors)} items")
-                    if len(sensors) > 0:
-                        first_sensor = sensors[0]
-                        print(f"    First sensor keys: {list(first_sensor.keys())}")
-                        for sensor_key in ["sensorSerialNumber", "measurementType", "units", "latest"]:
-                            if sensor_key in first_sensor:
-                                print(f"    {sensor_key}: {first_sensor[sensor_key]}")
-                
-
-                
-                # 2. Data endpoint - try to get readings for first temperature/humidity sensor
-                print(f"\n2. DATA ENDPOINT")
-                print("-" * 30)
-                print("Endpoint: GET /data?deviceSerialNumber=X&sensorSerialNumber=Y&startTime=Z&endTime=W")
-                
-                # Find temperature or humidity sensors and try them until we get data
-                candidate_sensors = []
-                
-                # Collect all temperature/humidity sensors from all devices
-                for device in devices:
-                    device_serial = device.get("deviceSerialNumber")
-                    if "sensors" in device:
-                        for sensor in device["sensors"]:
-                            measurement_type = sensor.get("measurementType", "").lower()
-                            if measurement_type in ["temperature", "temp", "rh", "humidity", "relative humidity"]:
-                                candidate_sensors.append({
-                                    'device': device,
-                                    'sensor': sensor,
-                                    'has_latest': sensor.get("latest") is not None
-                                })
-                
-                # Sort by preference: sensors with latest data first
-                candidate_sensors.sort(key=lambda x: x['has_latest'], reverse=True)
-                
-                print(f"Found {len(candidate_sensors)} candidate temperature/humidity sensors")
-                
-                # Try sensors until we find one with actual data
-                successful_response = None
-                attempts = 0
-                max_attempts = min(10, len(candidate_sensors))  # Try up to 10 sensors
-                
-                # Get time range for data queries
-                import datetime
-                now = datetime.datetime.now(datetime.timezone.utc)
-                end_time = now
-                start_time = now - datetime.timedelta(hours=24)  # Try 24 hours for more data
-                
-                end_time_ms = int(end_time.timestamp() * 1000)
-                start_time_ms = int(start_time.timestamp() * 1000)
-                
-                for candidate in candidate_sensors[:max_attempts]:
-                    attempts += 1
-                    target_device = candidate['device']
-                    target_sensor = candidate['sensor']
-                    
-                    device_serial = target_device.get("deviceSerialNumber")
-                    sensor_serial = target_sensor.get("sensorSerialNumber")
-                    measurement_type = target_sensor.get("measurementType")
-                    units = target_sensor.get("units")
-                    latest = target_sensor.get("latest")
-                    
-                    print(f"\nAttempt {attempts}: Testing device {device_serial}, sensor {sensor_serial}")
-                    print(f"  Sensor: {measurement_type}, {units}, latest: {latest}")
-                    
-                    try:
-                        data_response = self.get_sensor_data(
-                            device_serial, sensor_serial, start_time_ms, end_time_ms
-                        )
+                    if device.get('sensors') and len(device['sensors']) > 0:
+                        device_serial = device.get('serialNumber') or device.get('deviceSerialNumber')
+                        device_name = device.get('deviceName', 'Unknown Device')
                         
-                        # Check if we got actual data (not just "No sensor found")
-                        has_data = False
-                        if isinstance(data_response, dict):
-                            if "sensors" in data_response and data_response["sensors"]:
-                                has_data = True
-                            elif "data" in data_response and data_response["data"]:
-                                has_data = True
-                            elif data_response.get("message") != "No sensor found":
-                                has_data = True
+                        if not device_serial:
+                            continue
+                            
+                        sensors_sampled = 0
+                        print(f"\n📱 Device: {device_name} ({device_serial})")
                         
-                        if has_data:
-                            print(f"  ✓ SUCCESS! Found data for {device_serial}/{sensor_serial}")
-                            successful_response = data_response
-                            
-                            # Save successful data response to file
-                            if save_samples and samples_dir:
-                                data_file = os.path.join(samples_dir, f"hobolink_data_response_{device_serial}_{sensor_serial}.json")
-                                try:
-                                    with open(data_file, 'w', encoding='utf-8') as f:
-                                        json.dump(data_response, f, indent=2, default=str)
-                                    print(f"  ✓ Saved data response to: {data_file}")
-                                except Exception as e:
-                                    print(f"  ✗ Failed to save data response: {e}")
-                            
-                            # Show the successful response structure
-                            print(f"  Data response type: {type(data_response)}")
-                            if isinstance(data_response, dict):
-                                print(f"  Data response keys: {list(data_response.keys())}")
-                                
-                                # Show message if present
-                                if "message" in data_response:
-                                    print(f"    message: {data_response['message']}")
-                                
-                                # Look for common data patterns
-                                for key in ["sensors", "data", "readings", "measurements", "results"]:
-                                    if key in data_response:
-                                        data_content = data_response[key]
-                                        print(f"    {key}: {type(data_content)}")
-                                        
-                                        if isinstance(data_content, list):
-                                            print(f"      Length: {len(data_content)}")
-                                            if len(data_content) > 0:
-                                                first_item = data_content[0]
-                                                print(f"      First item type: {type(first_item)}")
-                                                if isinstance(first_item, dict):
-                                                    print(f"      First item keys: {list(first_item.keys())}")
-                                                    
-                                                    # Show sample data structure
-                                                    if key == "sensors" and "data" in first_item:
-                                                        sensor_data = first_item["data"]
-                                                        print(f"        sensor.data: {type(sensor_data)} with {len(sensor_data) if isinstance(sensor_data, list) else 'N/A'} items")
-                                                        if isinstance(sensor_data, list) and len(sensor_data) > 0:
-                                                            print(f"          Sample readings:")
-                                                            for i, reading in enumerate(sensor_data[:3]):  # Show first 3
-                                                                print(f"            [{i}]: {reading}")
-                                                else:
-                                                    # Show raw item if not complex structure  
-                                                    print(f"      Sample item: {first_item}")
-                                        else:
-                                            print(f"      Content: {data_content}")
-                            
-                            break  # Found successful response, stop trying
-                        else:
-                            print(f"  ✗ No data found for {device_serial}/{sensor_serial}")
-                            if "message" in data_response:
-                                print(f"    Message: {data_response['message']}")
-                            
-                    except Exception as e:
-                        print(f"  ✗ Error querying {device_serial}/{sensor_serial}: {str(e)}")
-                
-                if not successful_response:
-                    print(f"\n✗ No sensors returned data after {attempts} attempts")
-                    print("This could mean:")
-                    print("  - Sensors are not currently logging data")
-                    print("  - API requires different time ranges")
-                    print("  - Sensor serial numbers have changed")
-                else:
-                    print(f"\n✓ Successfully found sensor data after {attempts} attempt(s)")
-            
-            else:
-                print("No devices found or invalid response format")
-                
-            print(f"\n{'=' * 60}")
-            print("DIAGNOSTICS COMPLETE")
-            print(f"{'=' * 60}")
-            
-            # List saved files
-            if save_samples and samples_dir:
-                print(f"\nSaved sample files:")
-                try:
-                    for file in os.listdir(samples_dir):
-                        if file.startswith('hobolink_'):
-                            file_path = os.path.join(samples_dir, file)
-                            file_size = os.path.getsize(file_path)
-                            print(f"  - {file} ({file_size} bytes)")
-                except Exception as e:
-                    print(f"Error listing saved files: {e}")
-            
-        except Exception as e:
-            print(f"Diagnostic error: {str(e)}")
-            import traceback
-            traceback.print_exc()
-
-    def explore_recent_data(self, hours_back: int = 24) -> None:
-        """
-        Explore recent data from available devices/sensors.
-        
-        Parameters
-        ----------
-        hours_back : int, default=24
-            How many hours back to look for data
-        """
-        try:
-            # First explore structure
-            self.explore_device_structure()
-            
-            # Get devices for data queries
-            self.logger.info(f"\nExploring data from last {hours_back} hours...")
-            devices_response = self.get_devices(include_sensors=True)
-            
-            # Calculate time range - use proper current time
-            now = datetime.datetime.now(datetime.timezone.utc)
-            end_time = now
-            start_time = now - datetime.timedelta(hours=hours_back)
-            
-            # Convert to milliseconds
-            end_time_ms = int(end_time.timestamp() * 1000)
-            start_time_ms = int(start_time.timestamp() * 1000)
-            
-            self.logger.info(f"Time range: {start_time_ms} to {end_time_ms}")
-            
-            # Try to extract device and sensor info for data queries
-            devices_to_query = []
-            
-            if isinstance(devices_response, dict) and "devices" in devices_response:
-                devices = devices_response["devices"]
-                
-                for device in devices[:2]:  # Limit to first 2 devices for testing
-                    if isinstance(device, dict):
-                        # Try various possible device serial number fields
-                        device_serial = None
-                        for key in ["deviceSerialNumber", "serialNumber", "serial", "id", "deviceSerial", "deviceId"]:
-                            if key in device and device[key]:
-                                device_serial = str(device[key])
+                        for sensor in device['sensors']:
+                            if sensors_sampled >= max_sensors_per_device:
                                 break
+                                
+                            sensor_serial = sensor.get('serialNumber') or sensor.get('sensorSerialNumber')
+                            sensor_type = sensor.get('measurementType', 'Unknown')
+                            
+                            if not sensor_serial:
+                                continue
+                                
+                            print(f"  🔍 Fetching data for sensor {sensor_serial} ({sensor_type})...")
+                            
+                            try:
+                                raw_sensor_data = self.get_sensor_data(
+                                    device_serial=device_serial,
+                                    sensor_serial=sensor_serial,
+                                    start_time_ms=start_ms,
+                                    end_time_ms=end_ms
+                                )
+                                
+                                sensor_data_samples.append({
+                                    'device_serial': device_serial,
+                                    'device_name': device_name,
+                                    'sensor_serial': sensor_serial,
+                                    'sensor_type': sensor_type,
+                                    'raw_data': raw_sensor_data
+                                })
+                                
+                                if save_to_samples:
+                                    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                                    filename = f"raw_sensor_data_{device_serial}_{sensor_serial}_{timestamp}.json"
+                                    filepath = Path(__file__).parent.parent / "samples" / "hobolink" / filename
+                                    filepath.parent.mkdir(parents=True, exist_ok=True)
+                                    with open(filepath, 'w') as f:
+                                        json.dump(raw_sensor_data, f, indent=2, default=str)
+                                    print(f"    💾 Saved to: {filepath}")
+                                
+                                print(f"    ✅ Retrieved sensor data for {device_serial}/{sensor_serial}")
+                                sensors_sampled += 1
+                                
+                            except Exception as e:
+                                print(f"    ⚠️ Could not get sensor data for {device_serial}/{sensor_serial}: {e}")
+                                continue
                         
-                        if device_serial:
-                            # Look for sensors in various possible locations
-                            sensors = device.get("sensors", []) or device.get("sensorData", []) or []
-                            for sensor in sensors[:2]:  # Limit to first 2 sensors per device
-                                if isinstance(sensor, dict):
-                                    # Try various possible sensor serial number fields
-                                    sensor_serial = None
-                                    for key in ["sensorSerialNumber", "serialNumber", "serial", "id", "sensorSerial", "sensorId"]:
-                                        if key in sensor and sensor[key]:
-                                            sensor_serial = str(sensor[key])
-                                            break
-                                    
-                                    if sensor_serial:
-                                        devices_to_query.append((device_serial, sensor_serial))
-                                        self.logger.info(f"Will query: device={device_serial}, sensor={sensor_serial}")
+                        if sensors_sampled > 0:
+                            devices_sampled += 1
             
-            # Query data for found device/sensor combinations
-            self.logger.info(f"\nFound {len(devices_to_query)} device/sensor combinations to query")
+            results['sensor_data_samples'] = sensor_data_samples
             
-            for device_serial, sensor_serial in devices_to_query:
-                self.logger.info(f"\n--- Querying data for device {device_serial}, sensor {sensor_serial} ---")
-                try:
-                    data = self.get_sensor_data(device_serial, sensor_serial, start_time_ms, end_time_ms)
-                    self.logger.info(f"Successfully retrieved data for {device_serial}/{sensor_serial}")
-                except Exception as e:
-                    self.logger.warning(f"Failed to get data for {device_serial}/{sensor_serial}: {str(e)}")
-                    
+            # Print summary
+            print(f"\n📋 Sample Data Summary:")
+            print(f"   • Devices: {len(devices_data)} found")
+            print(f"   • Sensor data samples: {len(sensor_data_samples)} collected from {devices_sampled} devices")
+            
+            if sensor_data_samples:
+                for i, sample in enumerate(sensor_data_samples, 1):
+                    print(f"     {i}. {sample['device_name']} - {sample['sensor_type']} ({sample['sensor_serial']})")
+            
+            if save_to_samples:
+                print(f"   • Files saved to: samples/hobolink/")
+            
+            return results
+            
         except Exception as e:
-            self.logger.error(f"Error exploring recent data: {str(e)}")
+            print(f"❌ Error generating sample data: {e}")
+            raise
 
-
-def create_hobolink_client_from_env(logger: Optional[logging.Logger] = None) -> HobolinkClient:
-    """
-    Create a Hobolink client using environment variables or .env file.
-    
-    Parameters
-    ----------
-    logger : Optional[logging.Logger]
-        Logger instance for recording client creation
-        
-    Returns
-    -------
-    HobolinkClient
-        Configured Hobolink client instance
-        
-    Raises
-    ------
-    ValueError
-        If required environment variables are not found
-    """
-    def read_env_variable(var_name: str) -> Optional[str]:
-        """Read environment variable from .env file or environment."""
-        # First try environment variables
-        value = os.getenv(var_name)
-        if value:
-            return value
-            
-        # Then try .env file
-        try:
-            with open(".env") as f:
-                for line in f:
-                    if line.startswith(var_name):
-                        return line.split("=", 1)[1].strip()
-        except FileNotFoundError:
-            pass
-        
-        return None
-    
-    api_key = read_env_variable("HOBOLINK_API_KEY")
-    
-    if not api_key:
-        raise ValueError("HOBOLINK_API_KEY not found in environment or .env file")
-    
-    if logger:
-        logger.info("Created Hobolink client")
-    
-    return HobolinkClient(api_key=api_key, logger=logger)
-
-
-def run_hobolink_diagnostics(save_samples: bool = True):
-    """
-    Convenience function to run API endpoint diagnostics.
-    
-    This function creates a Hobolink client and runs comprehensive diagnostics
-    on all API endpoints to show raw response formats and data structures.
-    
-    Parameters
-    ----------
-    save_samples : bool, default=True
-        Whether to save sample responses to files in samples/ directory
-    
-    Requires HOBOLINK_API_KEY environment variable to be set.
-    """
-    import logging
-    logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
-    
-    try:
-        client = create_hobolink_client_from_env()
-        client.diagnose_api_endpoints(save_samples=save_samples)
-    except Exception as e:
-        print(f"✗ Failed to run diagnostics: {e}")
-        print("Make sure HOBOLINK_API_KEY environment variable is set")
-
-
-# Example usage
-if __name__ == "__main__":
-    """
-    Example usage of the Hobolink client.
-    For comprehensive testing, run: python -m pytest test/test_hobolink.py -v
-    """
-    import logging
-    
-    # Set up basic logging
-    logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger(__name__)
-    
-    try:
-        # Create client from environment
-        client = create_hobolink_client_from_env(logger=logger)
-        
-        # Basic API test
-        if client.test_api_connection():
-            print("✓ Hobolink API connection successful!")
-            
-            # Quick device count
-            devices = client.get_devices_as_dataframe(testing=True, testing_device_limit=1)
-            print(f"✓ Found {len(devices)} device/sensor combinations")
-            
-            # Quick current readings check
-            current = client.get_current_readings(testing=True, testing_device_limit=1)
-            print(f"✓ Retrieved {len(current)} current readings")
-            
-            print("\nFor comprehensive testing, run:")
-            print("python -m pytest test/test_hobolink.py -v")
-            
-        else:
-            print("✗ API connection failed. Check your HOBOLINK_API_KEY environment variable.")
-            
-    except Exception as e:
-        print(f"✗ Error: {e}")
-        print("Make sure HOBOLINK_API_KEY is set in your environment or .env file.")

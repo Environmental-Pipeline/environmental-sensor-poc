@@ -206,7 +206,7 @@ class CorisClient:
         
         return data
     
-    def get_historical_data_bulk(self, acceptable_range: Dict[str, List], 
+    def get_historical_data(self, acceptable_range: Dict[str, List], 
                                start_utc: int, end_utc: int,
                                out_of_scope: List[str] = None,
                                testing: bool = False,
