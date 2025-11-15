@@ -30,7 +30,7 @@ class ConservAPIClient:
     Supports multiple customer tenants and handles the 7-day window limitation.
     """
 
-    def __init__(self, logger: Optional[logging.Logger] = None):
+    def __init__(self, logger: Optional[logging.Logger] = None, home_directory: str = "."):
         """
         Initialize the Conserv API client.
 
@@ -38,6 +38,8 @@ class ConservAPIClient:
         ----------
         logger : Optional[logging.Logger]
             Logger instance for tracking operations
+        home_directory : str, default="."
+            Base directory for finding .env file
         """
         # Read configuration for all 5 customers
         customers = []
@@ -45,9 +47,10 @@ class ConservAPIClient:
 
         for customer_id in customer_ids:
             # Read environment variable from .env file or environment
+            env_file_path = os.path.join(home_directory, ".env")
             api_key = None
             try:
-                with open(".env") as f:
+                with open(env_file_path) as f:
                     for line in f:
                         var_name = f"CONSERV_API_KEY_{customer_id}"
                         if line.startswith(var_name):
@@ -55,7 +58,9 @@ class ConservAPIClient:
                             break
             except FileNotFoundError:
                 if logger:
-                    logger.warning("No .env file found, trying os.getenv")
+                    logger.warning(
+                        f"No .env file found at {env_file_path}, trying os.getenv. "
+                        f"If running from a subdirectory, set home_directory parameter to parent directory (e.g., home_directory='..').")
             
             if api_key:
                 customers.append(ConservCustomer(customer_id=customer_id, api_key=api_key))

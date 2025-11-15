@@ -101,7 +101,7 @@ class CorisClient:
     - Data transformation to standardized schema
     """
     
-    def __init__(self, logger: Optional[logging.Logger] = None):
+    def __init__(self, logger: Optional[logging.Logger] = None, home_directory: str = "."):
         """
         Initialize the Coris API client.
         
@@ -109,11 +109,14 @@ class CorisClient:
         ----------
         logger : Optional[logging.Logger]
             Logger instance for recording API interactions
+        home_directory : str, default="."
+            Base directory for finding .env file
         """
         # Read API key from environment variables
+        env_file_path = os.path.join(home_directory, ".env")
         api_key = None
         try:
-            with open(".env") as f:
+            with open(env_file_path) as f:
                 for line in f:
                     if line.startswith("CORIS_API_KEY"):
                         api_key = line.split("=", 1)[1].strip()
@@ -124,7 +127,7 @@ class CorisClient:
         # Read CATS User ID from environment variables
         cats_user_id_str = None
         try:
-            with open(".env") as f:
+            with open(env_file_path) as f:
                 for line in f:
                     if line.startswith("CATS_USER_ID"):
                         cats_user_id_str = line.split("=", 1)[1].strip()
@@ -133,10 +136,14 @@ class CorisClient:
             pass
         
         if not api_key:
-            raise ValueError("CORIS_API_KEY not found in environment or .env file")
+            raise ValueError(
+                f"CORIS_API_KEY not found in environment or .env file at {env_file_path}. "
+                f"If running from a subdirectory, set home_directory parameter to parent directory (e.g., home_directory='..').")
         
         if not cats_user_id_str:
-            raise ValueError("CATS_USER_ID not found in environment or .env file")
+            raise ValueError(
+                f"CATS_USER_ID not found in environment or .env file at {env_file_path}. "
+                f"If running from a subdirectory, set home_directory parameter to parent directory (e.g., home_directory='..').")
         
         try:
             cats_user_id = int(cats_user_id_str)
@@ -359,7 +366,7 @@ class CorisClient:
                     testing_sensor_ids.extend(sensor_ids)
             
             # Query API for each sensor
-            pbar = tqdm.tqdm(total=len(sensor_ids), desc=f"Gather readings: {reading_type}")
+            pbar = tqdm.tqdm(total=len(sensor_ids), desc=f"Gather Coris readings: {reading_type}")
             
             for sensor_id in sensor_ids:
                 data = self.get_historical_data(

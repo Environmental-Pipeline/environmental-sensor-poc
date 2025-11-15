@@ -78,6 +78,7 @@ The client queries available sensors and then loops over them to get readings. A
 ```
 """
 
+import os
 import requests
 import polars
 import datetime
@@ -89,7 +90,7 @@ from typing import List, Dict, Optional, Any
 
 class LicorClient:
     
-    def __init__(self, logger: Optional[logging.Logger] = None):
+    def __init__(self, logger: Optional[logging.Logger] = None, home_directory: str = "."):
         """
         Initialize the LI-COR API client.
         
@@ -97,11 +98,14 @@ class LicorClient:
         ----------
         logger : Optional[logging.Logger]
             Logger instance for recording API interactions
+        home_directory : str, default="."
+            Base directory for finding .env file
         """
         # Read API key from environment
         api_key = None
+        env_file_path = os.path.join(home_directory, ".env")
         try:
-            with open(".env") as f:
+            with open(env_file_path) as f:
                 for line in f:
                     if line.startswith("LICOR_API_KEY"):
                         api_key = line.split("=", 1)[1].strip()
@@ -110,7 +114,9 @@ class LicorClient:
             pass
         
         if not api_key:
-            raise ValueError("LICOR_API_KEY not found in .env file.")
+            raise ValueError(
+                f"LICOR_API_KEY not found in .env file at {env_file_path}. "
+                f"If running from a subdirectory, set home_directory parameter to parent directory (e.g., home_directory='..').")
         
         self.api_key = api_key
         self.logger = logger or logging.getLogger(__name__)

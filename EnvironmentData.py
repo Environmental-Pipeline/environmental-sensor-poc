@@ -13,7 +13,6 @@ class EnvironmentData:
 
     def __init__(
         self,
-        CatsUserID: int = None,  # Deprecated - now read from environment
         data_path: str = "./data/",
         days_back: int = int(365 * 2),
         out_of_scope: list = [],
@@ -21,16 +20,13 @@ class EnvironmentData:
         coris_enabled: bool = False,
         conserv_enabled: bool = False,
         licor_enabled: bool = False,
+        home_directory: str = ".",
     ):
         """
         Initialize resources for managing the environmental readings.
 
         Parameters
         ----------
-        CatsUserID : int, optional (deprecated)
-            DEPRECATED: Cats User ID is now read from CATS_USER_ID environment variable.
-            This parameter is maintained for backward compatibility but is ignored.
-
         data_path : str, default='./data/'
             Path to store the parquet files which make up the database.
 
@@ -53,14 +49,22 @@ class EnvironmentData:
         licor_enabled : bool, default=False
             Enable LI-COR API integration for additional sensor data sources.
 
+        home_directory : str, default="."
+            Base directory for finding .env file and resolving relative paths.
+            Use ".." when running from subdirectories like experiments/.
+
         Returns
         -------
         EnvironmentData: EnvironmentData object.
         """
 
         # Save inputs to the class instance.
-        self.CatsUserID = CatsUserID  # Kept for backward compatibility
-        self.data_path = data_path
+        self.home_directory = home_directory
+        # Make data_path relative to home_directory if it's a relative path
+        if os.path.isabs(data_path):
+            self.data_path = data_path
+        else:
+            self.data_path = os.path.join(home_directory, data_path)
         self.testing = testing
         self.testing_sensor_ids = []
         self.out_of_scope = out_of_scope
@@ -75,9 +79,18 @@ class EnvironmentData:
                 "Set coris_enabled=True, conserv_enabled=True, or licor_enabled=True"
             )
 
+        # Check that .env file exists before initializing clients
+        env_file_path = os.path.join(home_directory, ".env")
+        if not os.path.exists(env_file_path):
+            raise FileNotFoundError(
+                f".env file not found at {env_file_path}. "
+                f"Please create a .env file with required API keys (LICOR_API_KEY, CORIS_API_KEY, CATS_USER_ID). "
+                f"If running from a subdirectory like experiments/, set home_directory='..'"
+            )
+
         # Create the data folder.
-        if not os.path.exists(data_path):
-            os.makedirs(data_path)
+        if not os.path.exists(self.data_path):
+            os.makedirs(self.data_path)
 
         # Set up logging to allow status to be viewed when run as a cron job.
         # https://docs.python.org/3/howto/logging-cookbook.html#logging-cookbook
@@ -88,7 +101,7 @@ class EnvironmentData:
         )
 
         fh = logging.FileHandler(
-            f"{data_path}/EnvironmentData.log"
+            f"{self.data_path}/EnvironmentData.log"
         )  # log to EnvironmentData.log in the data folder.
         fh.setFormatter(formatter)
         self.logger.addHandler(fh)
@@ -100,13 +113,13 @@ class EnvironmentData:
         # Set up a second logger for errors only.
         self.logger_err = logging.getLogger("EnvironmentData-Errors")
         self.logger_err.setLevel(logging.ERROR)
-        fh = logging.FileHandler(f"{data_path}/EnvironmentData-Errors.log")
+        fh = logging.FileHandler(f"{self.data_path}/EnvironmentData-Errors.log")
         fh.setFormatter(formatter)
         self.logger_err.addHandler(fh)
 
         # Read cron status, or initialize the status file.
-        if os.path.exists(f"{data_path}/cron_status.txt"):
-            with open(f"{data_path}/cron_status.txt") as f:
+        if os.path.exists(f"{self.data_path}/cron_status.txt"):
+            with open(f"{self.data_path}/cron_status.txt") as f:
                 self.cron_status = f.read()
         else:
             self.update_cron_status("not-initialized")
@@ -115,7 +128,7 @@ class EnvironmentData:
         self.coris_client = None
         if self.coris_enabled:
             try:
-                self.coris_client = CorisClient(self.logger)
+                self.coris_client = CorisClient(self.logger, home_directory=self.home_directory)
                 # self.logger.info("Coris API client initialized successfully")
             except Exception as e:
                 self.logger.warning(f"Failed to initialize Coris client: {e}")
@@ -125,7 +138,7 @@ class EnvironmentData:
         self.conserv_client = None
         if self.conserv_enabled:
             try:
-                self.conserv_client = ConservAPIClient(self.logger)
+                self.conserv_client = ConservAPIClient(self.logger, home_directory=self.home_directory)
                 # self.logger.info(
                 #     f"Conserv API client initialized with {len(self.conserv_client.customers)} customers"
                 # )
@@ -137,7 +150,7 @@ class EnvironmentData:
         self.licor_client = None
         if self.licor_enabled:
             try:
-                self.licor_client = LicorClient(self.logger)
+                self.licor_client = LicorClient(self.logger, home_directory=self.home_directory)
                 # self.logger.info("LI-COR API client initialized successfully")
             except Exception as e:
                 self.logger.warning(f"Failed to initialize LI-COR client: {e}")
