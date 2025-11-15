@@ -325,6 +325,8 @@ class LicorClient:
                         polars.lit(None, dtype=polars.Int32).alias("customer_id"),
                         polars.lit(None, dtype=polars.String).alias("SensorName"),
                         polars.lit(None, dtype=polars.String).alias("DeviceName"),
+                        polars.lit(int(datetime.datetime.now(datetime.timezone.utc).timestamp())).alias("QueryUTC"),
+                        polars.lit(True).alias("Historical"),
                     ])
                     
                     # Map measurement types to standardized reading columns
@@ -694,10 +696,12 @@ class LicorClient:
         # Note: Only SensorReadingF (no SensorReadingC)
         standardized_columns = [
             "source", "SensorID", "DeviceID", "customer_id", "QueryUTC", "SensorReadingUTC", 
-            "SensorName", "DeviceName", "SensorType", "SensorReading", "SensorReadingF", "SensorReadingRh"
+            "SensorName", "DeviceName", "SensorType", "SensorReading", "SensorReadingF", "SensorReadingRh", "Historical"
         ]
         
-        # Add missing columns with None values
+        # Add missing columns with None values and Historical=False
+        result = result.with_columns(polars.lit(False).alias("Historical"))
+        
         for col in standardized_columns:
             if col not in result.columns:
                 if col in ["customer_id", "QueryUTC", "SensorReadingUTC"]:

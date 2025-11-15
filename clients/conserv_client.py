@@ -248,6 +248,7 @@ class ConservAPIClient:
             # Wait for completion - inline wait_for_export_completion
             wait_start_time = time.time()
             max_wait_seconds = self.max_wait_minutes * 60
+            query_utc = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
 
             while time.time() - wait_start_time < max_wait_seconds:
                 # Check export status - inline check_export_status
@@ -301,11 +302,12 @@ class ConservAPIClient:
                 self.logger.info(f"No data found for customer {customer_id}")
                 return None
 
-            # Add customer_id and source columns
+                # Add customer_id, source, and QueryUTC columns
             df = df.with_columns(
                 [
                     polars.lit(customer_id).alias("customer_id"),
                     polars.lit("Conserv").alias("source"),
+                    polars.lit(query_utc).alias("QueryUTC"),
                 ]
             )
 
@@ -417,9 +419,9 @@ class ConservAPIClient:
                 if df is None:
                     return None
             
-            # Transform to standardized schema
-            current_utc = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
-            df = self._transform_to_standard_schema(df, customer_id, current_utc)
+            # Add Historical column and transform to standardized schema
+            df = df.with_columns(polars.lit(False).alias("Historical"))
+            df = self.transform_to_standard_schema(df)
             return df
 
         except Exception as e:
@@ -488,9 +490,9 @@ class ConservAPIClient:
                             polars.lit(customer['customer_id']).alias("customer_id")
                         )
 
-                    # Transform to standardized schema for this customer
-                    current_utc = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
-                    customer_data = self._transform_to_standard_schema(customer_data, customer['customer_id'], current_utc)
+                    # Add Historical column and transform to standardized schema for this customer
+                    customer_data = customer_data.with_columns(polars.lit(True).alias("Historical"))
+                    customer_data = self.transform_to_standard_schema(customer_data)
 
                     all_customer_data.append(customer_data)
 
@@ -726,8 +728,8 @@ class ConservAPIClient:
 
         return df
 
-    def _transform_to_standard_schema(
-        self, df: polars.DataFrame, customer_id: int, query_utc: int = None
+    def transform_to_standard_schema(
+        self, df: polars.DataFrame
     ) -> polars.DataFrame:
         """
         Transform Conserv API data to standardized schema.
@@ -736,8 +738,6 @@ class ConservAPIClient:
         ----------
         df : polars.DataFrame
             Raw Conserv data with columns: Sensor Name, Time, Temperature (°C), Humidity (%), customer_id, source
-        customer_id : int
-            Customer ID for generating SensorID and DeviceID
 
         Returns
         -------
@@ -799,9 +799,7 @@ class ConservAPIClient:
             polars.lit(None, dtype=polars.String).alias("SensorType"),
         ])
 
-        # 6. Add QueryUTC if provided
-        if query_utc is not None:
-            df = df.with_columns(polars.lit(query_utc).alias("QueryUTC"))
+        # 6. QueryUTC is already in the data from export_data
 
         # 7. Final schema enforcement for common columns
         cast_columns = [
