@@ -139,9 +139,6 @@ class EnvironmentData:
         if self.conserv_enabled:
             try:
                 self.conserv_client = ConservAPIClient(self.logger, home_directory=self.home_directory)
-                # self.logger.info(
-                #     f"Conserv API client initialized with {len(self.conserv_client.customers)} customers"
-                # )
             except Exception as e:
                 self.logger.warning(f"Failed to initialize Conserv client: {e}")
                 self.conserv_enabled = False
@@ -600,31 +597,13 @@ class EnvironmentData:
             self.logger.info("Fetching current Conserv data for all customers")
 
             try:
-                # Get window size from environment (default 24 hours)
-                def read_env_variable(var_name):
-                    try:
-                        with open(".env") as f:
-                            for line in f:
-                                if line.startswith(var_name):
-                                    return line.split("=", 1)[1].strip()
-                    except FileNotFoundError:
-                        pass
-                    return None
-
-                hours_back = int(read_env_variable("RUN_WINDOW_HOURS") or "24")
-                start_utc = current_utc - (
-                    hours_back * 3600
-                )  # Convert hours to seconds
-
-                # Get Conserv data for the specified window
-                conserv_data = self.conserv_client.get_historical_data(
-                    start_utc=start_utc,
-                    end_utc=current_utc,
-                    max_concurrent_jobs=3 if self.testing else 5,
+                # Get current readings.
+                conserv_data = self.conserv_client.get_current_readings(
+                    test=self.testing
                 )
 
                 if conserv_data is not None and not conserv_data.is_empty():
-                    self.logger.info(f"Conserv data shape: {conserv_data.shape}")
+                    self.logger.info(f"Conserv current data shape: {conserv_data.shape}")
 
                     # Conserv data is already transformed by clients/conserv_client.py
                     conserv_sensors = conserv_data

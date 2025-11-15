@@ -17,6 +17,7 @@ There are multiple Conserv customers (API keys). For each, we trigger an export,
 - Auth is handled by sending headers = {"x-api-key": api_key, ...}
 - Some customers are failing due to invalid keys. These are skipped with warnings logged.
 - Exports can only be 7 days so for historical data we chunk into 7-day windows. This will be very slow for large date ranges.
+- Export data is captured in 15 minute increments, so for get_current we take the last 30 minutes and then return the most recent reading per sensor.
 
 ### Trigger Export
 
@@ -41,6 +42,7 @@ import logging
 import datetime
 import polars
 import io
+import tqdm
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 import urllib3
@@ -90,7 +92,7 @@ class ConservAPIClient:
         self.customers = customers
         self.logger = logger or logging.getLogger(__name__)
         self.max_window_days = 7  # API limitation
-        self.poll_interval_seconds = 30  # How often to check export status
+        self.poll_interval_seconds = 10  # How often to check export status (reduced from 30s)
         self.max_wait_minutes = 15  # Maximum time to wait for export completion
         
         if logger:
@@ -261,15 +263,14 @@ class ConservAPIClient:
                     raise ValueError(f"No status returned for export {uuid}: {result}")
 
                 if status == "completed":
-                    self.logger.info(f"Export {uuid} completed successfully")
+                    export_duration = time.time() - wait_start_time
+                    self.logger.info(f"Export {uuid} completed successfully in {export_duration:.1f} seconds")
                     break
                 elif status == "failed":
                     self.logger.error(f"Export {uuid} failed")
                     return None
                 elif status in ("pending", "processing", "queued"):
-                    self.logger.info(
-                        f"Export {uuid} still {status}, waiting {self.poll_interval_seconds}s..."
-                    )
+                    # Don't log individual status checks to reduce noise
                     time.sleep(self.poll_interval_seconds)
                 else:
                     raise ValueError(f"Unknown export status: {status}")
@@ -371,70 +372,125 @@ class ConservAPIClient:
 
         return chunks
 
-    def get_current_readings_for_customer(self, customer_id: int, hours_back: int = 6) -> Optional[polars.DataFrame]:
+    def get_current_data(self, hours_back: int = 6, test: bool = False) -> Optional[polars.DataFrame]:
         """
-        Get current readings for a specific customer with error handling.
-
+        Get current data for testing purposes without saving to samples directory.
+        
         Parameters
         ----------
-        customer_id : int
-            Customer ID to get data for
         hours_back : int, default=6
-            Number of hours of data to retrieve
-
+            How many hours back to retrieve data
+        test : bool, default=False
+            If True, only use customer 333 for testing
+            
         Returns
         -------
         Optional[polars.DataFrame]
-            Customer data, or None if failed
+            Current sensor data in standardized format, or None if no data
         """
-        # Find the customer
-        customer = None
-        for c in self.customers:
-            if c['customer_id'] == customer_id:
-                customer = c
-                break
-        
-        if not customer:
-            self.logger.error(f"Customer {customer_id} not found")
-            return None
-
         end_time = datetime.datetime.now(datetime.timezone.utc)
         start_time = end_time - datetime.timedelta(hours=hours_back)
+        return self.get_historical_data(int(start_time.timestamp()), int(end_time.timestamp()), test=test)
 
-        try:
-            # Export data (chunked if necessary)
-            if hours_back > (self.max_window_days * 24):
-                chunks = self.export_data_chunked(
-                    customer['api_key'], customer_id, start_time, end_time
-                )
-                if chunks:
-                    df = polars.concat(chunks, how="vertical")
-                else:
-                    return None
-            else:
-                df = self.export_data(
-                    customer['api_key'], customer_id, start_time, end_time
-                )
-                if df is None:
-                    return None
+    def get_current_readings(self, test: bool = False) -> Optional[polars.DataFrame]:
+        """
+        Get current readings from all customers (or just customer 333 if test=True) for the last 30 minutes.
+        
+        Parameters
+        ----------
+        test : bool, default=False
+            If True, only use customer 333 for testing
             
-            # Add Historical column and transform to standardized schema
-            df = df.with_columns(polars.lit(False).alias("Historical"))
-            df = self.transform_to_standardized_schema(df)
-            return df
-
-        except Exception as e:
-            self.logger.error(f"Failed to get data for customer {customer_id}: {e}")
+        Returns
+        -------
+        Optional[polars.DataFrame]
+            Current sensor data in standardized format from all customers, or None if no data
+        """
+        if self.logger:
+            self.logger.info("Fetching current readings for last 30 minutes")
+        
+        # Filter customers based on test mode
+        customers_to_process = self.customers
+        if test:
+            customers_to_process = [c for c in self.customers if c['customer_id'] == 333]
+            if not customers_to_process:
+                raise ValueError("Test mode requires customer 333 to be configured")
+            if self.logger:
+                self.logger.info("Running in test mode - only processing customer 333")
+        
+        all_customer_data = []
+        
+        # Process each customer with progress bar
+        pbar = tqdm.tqdm(total=len(customers_to_process), desc="Gathering Conserv current readings")
+        for customer in customers_to_process:
+            try:
+                if self.logger:
+                    self.logger.info(f"Fetching current data for customer {customer['customer_id']}")
+                
+                # Calculate time range (last 30 minutes)
+                end_time = datetime.datetime.now(datetime.timezone.utc)
+                start_time = end_time - datetime.timedelta(minutes=30)
+                
+                # Use export_data to get recent data
+                customer_data = self.export_data(
+                    api_key=customer['api_key'],
+                    customer_id=customer['customer_id'],
+                    start_time=start_time,
+                    end_time=end_time
+                )
+                
+                if customer_data is not None and len(customer_data) > 0:
+                    all_customer_data.append(customer_data)
+                    
+                    if self.logger:
+                        self.logger.info(f"Retrieved {len(customer_data)} current records for customer {customer['customer_id']}")
+                else:
+                    if self.logger:
+                        self.logger.info(f"No current data available for customer {customer['customer_id']}")
+                        
+            except Exception as e:
+                if self.logger:
+                    self.logger.warning(f"Failed to fetch current data for customer {customer['customer_id']}: {e}")
+                # Continue with other customers
+                continue
+            finally:
+                pbar.update(1)
+        
+        pbar.close()
+        
+        # Combine all customer data
+        if all_customer_data:
+            combined_data = polars.concat(all_customer_data, how="vertical")
+            
+            # Filter to only the last reading per sensor name/serial/customer combination
+            # Take the last (most recent) reading for each sensor (assuming chronological order from API)
+            combined_data = (
+                combined_data
+                .group_by(["customer_id", "Sensor Serial", "Sensor Name"])
+                .last()
+            )
+            
+            if self.logger:
+                self.logger.info(f"Filtered to {len(combined_data)} most recent readings per sensor")
+            
+            # Add Historical=False for current readings and transform to standardized schema
+            combined_data = combined_data.with_columns(polars.lit(False).alias("Historical"))
+            combined_data = self.transform_to_standardized_schema(combined_data)
+            
+            if self.logger:
+                self.logger.info(f"Successfully combined current readings from {len(all_customer_data)} customers: {len(combined_data)} total records")
+            
+            return combined_data
+        else:
+            if self.logger:
+                self.logger.warning("No current readings retrieved from any customer")
             return None
 
 
 
-    def get_historical_data(
-        self, start_utc: int, end_utc: int, max_concurrent_jobs: int = 5
-    ) -> Optional[polars.DataFrame]:
+    def get_historical_data(self, start_utc: int, end_utc: int, test: bool = False) -> Optional[polars.DataFrame]:
         """
         Get historical data for all customers for a specific time period.
-        Handles chunking for periods longer than 7 days.
 
         Parameters
         ----------
@@ -442,13 +498,13 @@ class ConservAPIClient:
             Start time as UTC timestamp in seconds
         end_utc : int
             End time as UTC timestamp in seconds
-        max_concurrent_jobs : int, default=5
-            Maximum number of concurrent API jobs
+        test : bool, default=False
+            If True, only use customer 333 for testing
 
         Returns
         -------
         Optional[polars.DataFrame]
-            Combined historical data from all customers for the specified period
+            Combined historical data from all customers (or just 333 if test=True) for the specified period
         """
         if self.logger:
             self.logger.info(
@@ -462,9 +518,19 @@ class ConservAPIClient:
         end_time = datetime.datetime.fromtimestamp(end_utc, tz=datetime.timezone.utc)
 
         all_customer_data = []
+        
+        # Filter customers based on test mode
+        customers_to_process = self.customers
+        if test:
+            customers_to_process = [c for c in self.customers if c['customer_id'] == 333]
+            if not customers_to_process:
+                raise ValueError("Test mode requires customer 333 to be configured")
+            if self.logger:
+                self.logger.info("Running in test mode - only processing customer 333")
 
-        # Process each customer
-        for customer in self.customers:
+        # Process each customer with progress bar
+        pbar = tqdm.tqdm(total=len(customers_to_process), desc="Gathering Conserv historical data")
+        for customer in customers_to_process:
             try:
                 if self.logger:
                     self.logger.info(
@@ -482,16 +548,6 @@ class ConservAPIClient:
                 if customer_data_chunks:
                     # Combine all chunks for this customer
                     customer_data = polars.concat(customer_data_chunks, how="diagonal")
-
-                    # Add customer_id column if not present
-                    if "customer_id" not in customer_data.columns:
-                        customer_data = customer_data.with_columns(
-                            polars.lit(customer['customer_id']).alias("customer_id")
-                        )
-
-                    # Add Historical column and transform to standardized schema for this customer
-                    customer_data = customer_data.with_columns(polars.lit(True).alias("Historical"))
-                    customer_data = self.transform_to_standardized_schema(customer_data)
 
                     all_customer_data.append(customer_data)
 
@@ -512,10 +568,19 @@ class ConservAPIClient:
                     )
                 # Continue with other customers
                 continue
+            finally:
+                pbar.update(1)
+
+        pbar.close()
 
         # Combine all customer data
         if all_customer_data:
-            combined_data = polars.concat(all_customer_data, how="vertical")
+            combined_data = polars.concat(all_customer_data, how="vertical")            
+
+            # Add Historical column and transform to standardized schema for this customer
+            combined_data = combined_data.with_columns(polars.lit(True).alias("Historical"))
+            combined_data = self.transform_to_standardized_schema(combined_data)
+            
             if self.logger:
                 self.logger.info(
                     f"Successfully combined data from {len(all_customer_data)} customers: {combined_data.shape[0]} total records"
@@ -525,8 +590,6 @@ class ConservAPIClient:
             if self.logger:
                 self.logger.warning("No data retrieved from any customer")
             return None
-
-
 
     def transform_to_standardized_schema(
         self, df: polars.DataFrame
@@ -555,18 +618,34 @@ class ConservAPIClient:
         # Source
         df = df.with_columns(polars.lit("Conserv").alias("Source"))
 
-        # SensorReadingF
+        # SensorReadingF - handle potential encoding issues in column names
+        temp_col = None
+        humidity_col = None
+        
+        for col in df.columns:
+            if "Temperature" in col and ("°C" in col or "Â°C" in col):
+                temp_col = col
+            elif "Humidity" in col and "%" in col:
+                humidity_col = col
+        
+        if temp_col is None:
+            raise ValueError(f"Temperature column not found. Available columns: {df.columns}")
+        if humidity_col is None:
+            raise ValueError(f"Humidity column not found. Available columns: {df.columns}")
+        
         df = df.with_columns(
-            ((polars.col("Temperature (°C)") * 9 / 5) + 32).alias("SensorReadingF")
+            ((polars.col(temp_col) * 9 / 5) + 32).cast(polars.Float32).alias("SensorReadingF")
         )
 
         # SensorReadingRh
-        df = df.rename({"Humidity (%)": "SensorReadingRh"})
+        df = df.rename({humidity_col: "SensorReadingRh"})
+        df = df.with_columns(polars.col("SensorReadingRh").cast(polars.Float32))
 
-        # SensorReadingUTC
+        # SensorReadingUTC - handle ISO format like "2025-11-15T18:51:01.729Z"
         df = df.with_columns(
             polars.col("Time")
-            .str.strptime(polars.Datetime, "%Y-%m-%d %H:%M:%S%.f")
+            .str.replace("Z$", "")  # Remove trailing Z if present
+            .str.strptime(polars.Datetime, "%Y-%m-%dT%H:%M:%S%.f")
             .dt.timestamp("ms")
             .floordiv(1000)  # Convert milliseconds to seconds
             .alias("SensorReadingUTC")
@@ -593,6 +672,7 @@ class ConservAPIClient:
         
         # Create Temperature sensor rows
         temp_rows = df.select([
+            polars.col("Historical"),
             polars.col("SensorReadingUTC"),
             polars.col("Source"),
             polars.col("DeviceId").alias("DeviceID"),
@@ -607,11 +687,14 @@ class ConservAPIClient:
             ]).alias("SensorName"),
             polars.lit("Temperature").alias("SensorType"),
             polars.col("SensorReadingF"),
-            polars.lit(None, dtype=polars.Float32).alias("SensorReadingRh")
-        ] + [polars.col(col) for col in df.columns if col not in ["SensorReadingUTC", "Source", "DeviceId", "DeviceName", "SensorReadingF"]])
+            polars.lit(None, dtype=polars.Float32).alias("SensorReadingRh"),
+            #polars.col("customer_id"),
+            polars.col("QueryUTC")
+        ])
         
         # Create RH sensor rows
         rh_rows = df.select([
+            polars.col("Historical"),
             polars.col("SensorReadingUTC"),
             polars.col("Source"),
             polars.col("DeviceId").alias("DeviceID"),
@@ -626,8 +709,10 @@ class ConservAPIClient:
             ]).alias("SensorName"),
             polars.lit("RH").alias("SensorType"),
             polars.lit(None, dtype=polars.Float32).alias("SensorReadingF"),
-            polars.col("SensorReadingRh")
-        ] + [polars.col(col) for col in df.columns if col not in ["SensorReadingUTC", "Source", "DeviceId", "DeviceName", "SensorReadingRh"]])
+            polars.col("SensorReadingRh"),
+            #polars.col("customer_id"),
+            polars.col("QueryUTC")
+        ])
         
         # Combine temperature and RH rows
         df = polars.concat([temp_rows, rh_rows], how="vertical")
