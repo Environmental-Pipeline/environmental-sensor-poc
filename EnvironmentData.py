@@ -801,14 +801,23 @@ class EnvironmentData:
             duplicates_removed = initial_count - final_count
             self.logger.info(f"Removed {duplicates_removed} duplicate readings (SensorID + SensorReadingUTC)")
 
-        # Add time difference between readings for each sensor
+        # Add time difference between readings for each sensor within each source, device, and type
+        # Only calculate for non-Historical data to avoid mixing backfilled data with real-time readings
         if not dt.is_empty():
-            dt = dt.sort(["SensorID", "SensorReadingUTC"])
+            dt = dt.sort(["Source", "DeviceID", "SensorType", "SensorID", "SensorReadingUTC"])
+            
+            # Create mask for non-Historical data
+            non_historical_mask = polars.col("Historical") != True
+            
             dt = dt.with_columns(
-                (
+                polars.when(non_historical_mask)
+                .then(
                     polars.col("SensorReadingUTC")
-                    - polars.col("SensorReadingUTC").shift(1).over("SensorID")
-                ).alias("SensorReadingUTC_SecondsFromPrior")
+                    - polars.col("SensorReadingUTC").shift(1).over(["Source", "DeviceID", "SensorType", "SensorID"])
+                    .filter(non_historical_mask)
+                )
+                .otherwise(None)
+                .alias("SensorReadingUTC_SecondsFromPrior")
             )
         else:
             dt = dt.with_columns(
