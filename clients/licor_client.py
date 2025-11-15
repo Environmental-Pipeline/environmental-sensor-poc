@@ -318,7 +318,7 @@ class LicorClient:
                         polars.lit(f"licor:{device_serial or 'unknown'}-{sensor_serial}").alias("SensorID"),
                         polars.lit(measurement_type).alias("SensorType"),
                         polars.lit(units).alias("SensorUnits"),
-                        polars.lit("LI-COR").alias("source"),
+                        polars.lit("LI-COR").alias("Source"),
                         
                         # Add schema columns - populate DeviceID with device serial when available
                         polars.lit(f"licor:{device_serial}" if device_serial else None).alias("DeviceID"),
@@ -468,7 +468,7 @@ class LicorClient:
         # Add standardized schema columns
         result = result.with_columns([
             polars.lit(current_utc).alias("QueryUTC"),
-            polars.lit("LI-COR").alias("source"),
+            polars.lit("LI-COR").alias("Source"),
             polars.lit(None, dtype=polars.Int32).alias("customer_id"),
         ])
         

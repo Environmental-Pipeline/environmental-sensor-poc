@@ -615,8 +615,11 @@ class ConservAPIClient:
 
         # ============ COLUMN TRANSFORMATIONS ============
 
-        # Source
-        df = df.with_columns(polars.lit("Conserv").alias("Source"))
+        # source - rename existing lowercase column to uppercase
+        if "source" in df.columns:
+            df = df.rename({"source": "Source"})
+        else:
+            df = df.with_columns(polars.lit("Conserv").alias("Source"))
 
         # SensorReadingF - handle potential encoding issues in column names
         temp_col = None

@@ -10,9 +10,7 @@ if os.path.exists('data'):
 
 # Initialize EnvironmentData. This will run the historical data pull.
 envdt = EnvironmentData(
-    CatsUserID = 2496, 
     days_back = 365 * 2,
-    out_of_scope = ['-80', 'Cryo tank', 'Water'],
     coris_enabled = True,
     licor_enabled = True,
     conserv_enabled = False, # out of scope for this project (just adding LI-COR). 

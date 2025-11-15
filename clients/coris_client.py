@@ -232,7 +232,7 @@ class CorisClient:
         # Add standardized schema columns
         sensors = sensors.with_columns([
             polars.lit(current_utc).alias("QueryUTC"),
-            polars.lit("Coris").alias("source"),
+            polars.lit("Coris").alias("Source"),
             polars.lit(None, dtype=polars.Int32).alias("customer_id"),
         ])
         
@@ -311,7 +311,7 @@ class CorisClient:
         
         # Add standardized schema columns including QueryUTC and Historical
         data = data.with_columns([
-            polars.lit("Coris").alias("source"),
+            polars.lit("Coris").alias("Source"),
             polars.lit(None, dtype=polars.Int32).alias("customer_id"),
             polars.lit(query_utc).alias("QueryUTC"),
             polars.lit(True).alias("Historical"),
@@ -416,7 +416,7 @@ class CorisClient:
         
         # Add schema columns for compatibility including Historical
         sensors = sensors.with_columns([
-            polars.lit("Coris").cast(polars.String).alias("source"),
+            polars.lit("Coris").cast(polars.String).alias("Source"),
             polars.lit(None, dtype=polars.Int32).alias("customer_id"),
             polars.lit(False).alias("Historical"),
         ])

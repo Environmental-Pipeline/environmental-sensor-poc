@@ -153,8 +153,6 @@ def main():
             logger.info("LI-COR integration is disabled.")
 
         env_data = EnvironmentData(
-            CatsUserID=cats_user_id,
-            out_of_scope=['-80', 'Cryo tank', 'Water'],
             data_path="./data",
             coris_enabled=coris_enabled,
             conserv_enabled=conserv_enabled,

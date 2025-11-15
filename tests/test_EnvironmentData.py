@@ -78,9 +78,7 @@ class TestGetReading(unittest.TestCase):
     def setUpClass(cls):
         """Set up EnvironmentData instance for the class."""
         cls.envdt = EnvironmentData(
-            CatsUserID=2496, 
             data_path='test/data', 
-            out_of_scope=['-80', 'Cryo tank', 'Water'], 
             testing=True,
             coris_enabled=True,
             licor_enabled=True,
@@ -137,10 +135,8 @@ class TestCronWorkflow(unittest.TestCase):
         
         # Initialize EnvironmentData with historical data pull
         cls.cron_envdt = EnvironmentData(
-            CatsUserID=2496, 
             data_path='test/cron-data',
             days_back=365 * 2,
-            out_of_scope=['-80', 'Cryo tank', 'Water'],
             coris_enabled=True,
             licor_enabled=True,
             conserv_enabled=False,  # out of scope for this project

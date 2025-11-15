@@ -15,7 +15,6 @@ class EnvironmentData:
         self,
         data_path: str = "./data/",
         days_back: int = int(365 * 2),
-        out_of_scope: list = [],
         testing: bool = False,
         coris_enabled: bool = False,
         conserv_enabled: bool = False,
@@ -32,10 +31,6 @@ class EnvironmentData:
 
         days_back : int, default=int(365 * 2)
             Number of days of historical data to pull when initializing the database.
-
-        out_of_scope : list[str], default=[]
-            List of strings indicating sensors that are out of scope and should be ignored.
-            If a SensorName starts with any of the strings in the list, that Sensor will be ignored.
 
         testing : bool, default=False
             Create a class in "testing mode". Only a few sensors will be included so that tests can run quickly and use fewer API calls.
@@ -67,7 +62,7 @@ class EnvironmentData:
             self.data_path = os.path.join(home_directory, data_path)
         self.testing = testing
         self.testing_sensor_ids = []
-        self.out_of_scope = out_of_scope
+        self.out_of_scope = ['-80', 'Cryo tank', 'Water']
         self.coris_enabled = coris_enabled
         self.conserv_enabled = conserv_enabled
         self.licor_enabled = licor_enabled
@@ -277,7 +272,7 @@ class EnvironmentData:
                 conserv_data = self.conserv_client.get_historical_data(
                     start_utc=start_utc,
                     end_utc=current_utc,
-                    max_concurrent_jobs=3 if self.testing else 5,
+                    test=self.testing,
                 )
 
                 if conserv_data is not None and not conserv_data.is_empty():
@@ -737,9 +732,7 @@ class EnvironmentData:
 
         # Standardize the current readings data (rename columns, filter, and reorder) 
         if not all_sensors.is_empty():
-            # Include QueryUTC for current readings so it's preserved for later processing
-            additional_columns = ["QueryUTC"] if "QueryUTC" in all_sensors.columns else []
-            all_sensors = self.standardize_sensor_dataframe(all_sensors, include_additional_columns=additional_columns)
+            all_sensors = self.standardize_sensor_dataframe(all_sensors)
 
         # Save the new-readings file. A daily process will pull these later to clean, validate, and consolidate them into the database.
         os.makedirs(f"{self.data_path}/new-readings/", exist_ok=True)
@@ -819,8 +812,7 @@ class EnvironmentData:
             )
 
         # Standardize the DataFrame (rename columns, filter, and reorder)
-        additional_columns = ["QueryUTC", "SensorReadingUTC_SecondsFromPrior"]
-        dt = self.standardize_sensor_dataframe(dt, include_additional_columns=additional_columns)
+        dt = self.standardize_sensor_dataframe(dt)
 
         # Write the file.
         dt.write_parquet(f"{self.data_path}/sensor_readings.parquet")
@@ -1025,7 +1017,7 @@ class EnvironmentData:
 
         return sensors
 
-    def standardize_sensor_dataframe(self, dt: polars.DataFrame, include_additional_columns: list = None) -> polars.DataFrame:
+    def standardize_sensor_dataframe(self, dt: polars.DataFrame) -> polars.DataFrame:
         """
         Standardize sensor data DataFrame by renaming columns, filtering, and reordering.
         
@@ -1033,39 +1025,18 @@ class EnvironmentData:
         ----------
         dt : polars.DataFrame
             Input DataFrame to standardize
-        include_additional_columns : list, optional
-            Additional columns to include after the standard columns
             
         Returns
         -------
         polars.DataFrame
-            Standardized DataFrame with renamed columns, filtered columns, and proper ordering
+            Standardized DataFrame with proper ordering
         """
-        # Rename columns to match desired schema
-        column_renames = {}
-        if "source" in dt.columns:
-            column_renames["source"] = "Source"
-        if "customer_id" in dt.columns:
-            column_renames["customer_id"] = "ConservCustomerID"
-        
-        if column_renames:
-            dt = dt.rename(column_renames)
-
-        # Remove ConservCustomerID column if Conserv is not enabled
-        if not self.conserv_enabled and "ConservCustomerID" in dt.columns:
-            dt = dt.drop("ConservCustomerID")
 
         # Apply standard column ordering and filter to only desired columns
         desired_columns = self.get_sensor_readings_column_order()
-        
-        # Determine which columns to keep
-        if include_additional_columns:
-            all_columns = desired_columns + include_additional_columns
-        else:
-            all_columns = desired_columns
             
         # Only select columns that exist in both the data and the allowed columns
-        available_columns = [col for col in all_columns if col in dt.columns]
+        available_columns = [col for col in desired_columns if col in dt.columns]
         dt = dt.select(available_columns)
         
         return dt
@@ -1081,6 +1052,7 @@ class EnvironmentData:
         # Base columns in the desired order
         columns = [
             "SensorReadingUTC",
+            "QueryUTC",
             "Source",  # Renamed from 'source' 
         ]
         
@@ -1095,7 +1067,8 @@ class EnvironmentData:
             "SensorName", 
             "SensorType",
             "SensorReadingF", 
-            "SensorReadingRh"
+            "SensorReadingRh",
+            "SensorReadingUTC_SecondsFromPrior"
         ])
         
         return columns
