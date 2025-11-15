@@ -15,6 +15,8 @@ There are multiple Conserv customers (API keys). For each, we trigger an export,
 
 - New customers can be added by adding a new API key in the `.env` file as `CONSERV_API_KEY_{customer_id}`.
 - Auth is handled by sending headers = {"x-api-key": api_key, ...}
+- Some customers are failing due to invalid keys. These are skipped with warnings logged.
+- Exports can only be 7 days so for historical data we chunk into 7-day windows. This will be very slow for large date ranges.
 
 ### Trigger Export
 
@@ -39,7 +41,6 @@ import logging
 import datetime
 import polars
 import io
-import json
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 import urllib3
@@ -100,6 +101,7 @@ class ConservAPIClient:
     ) -> requests.Response:
         """
         Make a request to the Conserv API with proper headers and error handling.
+        SSL issues are expected so we handle them here.
 
         Parameters
         ----------
@@ -125,20 +127,16 @@ class ConservAPIClient:
         self.logger.info(f"Conserv API {method} {url} headers={safe_headers}")
 
         try:
-            # Add SSL verification handling for potential certificate issues
+            # Try the regular request. This is preferred even if we expect it to fail.
             response = requests.request(
                 method, url, headers=headers, verify=True, **kwargs
             )
             response.raise_for_status()
             return response
         
+        # SSL verification fails for api.conserv.io, retry without verification.
+        # Suppress verbose logging since this is expected behavior.
         except requests.exceptions.SSLError as e:
-            # Log the SSL error for debugging
-            self.logger.warning(f"SSL verification failed for {url}: {str(e)}")
-            self.logger.info("Retrying with SSL verification disabled...")
-
-            # Try again with SSL verification disabled if certificate issues
-            # Temporarily disable SSL warnings only for this specific request
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
             
             try:
@@ -146,8 +144,6 @@ class ConservAPIClient:
                     method, url, headers=headers, verify=False, **kwargs
                 )
                 response.raise_for_status()
-                
-                self.logger.info("Request succeeded with SSL verification disabled")
                 return response
             
             except requests.exceptions.RequestException as retry_error:
@@ -166,9 +162,9 @@ class ConservAPIClient:
 
     def launch_export(
         self, api_key: str, start_time: datetime.datetime, end_time: datetime.datetime
-    ) -> str:
+    ) -> Optional[str]:
         """
-        Launch a data export for a specific time window.
+        Launch a data export for a specific time window with error handling.
 
         Parameters
         ----------
@@ -181,162 +177,37 @@ class ConservAPIClient:
 
         Returns
         -------
-        str
-            Export UUID for polling status
+        Optional[str]
+            Export UUID for polling status, or None if launch failed
         """
-        # Validate window size
-        window_days = (end_time - start_time).days
-        if window_days > self.max_window_days:
-            raise ValueError(
-                f"Export window of {window_days} days exceeds maximum of {self.max_window_days} days"
+        try:
+            # Validate window size
+            window_days = (end_time - start_time).days
+            if window_days > self.max_window_days:
+                raise ValueError(
+                    f"Export window of {window_days} days exceeds maximum of {self.max_window_days} days"
+                )
+
+            response = self._make_api_request(
+                "POST", 
+                "/v1/sensors/export", 
+                api_key, 
+                json={"start": start_time.isoformat(), "end": end_time.isoformat()}
             )
 
-        payload = {"start": start_time.isoformat(), "end": end_time.isoformat()}
+            result = response.json()
 
-        # Debug the request payload
-        if self.logger:
-            self.logger.info(f"Launch export payload: {payload}")
+            uuid = result.get("uuid")
+            if not uuid:
+                raise ValueError(f"No UUID returned from export launch: {result}")
 
-        response = self._make_api_request("POST", "/v1/sensors/export", api_key, json=payload)
-
-        result = response.json()
-
-        uuid = result.get("uuid")
-        if not uuid:
-            raise ValueError(f"No UUID returned from export launch: {result}")
-
-        self.logger.info(f"Conserv export launched: {uuid}")
-        return uuid
-
-    def check_export_status(self, uuid: str, api_key: str) -> str:
-        """
-        Check the status of an export.
-
-        Parameters
-        ----------
-        uuid : str
-            Export UUID
-        api_key : str
-            Customer API key
-
-        Returns
-        -------
-        str
-            Status: "pending", "completed", or "failed"
-        """
-        response = self._make_api_request(
-            "GET", f"/v1/sensors/export/{uuid}/status", api_key
-        )
-        result = response.json()
-
-        status = result.get("status")
-        if not status:
-            raise ValueError(f"No status returned for export {uuid}: {result}")
-
-        return status
-
-    def get_download_url(self, uuid: str, api_key: str) -> str:
-        """
-        Get the download URL for a completed export.
-
-        Parameters
-        ----------
-        uuid : str
-            Export UUID
-        api_key : str
-            Customer API key
-
-        Returns
-        -------
-        str
-            S3 download URL
-        """
-        response = self._make_api_request(
-            "POST", f"/v1/sensors/export/{uuid}/download", api_key
-        )
-        result = response.json()
-
-        url = result.get("url")
-        if not url:
-            raise ValueError(f"No download URL returned for export {uuid}: {result}")
-
-        return url
-
-    def download_export_data(self, download_url: str) -> polars.DataFrame:
-        """
-        Download and parse the export data from S3.
-
-        Parameters
-        ----------
-        download_url : str
-            S3 download URL
-
-        Returns
-        -------
-        polars.DataFrame
-            Parsed sensor data
-        """
-        self.logger.info("Downloading export data from S3")
-
-        try:
-            response = requests.get(download_url)
-            response.raise_for_status()
-
-            # Parse CSV data
-            csv_content = response.content
-            df = polars.read_csv(io.BytesIO(csv_content))
-
-            self.logger.info(f"Downloaded {df.shape[0]} rows, {df.shape[1]} columns")
-            return df
-
+            self.logger.info(f"Conserv export launched: {uuid}")
+            return uuid
+            
         except Exception as e:
-            self.logger.error(f"Failed to download export data: {e}")
-            raise
+            self.logger.error(f"Failed to launch export: {e}")
+            return None
 
-    def wait_for_export_completion(self, uuid: str, api_key: str) -> str:
-        """
-        Poll export status until completion or timeout.
-
-        Parameters
-        ----------
-        uuid : str
-            Export UUID
-        api_key : str
-            Customer API key
-
-        Returns
-        -------
-        str
-            Final status ("completed" or "failed")
-        """
-        start_time = time.time()
-        max_wait_seconds = self.max_wait_minutes * 60
-
-        while time.time() - start_time < max_wait_seconds:
-            status = self.check_export_status(uuid, api_key)
-
-            if status == "completed":
-                self.logger.info(f"Export {uuid} completed successfully")
-                return status
-            elif status == "failed":
-                self.logger.error(f"Export {uuid} failed")
-                return status
-            elif status in ("pending", "processing", "queued"):
-                self.logger.info(
-                    f"Export {uuid} still {status}, waiting {self.poll_interval_seconds}s..."
-                )
-                time.sleep(self.poll_interval_seconds)
-            elif status == "processing":
-                self.logger.info(
-                    f"Export {uuid} still processing, waiting {self.poll_interval_seconds}s..."
-                )
-                time.sleep(self.poll_interval_seconds)
-            else:
-                raise ValueError(f"Unknown export status: {status}")
-
-        raise TimeoutError(
-            f"Export {uuid} did not complete within {self.max_wait_minutes} minutes"
-        )
 
     def export_data(
         self,
@@ -371,22 +242,60 @@ class ConservAPIClient:
 
             # Launch export
             uuid = self.launch_export(api_key, start_time, end_time)
-
-            # Wait for completion
-            status = self.wait_for_export_completion(uuid, api_key)
-
-            if status != "completed":
-                self.logger.warning(
-                    f"Export failed for customer {customer_id}, UUID {uuid}"
-                )
+            if uuid is None:
                 return None
+
+            # Wait for completion - inline wait_for_export_completion
+            wait_start_time = time.time()
+            max_wait_seconds = self.max_wait_minutes * 60
+
+            while time.time() - wait_start_time < max_wait_seconds:
+                # Check export status - inline check_export_status
+                response = self._make_api_request(
+                    "GET", f"/v1/sensors/export/{uuid}/status", api_key
+                )
+                result = response.json()
+                status = result.get("status")
+                if not status:
+                    raise ValueError(f"No status returned for export {uuid}: {result}")
+
+                if status == "completed":
+                    self.logger.info(f"Export {uuid} completed successfully")
+                    break
+                elif status == "failed":
+                    self.logger.error(f"Export {uuid} failed")
+                    return None
+                elif status in ("pending", "processing", "queued"):
+                    self.logger.info(
+                        f"Export {uuid} still {status}, waiting {self.poll_interval_seconds}s..."
+                    )
+                    time.sleep(self.poll_interval_seconds)
+                else:
+                    raise ValueError(f"Unknown export status: {status}")
+            else:
+                raise TimeoutError(
+                    f"Export {uuid} did not complete within {self.max_wait_minutes} minutes"
+                )
 
             # Add delay to ensure download URL is ready after export completion
             time.sleep(5)
 
-            # Get download URL and fetch data
-            download_url = self.get_download_url(uuid, api_key)
-            df = self.download_export_data(download_url)
+            # Get download URL - inline get_download_url
+            response = self._make_api_request(
+                "POST", f"/v1/sensors/export/{uuid}/download", api_key
+            )
+            result = response.json()
+            download_url = result.get("url")
+            if not download_url:
+                raise ValueError(f"No download URL returned for export {uuid}: {result}")
+
+            # Download and parse data - inline download_export_data
+            self.logger.info("Downloading export data from S3")
+            response = requests.get(download_url)
+            response.raise_for_status()
+            csv_content = response.content
+            df = polars.read_csv(io.BytesIO(csv_content))
+            self.logger.info(f"Downloaded {df.shape[0]} rows, {df.shape[1]} columns")
 
             if df.shape[0] == 0:
                 self.logger.info(f"No data found for customer {customer_id}")
@@ -399,10 +308,6 @@ class ConservAPIClient:
                     polars.lit("Conserv").alias("source"),
                 ]
             )
-
-            # Transform to standardized schema
-            current_utc = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
-            df = self._transform_to_standard_schema(df, customer_id, current_utc)
 
             self.logger.info(
                 f"Successfully exported {df.shape[0]} rows for customer {customer_id}"
@@ -465,60 +370,63 @@ class ConservAPIClient:
 
         return chunks
 
-    def get_current_readings(self, hours_back: int = 24) -> polars.DataFrame:
+    def get_current_readings_for_customer(self, customer_id: int, hours_back: int = 6) -> Optional[polars.DataFrame]:
         """
-        Get current readings for all configured customers.
+        Get current readings for a specific customer with error handling.
 
         Parameters
         ----------
-        hours_back : int
+        customer_id : int
+            Customer ID to get data for
+        hours_back : int, default=6
             Number of hours of data to retrieve
 
         Returns
         -------
-        polars.DataFrame
-            Combined data from all customers
+        Optional[polars.DataFrame]
+            Customer data, or None if failed
         """
+        # Find the customer
+        customer = None
+        for c in self.customers:
+            if c['customer_id'] == customer_id:
+                customer = c
+                break
+        
+        if not customer:
+            self.logger.error(f"Customer {customer_id} not found")
+            return None
+
         end_time = datetime.datetime.now(datetime.timezone.utc)
         start_time = end_time - datetime.timedelta(hours=hours_back)
 
-        all_data = []
-
-        for customer in self.customers:
-            self.logger.info(f"Processing customer {customer['customer_id']}")
-
-            try:
-                # Export data (chunked if necessary)
-                if hours_back > (self.max_window_days * 24):
-                    chunks = self.export_data_chunked(
-                        customer['api_key'], customer['customer_id'], start_time, end_time
-                    )
-                    if chunks:
-                        customer_data = polars.concat(chunks, how="vertical")
-                        all_data.append(customer_data)
+        try:
+            # Export data (chunked if necessary)
+            if hours_back > (self.max_window_days * 24):
+                chunks = self.export_data_chunked(
+                    customer['api_key'], customer_id, start_time, end_time
+                )
+                if chunks:
+                    df = polars.concat(chunks, how="vertical")
                 else:
-                    customer_data = self.export_data(
-                        customer['api_key'], customer['customer_id'], start_time, end_time
-                    )
-                    if customer_data is not None:
-                        all_data.append(customer_data)
+                    return None
+            else:
+                df = self.export_data(
+                    customer['api_key'], customer_id, start_time, end_time
+                )
+                if df is None:
+                    return None
+            
+            # Transform to standardized schema
+            current_utc = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
+            df = self._transform_to_standard_schema(df, customer_id, current_utc)
+            return df
 
-            except Exception as e:
-                self.logger.error(f"Failed to process customer: {e}")
-                # Continue with other customers
-                continue
+        except Exception as e:
+            self.logger.error(f"Failed to get data for customer {customer_id}: {e}")
+            return None
 
-        if not all_data:
-            self.logger.warning("No data retrieved from any customer")
-            return polars.DataFrame()
 
-        # Combine all customer data
-        combined_data = polars.concat(all_data, how="vertical")
-        self.logger.info(
-            f"Combined data: {combined_data.shape[0]} total rows from {len(all_data)} customers"
-        )
-
-        return combined_data
 
     def get_historical_data(
         self, start_utc: int, end_utc: int, max_concurrent_jobs: int = 5
@@ -579,6 +487,10 @@ class ConservAPIClient:
                         customer_data = customer_data.with_columns(
                             polars.lit(customer['customer_id']).alias("customer_id")
                         )
+
+                    # Transform to standardized schema for this customer
+                    current_utc = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
+                    customer_data = self._transform_to_standard_schema(customer_data, customer['customer_id'], current_utc)
 
                     all_customer_data.append(customer_data)
 
@@ -857,7 +769,8 @@ class ConservAPIClient:
                 df = df.with_columns(
                     polars.col("Time")
                     .str.strptime(polars.Datetime, "%Y-%m-%d %H:%M:%S%.f")
-                    .dt.timestamp("s")
+                    .dt.timestamp("ms")
+                    .floordiv(1000)  # Convert milliseconds to seconds
                     .alias("SensorReadingUTC")
                 ).drop("Time")
             else:
@@ -911,126 +824,61 @@ class ConservAPIClient:
 
         return df
 
-    def sample_raw_data(self, save_to_samples: bool = True) -> Dict[str, Any]:
+    def sample_raw_data(self):
         """
         Generate sample raw API data for testing and exploration.
         
-        This method triggers one export workflow using the first available customer
-        and optionally saves the raw CSV data to the samples directory with timestamps.
-        
-        Parameters
-        ----------
-        save_to_samples : bool, default=True
-            Whether to save the raw CSV data to samples/conserv/ directory
-            
-        Returns
-        -------
-        Dict[str, Any]
-            Dictionary containing the raw export data:
-            {
-                'customer_id': customer_id,
-                'export_uuid': export_uuid,
-                'raw_csv_data': raw_csv_content,
-                'processed_data': polars_dataframe
-            }
+        Downloads actual data from customer 333 and saves it to samples/conserv/ directory.
         """
         if not self.customers:
             raise ValueError("No Conserv customers configured")
         
-        # Use first available customer for sampling
-        customer = self.customers[0]
-        customer_id = customer['customer_id']
-        api_key = customer['api_key']
-        
-        print(f"🔍 Generating sample data for Conserv customer {customer_id}...")
-        
-        results = {}
-        
-        # Export last 6 hours for quick sample
+        # Try each customer until one works
         end_time = datetime.datetime.now(datetime.timezone.utc)
         start_time = end_time - datetime.timedelta(hours=6)
         
         print(f"📅 Time range: {start_time} to {end_time}")
-        print(f"🚀 Launching export for customer {customer_id}...")
         
-        # Launch export
-        uuid = self.launch_export(api_key, start_time, end_time)
-        results['export_uuid'] = uuid
-        results['customer_id'] = customer_id
+        # Use customer 333 which we know works
+        target_customer = None
+        for customer in self.customers:
+            if customer['customer_id'] == 333:
+                target_customer = customer
+                break
         
-        print(f"⏳ Waiting for export {uuid} to complete...")
+        if target_customer is None:
+            raise ValueError("Customer 333 not found - sample_raw_data requires working customer 333")
         
-        # Wait for completion
-        status = self.wait_for_export_completion(uuid, api_key)
+        customer_id = target_customer['customer_id']
+        api_key = target_customer['api_key']
         
-        if status != "completed":
-            raise Exception(f"Export failed with status: {status}")
+        print(f"🔍 Downloading sample data for Conserv customer {customer_id}...")
         
-        print(f"✅ Export completed successfully")
+        # Get the full data using export_data
+        raw_data = self.export_data(api_key, customer_id, start_time, end_time)
         
-        # Add delay to ensure download URL is ready
-        time.sleep(5)
-        
-        # Get download URL and fetch raw data
-        download_url = self.get_download_url(uuid, api_key)
-        print(f"📥 Downloading raw CSV data...")
-        
-        # Download raw CSV data
-        response = requests.get(download_url)
-        response.raise_for_status()
-        raw_csv_data = response.text
-        results['raw_csv_data'] = raw_csv_data
-        
-        # Also parse into DataFrame for reference
-        df = polars.read_csv(io.StringIO(raw_csv_data))
-        results['processed_data'] = df
-        
-        print(f"📊 Retrieved {df.shape[0]} rows, {df.shape[1]} columns")
-        
-        if save_to_samples:
+        if raw_data is not None:
+            print(f"✅ Successfully downloaded data for customer {customer_id}: {raw_data.shape[0]} rows")
+            
+            # Save raw data as CSV
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"raw_export_data_customer{customer_id}_{uuid}_{timestamp}.csv"
-            filepath = Path(__file__).parent.parent / "samples" / "conserv" / filename
-            filepath.parent.mkdir(parents=True, exist_ok=True)
+            csv_filename = f"raw_data_customer{customer_id}_{timestamp}.csv"
+            csv_filepath = Path(__file__).parent.parent / "samples" / "conserv" / csv_filename
+            csv_filepath.parent.mkdir(parents=True, exist_ok=True)
+            raw_data.write_csv(csv_filepath)
             
-            with open(filepath, 'w', newline='') as f:
-                f.write(raw_csv_data)
-                
-            print(f"💾 Saved raw CSV to: {filepath}")
+            print(f"💾 Saved raw data to: {csv_filepath}")
             
-            # Also save metadata as JSON
-            metadata = {
-                'customer_id': customer_id,
-                'export_uuid': uuid,
-                'start_time': start_time.isoformat(),
-                'end_time': end_time.isoformat(),
-                'download_url': download_url,
-                'timestamp': timestamp,
-                'rows_count': df.shape[0],
-                'columns_count': df.shape[1],
-                'columns': df.columns
-            }
-            
-            metadata_filename = f"export_metadata_customer{customer_id}_{uuid}_{timestamp}.json"
-            metadata_filepath = filepath.parent / metadata_filename
-            
-            with open(metadata_filepath, 'w') as f:
-                json.dump(metadata, f, indent=2, default=str)
-                
-            print(f"📋 Saved metadata to: {metadata_filepath}")
-        
-        # Print summary
-        print(f"\n📋 Sample Data Summary:")
-        print(f"   • Customer ID: {customer_id}")
-        print(f"   • Export UUID: {uuid}")
-        print(f"   • Time range: {start_time} to {end_time}")
-        print(f"   • Rows retrieved: {df.shape[0]}")
-        print(f"   • Columns: {', '.join(df.columns)}")
-        
-        if save_to_samples:
+            # Print summary
+            print(f"\n📋 Sample Data Summary:")
+            print(f"   • Customer ID: {customer_id}")
+            print(f"   • Rows: {raw_data.shape[0]}")
+            print(f"   • Columns: {raw_data.shape[1]}")
+            print(f"   • Column names: {', '.join(raw_data.columns)}")
+            print(f"   • Time range: {start_time} to {end_time}")
             print(f"   • Files saved to: samples/conserv/")
-        
-        return results
+        else:
+            raise Exception(f"Customer {customer_id} failed to download data")
 
 
 
