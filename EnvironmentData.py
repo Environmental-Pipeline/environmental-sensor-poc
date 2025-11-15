@@ -448,10 +448,6 @@ class EnvironmentData:
             "SensorState": polars.String,
         }
 
-        # Add ConservCustomerID to schema only if Conserv is enabled
-        if self.conserv_enabled:
-            master_schema["ConservCustomerID"] = polars.Int32
-
         return master_schema
 
     def enforce_schema(
@@ -795,6 +791,16 @@ class EnvironmentData:
         # Append these to the database.
         dt = polars.concat([historical, dt], how="diagonal")
 
+        # Remove duplicate readings based on SensorID and SensorReadingUTC
+        # This handles cases where Conserv (15-min intervals) might pull the same readings multiple times
+        initial_count = dt.shape[0]
+        dt = dt.unique(subset=["SensorID", "SensorReadingUTC"])
+        final_count = dt.shape[0]
+        
+        if initial_count != final_count:
+            duplicates_removed = initial_count - final_count
+            self.logger.info(f"Removed {duplicates_removed} duplicate readings (SensorID + SensorReadingUTC)")
+
         # Add time difference between readings for each sensor
         if not dt.is_empty():
             dt = dt.sort(["SensorID", "SensorReadingUTC"])
@@ -879,7 +885,7 @@ class EnvironmentData:
         data = data.filter(polars.col("DeviceID").is_null().not_())
         for reading in self.acceptable_range:
             idt = data.filter(polars.col(reading).is_null().not_()).select(
-                ["Source", "DeviceID", "SensorReadingUTC", "QueryUTC", reading]
+                ["Source", "DeviceID", "SensorReadingUTC", "QueryUTC", "Historical", reading]
             )
             if isinstance(devices, polars.DataFrame):
                 devices = devices.join(
@@ -897,6 +903,7 @@ class EnvironmentData:
         cols_DeviceID = [x for x in devices.columns if "DeviceID" in x]
         cols_SensorReadingUTC = [x for x in devices.columns if "SensorReadingUTC" in x]
         cols_QueryUTC = [x for x in devices.columns if "QueryUTC" in x]
+        cols_Historical = [x for x in devices.columns if "Historical" in x]
 
         devices = devices.with_columns(
             polars.coalesce(cols_Source).alias("Source")
@@ -908,12 +915,13 @@ class EnvironmentData:
             polars.coalesce(cols_SensorReadingUTC).alias("SensorReadingUTC")
         )
         devices = devices.with_columns(polars.coalesce(cols_QueryUTC).alias("QueryUTC"))
+        devices = devices.with_columns(polars.coalesce(cols_Historical).alias("Historical"))
 
         devices = devices.drop(
             [
                 x
-                for x in cols_Source + cols_DeviceID + cols_SensorReadingUTC + cols_QueryUTC
-                if x not in ["Source", "DeviceID", "SensorReadingUTC", "QueryUTC"]
+                for x in cols_Source + cols_DeviceID + cols_SensorReadingUTC + cols_QueryUTC + cols_Historical
+                if x not in ["Source", "DeviceID", "SensorReadingUTC", "QueryUTC", "Historical"]
             ]
         )
 
@@ -939,9 +947,9 @@ class EnvironmentData:
             .unique()
             .group_by("DeviceID")
             .agg([
-                polars.col("SensorID").str.concat(", ").alias("Sensors"),
-                polars.col("SensorName").str.concat(", ").alias("SensorNames"), 
-                polars.col("SensorType").str.concat(", ").alias("SensorTypes")
+                polars.col("SensorID").str.join(", ").alias("Sensors"),
+                polars.col("SensorName").str.join(", ").alias("SensorNames"), 
+                polars.col("SensorType").str.join(", ").alias("SensorTypes")
             ])
         )
         
@@ -950,7 +958,7 @@ class EnvironmentData:
 
         # Rearrange columns.
         devices = devices.select(
-            ["Source", "DeviceID", "DeviceName", "Sensors", "SensorNames", "SensorTypes", "SensorReadingUTC", "QueryUTC"]
+            ["Source", "DeviceID", "DeviceName", "Sensors", "SensorNames", "SensorTypes", "SensorReadingUTC", "QueryUTC", "Historical"]
             + list(self.acceptable_range.keys())
         )
 
@@ -987,9 +995,6 @@ class EnvironmentData:
             "Source": polars.String,  # Fixed: Use String not Utf8 (renamed from source)
         }
         
-        # Add ConservCustomerID to dtypes only if Conserv is enabled
-        if self.conserv_enabled:
-            dtypes["ConservCustomerID"] = polars.Int32
         for dtype in dtypes:
             if dtype in sensors.columns:
                 sensors = sensors.with_columns(polars.col(dtype).cast(dtypes[dtype]))
@@ -1055,10 +1060,6 @@ class EnvironmentData:
             "QueryUTC",
             "Source",  # Renamed from 'source' 
         ]
-        
-        # Add ConservCustomerID only if Conserv is enabled  
-        if self.conserv_enabled:
-            columns.append("ConservCustomerID")  # Renamed from 'customer_id'
             
         columns.extend([
             "DeviceID", 
@@ -1207,7 +1208,7 @@ class EnvironmentData:
 
             # Did we lose any sensors?
             missing = historical.filter(
-                historical["SensorID"].is_in(sensors["SensorID"]).not_()
+                historical["SensorID"].is_in(sensors["SensorID"].implode()).not_()
             )
             if missing.shape[0] > 0:
                 errs.append(
@@ -1316,8 +1317,6 @@ class EnvironmentData:
             "SensorType",
             "Source",
         ]
-        if self.conserv_enabled:
-            columns_to_read.append("ConservCustomerID")
             
         sensors_data = polars.read_parquet(
             f"{self.data_path}/sensor_readings.parquet",
@@ -1518,9 +1517,9 @@ class EnvironmentData:
         
         # Get sensor information for each device from the sensors lookup table
         device_sensors_lookup = sensors.group_by("DeviceID").agg([
-            polars.col("SensorID").str.concat(", ").alias("Sensors"),
-            polars.col("SensorName").str.concat(", ").alias("SensorNames"),
-            polars.col("SensorType").str.concat(", ").alias("SensorTypes")
+            polars.col("SensorID").str.join(", ").alias("Sensors"),
+            polars.col("SensorName").str.join(", ").alias("SensorNames"),
+            polars.col("SensorType").str.join(", ").alias("SensorTypes")
         ])
         
         # Join sensor information to devices

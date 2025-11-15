@@ -695,7 +695,7 @@ class LicorClient:
         # Select only the columns that match the standardized schema
         # Note: Only SensorReadingF (no SensorReadingC)
         standardized_columns = [
-            "source", "SensorID", "DeviceID", "customer_id", "QueryUTC", "SensorReadingUTC", 
+            "Source", "SensorID", "DeviceID", "customer_id", "QueryUTC", "SensorReadingUTC", 
             "SensorName", "DeviceName", "SensorType", "SensorReading", "SensorReadingF", "SensorReadingRh", "Historical"
         ]
         
