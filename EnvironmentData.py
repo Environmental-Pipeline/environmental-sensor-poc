@@ -257,7 +257,7 @@ class EnvironmentData:
             # Clean and validate the Coris data
             for i, data in enumerate(coris_readings):
                 coris_readings[i] = self.clean_validate_sensors(
-                    sensors=data, step="initialize_database"
+                    sensors=data, step="initialize_database_coris"
                 )
             
             readings.extend(coris_readings)
@@ -806,17 +806,19 @@ class EnvironmentData:
         if not dt.is_empty():
             dt = dt.sort(["Source", "DeviceID", "SensorType", "SensorID", "SensorReadingUTC"])
             
-            # Create mask for non-Historical data
-            non_historical_mask = polars.col("Historical") != True
-            
+            # Calculate time differences grouping by Historical flag to prevent mixing historical and real-time data
             dt = dt.with_columns(
-                polars.when(non_historical_mask)
-                .then(
+                (
                     polars.col("SensorReadingUTC")
-                    - polars.col("SensorReadingUTC").shift(1).over(["Source", "DeviceID", "SensorType", "SensorID"])
-                    .filter(non_historical_mask)
-                )
-                .otherwise(None)
+                    - polars.col("SensorReadingUTC").shift(1).over(["Source", "DeviceID", "SensorType", "SensorID", "Historical"])
+                ).alias("SensorReadingUTC_SecondsFromPrior")
+            )
+            
+            # Then set Historical data timing to None since it shouldn't have real-time timing
+            dt = dt.with_columns(
+                polars.when(polars.col("Historical") == True)
+                .then(None)
+                .otherwise(polars.col("SensorReadingUTC_SecondsFromPrior"))
                 .alias("SensorReadingUTC_SecondsFromPrior")
             )
         else:
@@ -1078,7 +1080,8 @@ class EnvironmentData:
             "SensorType",
             "SensorReadingF", 
             "SensorReadingRh",
-            "SensorReadingUTC_SecondsFromPrior"
+            "SensorReadingUTC_SecondsFromPrior",
+            "Historical"
         ])
         
         return columns
@@ -1132,13 +1135,26 @@ class EnvironmentData:
         # Is the data format as expected?
         expect_types = {
             "SensorReadingUTC": polars.Int64,
+            "QueryUTC": polars.Int32,
+            "Source": polars.String,
+            "DeviceID": polars.String,
+            "DeviceName": polars.String,
             "SensorID": polars.String,
+            "SensorName": polars.String,
+            "SensorType": polars.String,
+            "Historical": polars.Boolean,
         }
         for reading in self.acceptable_range:
             if reading in sensors.columns:
                 expect_types[reading] = (
                     polars.Float32
                 )  # Fixed: Should be Float32 like existing data
+
+        # Check for required columns that must be present from clients
+        # Note: SensorReadingUTC_SecondsFromPrior is calculated later in consolidate_readings
+        for col in expect_types.keys():
+            if col not in sensors.columns:
+                errs.append(f"Required column [{col}] is missing from sensor data.")
 
         type_errors_found = False
         for col in expect_types:
@@ -1228,11 +1244,11 @@ class EnvironmentData:
                     f"{step} validation passed: all SensorID in historical data (no dropped SensorID)."
                 )
 
-        # Log the errors.
+        # Log the errors and raise exception to stop processing with bad data.
         if len(errs) > 0:
             self.error(
                 step + " validation errors : " + "; ".join(errs) + "\n",
-                raise_exception=False,
+                raise_exception=True,
             )
 
     def validate_devices(self, devices: polars.DataFrame):
@@ -1318,13 +1334,17 @@ class EnvironmentData:
             "CSC": "Collection Studies Center (West Campus)",
         }
 
-        # Sensor Info.
+        # Sensor Info - include all required columns for validation
         columns_to_read = [
             "SensorName",
             "SensorID",
             "DeviceID",
+            "DeviceName",
             "SensorType",
             "Source",
+            "SensorReadingUTC",
+            "QueryUTC",
+            "Historical"
         ]
             
         sensors_data = polars.read_parquet(
@@ -1366,11 +1386,14 @@ class EnvironmentData:
                     {
                         "Source": sensor["Source"],
                         "SensorName": sensorname,
-                        #   'SensorType_fromName': info[0],
                         "DeviceSerialFromName": info[4],
                         "SensorType": sensor["SensorType"],
                         "SensorID": sensor["SensorID"],
                         "DeviceID": sensor["DeviceID"],
+                        "DeviceName": sensor["DeviceName"],
+                        "SensorReadingUTC": sensor["SensorReadingUTC"],
+                        "QueryUTC": sensor["QueryUTC"],
+                        "Historical": sensor["Historical"],
                         "BuildingID": info[1],
                         "Building": (
                             building_name_map[info[1]]
@@ -1392,11 +1415,14 @@ class EnvironmentData:
                     {
                         "Source": sensor["Source"],
                         "SensorName": sensorname,
-                        #'SensorType_fromName': info[0],
                         "DeviceSerialFromName": info[3],
                         "SensorType": sensor["SensorType"],
                         "SensorID": sensor["SensorID"],
                         "DeviceID": sensor["DeviceID"],
+                        "DeviceName": sensor["DeviceName"],
+                        "SensorReadingUTC": sensor["SensorReadingUTC"],
+                        "QueryUTC": sensor["QueryUTC"],
+                        "Historical": sensor["Historical"],
                         "BuildingID": info[1],
                         "Building": (
                             building_name_map[info[1]]
@@ -1418,11 +1444,14 @@ class EnvironmentData:
                     {
                         "Source": sensor["Source"],
                         "SensorName": sensorname,
-                        # 'SensorType_fromName': info[0],
                         "DeviceSerialFromName": info[2],
                         "SensorType": sensor["SensorType"],
                         "SensorID": sensor["SensorID"],
                         "DeviceID": sensor["DeviceID"],
+                        "DeviceName": sensor["DeviceName"],
+                        "SensorReadingUTC": sensor["SensorReadingUTC"],
+                        "QueryUTC": sensor["QueryUTC"],
+                        "Historical": sensor["Historical"],
                         "BuildingID": "FLOATER",
                         "Building": (
                             building_name_map[info[1]]
@@ -1447,10 +1476,14 @@ class EnvironmentData:
                     {
                         "Source": sensor["Source"],
                         "SensorName": sensorname,
-                        "DeviceSerialFromName": None,  # NA for malformed names
+                        "DeviceSerialFromName": None,
                         "SensorType": sensor["SensorType"],
                         "SensorID": sensor["SensorID"], 
                         "DeviceID": sensor["DeviceID"],
+                        "DeviceName": sensor["DeviceName"],
+                        "SensorReadingUTC": sensor["SensorReadingUTC"],
+                        "QueryUTC": sensor["QueryUTC"],
+                        "Historical": sensor["Historical"],
                         "BuildingID": "MALFORMED",
                         "Building": "Unknown",
                         "Room": "Unknown", 
