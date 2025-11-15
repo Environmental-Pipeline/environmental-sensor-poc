@@ -1,9 +1,82 @@
 """
 Coris API Client Module
 
-This module provides a client interface for the Coris environmental monitoring API.
-It handles sensor data retrieval, historical data queries, and data transformation
+This module provides a client interface that handles sensor data retrieval, 
+historical data queries, and data transformation
 to maintain compatibility with the EnvironmentData schema.
+
+## Commands:
+- Create HTML documentation in `docs/clients`: `pdoc clients/coris_client.py -o docs/ --no-search` 
+- Save API output to `samples/` folder: `python -c "from clients.coris_client import CorisClient; CorisClient().sample_raw_data()"`
+
+## API Endpoints
+
+The client queries available sensors and then loops over them to get readings. APIs return JSON or CSV data. Authentication uses API key and CATS User ID from .env variables CORIS_API_KEY and CATS_USER_ID.
+
+Individual sensors only make one type of reading, so data is stored as one table per sensor type to prevent excessively repetitive or sparse tables. 
+
+The project reads `SensorType` = "Temperature", "Humidity" from the Coris API. New types can be brought in by adding a new entry to the `readings` object in the `EnvironmentData` class. 
+
+### Get User Account and Sensor Information
+
+- GET https://cats.corismonitoring.com/api/cats/user/?ApiKey={api_key}&CatsUserID={cats_user_id}
+- Returns comprehensive user account data including all sensors, devices, gateways, alerts, and configuration
+- Each sensor includes current readings in both Celsius and Fahrenheit, device associations, and sensor metadata
+
+```json
+{
+  "CatsUserID": 2496,
+  "CatsUserName": "YalePeabodyApi",
+  "MasterCatsUserID": 666,
+  "FirstName": "YaleApi",
+  "LastName": "Peabody",
+  "Sensors": [
+    {
+      "SensorName": "Cryo tank 1 on ETS 01AB4F (P3)",
+      "SensorID": 21030,
+      "SensorPort": 3,
+      "ServerUTC": 1763165616,
+      "HexGatewayMac": "000000000000",
+      "LoraHexGatewayMac": "0080000000019E44",
+      "SensorReading": -188.1,
+      "SensorReadingUTC": 1763165582,
+      "DeviceName": "Basement LN2 1 YALE TWhite ETS 1AB4F",
+      "DeviceDevID": 11808,
+      "SensorType": "Thermocouple",
+      "SensorReadingC": -188.1,
+      "SensorReadingF": -306.6,
+      "SensorTempPref": "C",
+      "UserTempPref": "F",
+      "SensorTimeZone": "America/New_York",
+      "LoraBatteryPresent": 0,
+      "LoraBattery_mV": null,
+      "LoraBatteryPercentage": null,
+      ...
+    },
+    ...
+  ],
+  "Gateways": [...],
+  "CriticalAlerts": [...],
+  "ContactMethods": [...]
+}
+```
+
+### Historical Sensor Data
+
+- GET https://cats.corismonitoring.com/api/sensor/historical/?ApiKey={api_key}&SensorID={sensor_id}&ReadingType={reading_type}&StartUTC={start_utc}&EndUTC={end_utc}&MinReadingSpacing=600&RequestedOutputFormat=raw
+- Returns CSV format with timestamp,value pairs
+- Common ReadingType values: 'SensorReadingF', 'SensorReadingC', 'SensorReadingRh'
+- MinReadingSpacing=600 requests data every 10 minutes
+- Times are in UTC seconds (not milliseconds like LI-COR)
+- You can remove StartUTC and/or EndUTC to get the full historical data (this should be confirmed with the API provider though). 
+
+```csv
+1763079219,-309.1
+1763079819,-309.1
+1763080419,-309.1
+1763081019,-309.1
+1763081619,-309.1
+```
 """
 
 import os
@@ -12,7 +85,9 @@ import polars
 import datetime
 import logging
 import tqdm
-from typing import List, Dict, Optional
+import json
+from pathlib import Path
+from typing import List, Dict, Optional, Any
 
 
 class CorisClient:
@@ -337,5 +412,173 @@ class CorisClient:
         ])
         
         return sensors
+    
+    def sample_raw_data(self, save_to_samples: bool = True) -> Dict[str, Any]:
+        """
+        Generate sample raw API data for testing and exploration.
+        
+        This method fetches raw data from the Coris API and optionally saves it
+        to the samples directory with timestamps. Fetches sensor metadata and 
+        sample historical data from multiple sensors for comprehensive testing.
+        
+        Parameters
+        ----------
+        save_to_samples : bool, default=True
+            Whether to save the raw responses to samples/coris/ directory
+            
+        Returns
+        -------
+        Dict[str, Any]
+            Dictionary containing the raw API responses:
+            {
+                'sensors': raw_sensors_response,
+                'historical_data_samples': [list of raw historical data responses]
+            }
+        """
+        results = {}
+        
+        try:
+            print("🔍 Fetching raw sensor data...")
+            # Get raw sensors data - make direct API call to get raw response
+            url = f'{self.base_url}/cats/user/?ApiKey={self.api_key}&CatsUserID={self.cats_user_id}'
+            
+            self.logger.info(
+                "API call: https://cats.corismonitoring.com/api/cats/user/?ApiKey=XXXX&CatsUserID=XXXX"
+            )
+            
+            response = requests.get(url)
+            
+            if not response.ok:
+                error_msg = f"Error getting sensors: {response.json()}"
+                self.logger.error(error_msg)
+                raise Exception(error_msg)
+            
+            raw_sensors = response.json()
+            results['sensors'] = raw_sensors
+            
+            if save_to_samples:
+                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"raw_sensors_response_{timestamp}.json"
+                filepath = Path(__file__).parent.parent / "samples" / "coris" / filename
+                filepath.parent.mkdir(parents=True, exist_ok=True)
+                with open(filepath, 'w') as f:
+                    json.dump(raw_sensors, f, indent=2, default=str)
+                print(f"Saved sensors data to: {filepath}")
+            
+            sensors_data = raw_sensors.get('Sensors', [])
+            print(f"✅ Retrieved {len(sensors_data)} sensors")
+            
+            # Try to get sample historical data from multiple sensors
+            historical_data_samples = []
+            max_sensors = 3  # Sample up to 3 sensors
+            sensors_sampled = 0
+            
+            if len(sensors_data) > 0:
+                print(f"🔍 Fetching historical data from up to {max_sensors} sensors...")
+                
+                # Get last 24 hours for quick sample
+                end_time = datetime.datetime.now(datetime.timezone.utc)
+                start_time = end_time - datetime.timedelta(hours=24)
+                start_utc = int(start_time.timestamp())
+                end_utc = int(end_time.timestamp())
+                
+                # Common reading types to sample
+                reading_types = ['SensorReadingF', 'SensorReadingRh', 'SensorReadingC']
+                
+                for sensor in sensors_data:
+                    if sensors_sampled >= max_sensors:
+                        break
+                    
+                    sensor_id = sensor.get('SensorID')
+                    sensor_name = sensor.get('SensorName', 'Unknown Sensor')
+                    
+                    if not sensor_id:
+                        continue
+                    
+                    print(f"\n📊 Sensor: {sensor_name} (ID: {sensor_id})")
+                    
+                    # Try to get data for different reading types
+                    for reading_type in reading_types:
+                        # Check if this sensor has this reading type
+                        if reading_type in sensor and sensor.get(reading_type) is not None:
+                            print(f"  🔍 Fetching {reading_type} data...")
+                            
+                            try:
+                                url = "&".join([
+                                    f'{self.base_url}/sensor/historical/?ApiKey={self.api_key}',
+                                    f"SensorID={sensor_id}",
+                                    f"ReadingType={reading_type}",
+                                    f"StartUTC={start_utc}",
+                                    f"EndUTC={end_utc}",
+                                    "MinReadingSpacing=600",  # every 10 minutes
+                                    "RequestedOutputFormat=raw",
+                                ])
+                                
+                                logurl = "&".join([
+                                    "https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX",
+                                    f"SensorID={sensor_id}",
+                                    f"ReadingType={reading_type}",
+                                    f"StartUTC={start_utc}",
+                                    f"EndUTC={end_utc}",
+                                    "MinReadingSpacing=600",
+                                    "RequestedOutputFormat=raw",
+                                ])
+                                
+                                self.logger.info(f"API call: {logurl}")
+                                response = requests.get(url)
+                                
+                                if response.ok:
+                                    # Store raw response text since it's CSV data
+                                    raw_historical_data = response.text
+                                    
+                                    historical_data_samples.append({
+                                        'sensor_id': sensor_id,
+                                        'sensor_name': sensor_name,
+                                        'reading_type': reading_type,
+                                        'raw_data': raw_historical_data
+                                    })
+                                    
+                                    if save_to_samples:
+                                        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                                        filename = f"raw_historical_data_{sensor_id}_{reading_type}_{timestamp}.csv"
+                                        filepath = Path(__file__).parent.parent / "samples" / "coris" / filename
+                                        filepath.parent.mkdir(parents=True, exist_ok=True)
+                                        with open(filepath, 'w') as f:
+                                            f.write(raw_historical_data)
+                                        print(f"    💾 Saved to: {filepath}")
+                                    
+                                    print(f"    ✅ Retrieved {reading_type} data for sensor {sensor_id}")
+                                    
+                                    # Only sample one reading type per sensor to avoid too much data
+                                    break
+                                    
+                                else:
+                                    print(f"    ⚠️ Could not get {reading_type} data: HTTP {response.status_code}")
+                                    
+                            except Exception as e:
+                                print(f"    ⚠️ Could not get {reading_type} data for sensor {sensor_id}: {e}")
+                                continue
+                    
+                    sensors_sampled += 1
+            
+            results['historical_data_samples'] = historical_data_samples
+            
+            # Print summary
+            print(f"\n📋 Sample Data Summary:")
+            print(f"   • Sensors: {len(sensors_data)} found")
+            print(f"   • Historical data samples: {len(historical_data_samples)} collected from {sensors_sampled} sensors")
+            
+            if historical_data_samples:
+                for i, sample in enumerate(historical_data_samples, 1):
+                    print(f"     {i}. {sample['sensor_name']} - {sample['reading_type']} (ID: {sample['sensor_id']})")
+            
+            if save_to_samples:
+                print(f"   • Files saved to: samples/coris/")
+            
+            return results
+            
+        except Exception as e:
+            print(f"❌ Error generating sample data: {e}")
+            raise
 
 
