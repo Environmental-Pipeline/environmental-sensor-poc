@@ -7,15 +7,13 @@ This package contains clients for various environmental monitoring APIs:
 - licor_client: LI-COR API client for environmental sensor data
 """
 
-from .coris_client import CorisClient, create_coris_client_from_env
-from .conserv_client import ConservAPIClient, ConservCustomer, create_conserv_client_from_env
+from .coris_client import CorisClient
+from .conserv_client import ConservAPIClient, ConservCustomer
 from .licor_client import LicorClient
 
 __all__ = [
     'CorisClient',
-    'create_coris_client_from_env',
     'ConservAPIClient', 
     'ConservCustomer',
-    'create_conserv_client_from_env',
     'LicorClient',
 ]

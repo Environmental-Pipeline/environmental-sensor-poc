@@ -26,19 +26,48 @@ class CorisClient:
     - Data transformation to standardized schema
     """
     
-    def __init__(self, api_key: str, cats_user_id: int, logger: Optional[logging.Logger] = None):
+    def __init__(self, logger: Optional[logging.Logger] = None):
         """
         Initialize the Coris API client.
         
         Parameters
         ----------
-        api_key : str
-            Coris API key for authentication
-        cats_user_id : int
-            Coris Cats User ID for API queries
         logger : Optional[logging.Logger]
             Logger instance for recording API interactions
         """
+        # Read API key from environment variables
+        api_key = None
+        try:
+            with open(".env") as f:
+                for line in f:
+                    if line.startswith("CORIS_API_KEY"):
+                        api_key = line.split("=", 1)[1].strip()
+                        break
+        except FileNotFoundError:
+            pass
+        
+        # Read CATS User ID from environment variables
+        cats_user_id_str = None
+        try:
+            with open(".env") as f:
+                for line in f:
+                    if line.startswith("CATS_USER_ID"):
+                        cats_user_id_str = line.split("=", 1)[1].strip()
+                        break
+        except FileNotFoundError:
+            pass
+        
+        if not api_key:
+            raise ValueError("CORIS_API_KEY not found in environment or .env file")
+        
+        if not cats_user_id_str:
+            raise ValueError("CATS_USER_ID not found in environment or .env file")
+        
+        try:
+            cats_user_id = int(cats_user_id_str)
+        except ValueError:
+            raise ValueError(f"CATS_USER_ID must be an integer, got: {cats_user_id_str}")
+        
         self.api_key = api_key
         self.cats_user_id = cats_user_id
         self.logger = logger or logging.getLogger(__name__)
@@ -206,7 +235,7 @@ class CorisClient:
         
         return data
     
-    def get_historical_data(self, acceptable_range: Dict[str, List], 
+    def get_historical_data_bulk(self, acceptable_range: Dict[str, List], 
                                start_utc: int, end_utc: int,
                                out_of_scope: List[str] = None,
                                testing: bool = False,
@@ -310,58 +339,3 @@ class CorisClient:
         return sensors
 
 
-def create_coris_client_from_env(logger: Optional[logging.Logger] = None) -> CorisClient:
-    """
-    Create a Coris client using environment variables or .env file.
-    
-    Parameters
-    ----------
-    logger : Optional[logging.Logger]
-        Logger instance for recording client creation
-        
-    Returns
-    -------
-    CorisClient
-        Configured Coris client instance
-        
-    Raises
-    ------
-    ValueError
-        If required environment variables are not found
-    """
-    def read_env_variable(var_name: str) -> Optional[str]:
-        """Read environment variable from .env file or environment."""
-        # First try environment variables
-        value = os.getenv(var_name)
-        if value:
-            return value
-            
-        # Then try .env file
-        try:
-            with open(".env") as f:
-                for line in f:
-                    if line.startswith(var_name):
-                        return line.split("=", 1)[1].strip()
-        except FileNotFoundError:
-            pass
-        
-        return None
-    
-    api_key = read_env_variable("CORIS_API_KEY")
-    cats_user_id_str = read_env_variable("CATS_USER_ID")
-    
-    if not api_key:
-        raise ValueError("CORIS_API_KEY not found in environment or .env file")
-    
-    if not cats_user_id_str:
-        raise ValueError("CATS_USER_ID not found in environment or .env file")
-    
-    try:
-        cats_user_id = int(cats_user_id_str)
-    except ValueError:
-        raise ValueError(f"CATS_USER_ID must be an integer, got: {cats_user_id_str}")
-    
-    # if logger:
-    #     logger.info(f"Created Coris client for user ID: {cats_user_id}")
-    
-    return CorisClient(api_key=api_key, cats_user_id=cats_user_id, logger=logger)

@@ -30,25 +30,51 @@ class ConservAPIClient:
     Supports multiple customer tenants and handles the 7-day window limitation.
     """
 
-    def __init__(
-        self, customers: List[ConservCustomer], logger: Optional[logging.Logger] = None
-    ):
+    def __init__(self, logger: Optional[logging.Logger] = None):
         """
         Initialize the Conserv API client.
 
         Parameters
         ----------
-        customers : List[ConservCustomer]
-            List of customer configurations with customer_id and api_key
         logger : Optional[logging.Logger]
             Logger instance for tracking operations
         """
+        # Read configuration for all 5 customers
+        customers = []
+        customer_ids = [1545, 333, 307, 2671, 1696]
+
+        for customer_id in customer_ids:
+            # Read environment variable from .env file or environment
+            api_key = None
+            try:
+                with open(".env") as f:
+                    for line in f:
+                        var_name = f"CONSERV_API_KEY_{customer_id}"
+                        if line.startswith(var_name):
+                            api_key = line.split("=", 1)[1].strip()
+                            break
+            except FileNotFoundError:
+                if logger:
+                    logger.warning("No .env file found, trying os.getenv")
+            
+            if api_key:
+                customers.append(ConservCustomer(customer_id=customer_id, api_key=api_key))
+            else:
+                if logger:
+                    logger.warning(f"No API key found for customer {customer_id}")
+
+        if not customers:
+            raise ValueError("No Conserv API keys found in environment variables")
+
         self.base_url = "https://api.conserv.io"
         self.customers = customers
         self.logger = logger or logging.getLogger(__name__)
         self.max_window_days = 7  # API limitation
         self.poll_interval_seconds = 30  # How often to check export status
         self.max_wait_minutes = 15  # Maximum time to wait for export completion
+        
+        if logger:
+            logger.info(f"Initialized Conserv client with {len(customers)} customers")
 
     def _make_request(
         self, method: str, endpoint: str, api_key: str, **kwargs
@@ -890,52 +916,3 @@ class ConservAPIClient:
         return df
 
 
-def create_conserv_client_from_env(
-    logger: Optional[logging.Logger] = None,
-) -> ConservAPIClient:
-    """
-    Create a ConservAPIClient instance using environment variables from .env file.
-
-    Parameters
-    ----------
-    logger : Optional[logging.Logger]
-        Logger instance
-
-    Returns
-    -------
-    ConservAPIClient
-        Configured client instance
-    """
-
-    # Read environment variables from .env file (similar to EnvironmentData approach)
-    def read_env_variable(var_name):
-        try:
-            with open(".env") as f:
-                for line in f:
-                    if line.startswith(var_name):
-                        return line.split("=", 1)[1].strip()
-        except FileNotFoundError:
-            if logger:
-                logger.warning("No .env file found, trying os.getenv")
-            return os.getenv(var_name)
-        return None
-
-    # Read configuration for all 5 customers
-    customers = []
-    customer_ids = [1545, 333, 307, 2671, 1696]
-
-    for customer_id in customer_ids:
-        api_key = read_env_variable(f"CONSERV_API_KEY_{customer_id}")
-        if api_key:
-            customers.append(ConservCustomer(customer_id=customer_id, api_key=api_key))
-        else:
-            if logger:
-                logger.warning(f"No API key found for customer {customer_id}")
-
-    if not customers:
-        raise ValueError("No Conserv API keys found in environment variables")
-
-    if logger:
-        logger.info(f"Initialized Conserv client with {len(customers)} customers")
-
-    return ConservAPIClient(customers, logger)

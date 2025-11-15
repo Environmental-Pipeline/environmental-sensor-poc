@@ -25,18 +25,20 @@ class TestConservAPIClient(unittest.TestCase):
     
     def setUp(self):
         """Set up test fixtures."""
-        self.customers = [
-            ConservCustomer(customer_id=1545, api_key="test_key_1545"),
-            ConservCustomer(customer_id=333, api_key="test_key_333"),
-        ]
-        self.client = ConservAPIClient(self.customers)
+        # Use real environment variables to test constructor
+        self.client = ConservAPIClient()
     
     def test_client_initialization(self):
         """Test that the ConservAPIClient initializes correctly."""
-        self.assertEqual(len(self.client.customers), 2)
-        self.assertEqual(self.client.customers[0].customer_id, 1545)
-        self.assertEqual(self.client.customers[1].customer_id, 333)
+        # Test that client initializes with real environment variables
+        self.assertGreater(len(self.client.customers), 0)  # Should have at least some customers
         self.assertEqual(self.client.base_url, "https://api.conserv.io")
+        
+        # Test that all customers have required attributes
+        for customer in self.client.customers:
+            self.assertIsInstance(customer.customer_id, int)
+            self.assertIsInstance(customer.api_key, str)
+            self.assertGreater(len(customer.api_key), 0)  # API key should not be empty
     
     @patch('requests.request')
     def test_launch_export_success(self, mock_request):
@@ -280,8 +282,8 @@ class TestIntegrationScenarios(unittest.TestCase):
     
     def test_no_data_found_handling(self):
         """Test graceful handling of 'No data found' responses."""
-        customers = [ConservCustomer(customer_id=999, api_key="test_key")]
-        client = ConservAPIClient(customers)
+        # Use a client with real environment variables
+        client = ConservAPIClient()
         
         with patch.object(client, 'export_data', return_value=None):
             # Test that empty result is handled gracefully
@@ -290,11 +292,8 @@ class TestIntegrationScenarios(unittest.TestCase):
     
     def test_individual_customer_failure_handling(self):
         """Test that individual customer failures don't break the entire process."""
-        customers = [
-            ConservCustomer(customer_id=1545, api_key="working_key"),
-            ConservCustomer(customer_id=333, api_key="failing_key"),
-        ]
-        client = ConservAPIClient(customers)
+        # Use a client with real environment variables
+        client = ConservAPIClient()
         
         # Mock: first customer succeeds, second fails
         successful_data = polars.DataFrame({

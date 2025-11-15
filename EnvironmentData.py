@@ -4,8 +4,8 @@ import numpy
 import logging
 import datetime
 import warnings
-from clients.conserv_client import create_conserv_client_from_env
-from clients.coris_client import create_coris_client_from_env
+from clients.conserv_client import ConservAPIClient
+from clients.coris_client import CorisClient
 from clients.licor_client import LicorClient
 
 
@@ -115,7 +115,7 @@ class EnvironmentData:
         self.coris_client = None
         if self.coris_enabled:
             try:
-                self.coris_client = create_coris_client_from_env(self.logger)
+                self.coris_client = CorisClient(self.logger)
                 # self.logger.info("Coris API client initialized successfully")
             except Exception as e:
                 self.logger.warning(f"Failed to initialize Coris client: {e}")
@@ -125,7 +125,7 @@ class EnvironmentData:
         self.conserv_client = None
         if self.conserv_enabled:
             try:
-                self.conserv_client = create_conserv_client_from_env(self.logger)
+                self.conserv_client = ConservAPIClient(self.logger)
                 # self.logger.info(
                 #     f"Conserv API client initialized with {len(self.conserv_client.customers)} customers"
                 # )
@@ -240,7 +240,7 @@ class EnvironmentData:
         readings = []
         if self.coris_enabled and self.coris_client:
             # Get historical data from Coris API using the client
-            coris_readings = self.coris_client.get_historical_data(
+            coris_readings = self.coris_client.get_historical_data_bulk(
                 acceptable_range=self.acceptable_range,
                 start_utc=start_utc,
                 end_utc=current_utc,

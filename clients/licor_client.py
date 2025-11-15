@@ -99,6 +99,7 @@ class LicorClient:
             Logger instance for recording API interactions
         """
         # Read API key from environment
+        api_key = None
         try:
             with open(".env") as f:
                 for line in f:
