@@ -309,7 +309,6 @@ class CorisClient:
                     )
         
         # Add standardized schema columns
-        current_utc = self.get_current_utc()
         data = data.with_columns([
             polars.lit("Coris").alias("source"),
             polars.lit(None, dtype=polars.Int32).alias("customer_id"),

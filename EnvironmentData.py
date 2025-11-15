@@ -277,7 +277,7 @@ class EnvironmentData:
 
             try:
                 # Get Conserv data for the same time period as Coris
-                conserv_data = self.conserv_client.get_data_for_period(
+                conserv_data = self.conserv_client.get_historical_data(
                     start_utc=start_utc,
                     end_utc=current_utc,
                     max_concurrent_jobs=3 if self.testing else 5,
@@ -617,7 +617,7 @@ class EnvironmentData:
                 )  # Convert hours to seconds
 
                 # Get Conserv data for the specified window
-                conserv_data = self.conserv_client.get_data_for_period(
+                conserv_data = self.conserv_client.get_historical_data(
                     start_utc=start_utc,
                     end_utc=current_utc,
                     max_concurrent_jobs=3 if self.testing else 5,

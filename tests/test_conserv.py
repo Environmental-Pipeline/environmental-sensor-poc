@@ -16,7 +16,7 @@ import os
 # Add the parent directory to the path to import our clients
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from clients.conserv_client import ConservAPIClient, ConservCustomer
+from clients.conserv_client import ConservAPIClient
 from EnvironmentData import EnvironmentData
 
 
@@ -36,9 +36,9 @@ class TestConservAPIClient(unittest.TestCase):
         
         # Test that all customers have required attributes
         for customer in self.client.customers:
-            self.assertIsInstance(customer.customer_id, int)
-            self.assertIsInstance(customer.api_key, str)
-            self.assertGreater(len(customer.api_key), 0)  # API key should not be empty
+            self.assertIsInstance(customer['customer_id'], int)
+            self.assertIsInstance(customer['api_key'], str)
+            self.assertGreater(len(customer['api_key']), 0)  # API key should not be empty
     
     @patch('requests.request')
     def test_launch_export_success(self, mock_request):
@@ -287,7 +287,7 @@ class TestIntegrationScenarios(unittest.TestCase):
         
         with patch.object(client, 'export_data', return_value=None):
             # Test that empty result is handled gracefully
-            result = client.get_data_for_period(1750162000, 1750162500)
+            result = client.get_historical_data(1750162000, 1750162500)
             self.assertIsNone(result)
     
     def test_individual_customer_failure_handling(self):
@@ -311,7 +311,7 @@ class TestIntegrationScenarios(unittest.TestCase):
                 raise Exception("API Error")
         
         with patch.object(client, 'export_data', side_effect=mock_export_data):
-            result = client.get_data_for_period(1750162000, 1750162500)
+            result = client.get_historical_data(1750162000, 1750162500)
             
             # Should return data from successful customer only
             self.assertIsNotNone(result)

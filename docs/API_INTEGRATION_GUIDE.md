@@ -32,7 +32,7 @@ class NewAPIClient:
         self.base_url = base_url
         self.logger = logging.getLogger(f'{__name__}.NewAPIClient')
     
-    def get_data_for_period(self, start_time, end_time):
+    def get_historical_data(self, start_time, end_time):
         # Implement API-specific data retrieval
         pass
 ```

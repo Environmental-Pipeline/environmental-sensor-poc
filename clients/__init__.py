@@ -8,12 +8,11 @@ This package contains clients for various environmental monitoring APIs:
 """
 
 from .coris_client import CorisClient
-from .conserv_client import ConservAPIClient, ConservCustomer
+from .conserv_client import ConservAPIClient
 from .licor_client import LicorClient
 
 __all__ = [
     'CorisClient',
-    'ConservAPIClient', 
-    'ConservCustomer',
+    'ConservAPIClient',
     'LicorClient',
 ]

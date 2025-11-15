@@ -66,24 +66,9 @@ docker rm $(docker ps -a -q)
 ## APIs
 
 See documentation in each client file:
-- `clients/licor_client.py`
+- `clients/conserv_client.py`
 - `clients/coris_client.py`
-
-**Conserv (Multi-Tenant)**
-
-The Conserv API supports multiple customer tenants. _Conserv does not currently work with any script except `ingest_all_sources.py`, so it won't work with Docker or the Jupyter notebooks._
-
-* Multi-tenant architecture: Processes data from 5 different Conserv customers (API keys) in a single container run
-* Export-based workflow: Uses export → status polling → download pattern due to API design
-* Data format: CSV with columns: Sensor Name, Time, Temperature (°C), Humidity (%)
-* Schema mapping: Automatically converts °C→°F and maps to existing `SensorReadingF`/`SensorReadingRh` columns
-* 7-day limitation: API limits exports to 7-day windows, automatically chunked for historical data
-* API Endpoints:
-  - `POST /v1/sensors/export` - Launch export job
-  - `GET /v1/sensors/export/{uuid}/status` - Poll export status
-  - `POST /v1/sensors/export/{uuid}/download` - Get download URL
-* Error handling: Individual customer failures don't break the entire process ("No data found" handled gracefully)
-* New schema columns: `SensorID_Conserv`, `customer_id`, `source` (preserves backward compatibility)
+- `clients/licor_client.py`
 
 **Adding New APIs**
 
