@@ -56,6 +56,7 @@ There are 2 primary ways of running this script: Direct, and via Docker. Using *
     - Logs will print to terminal. At the start of every minute, you'll see it run `get_current_readings`. Every ten minutes, it'll run `consolidate_readings`.    
     - This one is technical, but if you want you can open a new terminal and run `docker exec -it sensorpull-run /bin/bash` to get an interactive session where you can run linux commands inside the terminal (for example, watch the logs with `tail -f data/EnvironmentData.log`). 
     - You can also open the container in Docker Desktop and navigate to `Files > src/data` to view the project files like `sensor_readings.parquet` and `device_readings.parquet`.
+* To run a second jupyter notebook from your machine, use `jupyter notebook --port 8889` so it doesn't conflict with the container which uses port 8888.
 * When you are done, remove any running containers by clicking the trash button on Docker Desktop. You can also do it with the command below:
 
 ```bash
