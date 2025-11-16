@@ -1,3 +1,14 @@
+"""
+Class for managing environmental sensor data from multiple APIs.
+
+Initializes with a historical data pull and provides get_current_readings() method for fetching current data. 
+Consolidates readings into an analytical database of parquet files that can be read with duckdb.
+
+## Commands:
+- Create HTML documentation in `docs/clients`: `pdoc EnvironmentData.py -o docs/ --no-search` 
+- See experiments/1-examples-cron.ipynb for example usage.
+"""
+
 import os
 import polars
 import numpy

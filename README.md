@@ -30,7 +30,7 @@ pip install -r requirements.txt
     - `Dockerfile` for creating the container and running repeated daily pulls.
     - `requirements.txt` listing Python package dependencies.
 - clients: Python classes for interacting with the various data sources.
-- docs: Additional documentation for the repo and for Python classes. 
+- docs: Additional documentation for the repo and for Python classes. Commands to update documentation are at the top of each file.
 - experiments: Code examples for working with the classes and data. 
 - jobs: Files for the Docker container to call during initialization and then scheduled via cron
 - tests: Automated tests, see the README.md there for more information about automated testing.
@@ -56,6 +56,7 @@ There are 2 primary ways of running this script: Direct, and via Docker. Using *
     - Logs will print to terminal. At the start of every minute, you'll see it run `get_current_readings`. Every ten minutes, it'll run `consolidate_readings`.    
     - This one is technical, but if you want you can open a new terminal and run `docker exec -it sensorpull-run /bin/bash` to get an interactive session where you can run linux commands inside the terminal (for example, watch the logs with `tail -f data/EnvironmentData.log`). 
     - You can also open the container in Docker Desktop and navigate to `Files > src/data` to view the project files like `sensor_readings.parquet` and `device_readings.parquet`.
+    - The container will initialize with the historical data pull and will then get current readings every 15 minutes (the frequency used by conserv). Each hour, it will consolidate new readings to update analytical tables starting at the 45 minute mark to hopefully be finished by the start of each hour.
 * To run a second jupyter notebook from your machine, use `jupyter notebook --port 8889` so it doesn't conflict with the container which uses port 8888.
 * When you are done, remove any running containers by clicking the trash button on Docker Desktop. You can also do it with the command below:
 
@@ -66,7 +67,7 @@ docker rm $(docker ps -a -q)
 
 ## APIs
 
-See documentation in each client file:
+See documentation at the top of each client file:
 - `clients/conserv_client.py`
 - `clients/coris_client.py`
 - `clients/licor_client.py`
@@ -74,10 +75,10 @@ See documentation in each client file:
 **Adding New APIs**
 
 Other APIs can be implemented following the established pattern:
-1. Create dedicated API client class (see `conserv_client.py` as example)
-2. Extend `EnvironmentData.get_current_readings()` and `EnvironmentData.initialize_database()` to include new source
-3. Create schema transformation method to map to existing column structure
-4. Add unit tests for the new integration
+1. Create dedicated API client class. See `licor_client.py` as probably the best example (coris was the first so has no transformation function) or `conserv_client.py` if the API sends back tabular data for devices and not the typical data by sensor as that data will need to be transformed to a sensor-level format.
+2. Extend `EnvironmentData.initialize_database()` and `EnvironmentData.get_current_readings()` to include new source (see the code there currently).
+3. Create a schema transformation method to map to existing column structure. See `EnvironmentData.validate_sensors()` or `experimentsexperiments\1-examples-cron.ipynb` (data is printed at the end) for the expected format.
+4. Add unit tests for the new integration (see examples in the `tests/` folder).
 
 ## Testing
 
@@ -93,37 +94,11 @@ The project includes automated tests to validate API clients and data processing
 pip install pytest
 
 # Run all tests
-python test/run.py
+python tests/run.py
 
 # Or run individual test files
-python -m pytest test/test_licor.py -v
-python -m pytest test/ -v
+python -m pytest tests/test_licor.py -v
 ```
-
-**Test Coverage**
-
-Tests are located in the `./test` directory and cover:
-- API client functionality (LI-COR, Coris, Conserv)
-- Data transformation and schema validation
-- Error handling and edge cases
-- Integration testing with sample data
-
-**Writing Tests**
-
-When adding new functionality:
-1. Create test files in `./test` directory following the `test_*.py` naming convention
-2. Use existing test files as templates for API client testing
-3. Include both unit tests and integration tests where applicable
-4. Test error conditions and edge cases
-
-## Other Commands
-
-* All APIs including Conserv are processed through a unified entry point (`ingest_all_sources.py`) that:
-  - Pulls 24-hour data from Coris API (existing functionality preserved)
-  - Pulls 24-hour data from all 5 Conserv customers  
-  - Merges and consolidates data maintaining schema compatibility
-  - Completes entire process in <15 minutes
-  - Handles individual API/customer failures gracefully
 
 ## Design Notes
 
@@ -137,12 +112,4 @@ When adding new functionality:
 **polars vs pandas**
 
 Polars/parquet was selected as our data framework because it is faster and more memory efficient, and will therefore help the project scale better. Parquet files can be interacted with effeciently using SQL syntax in DuckDB.
-
-**EnvironmentData Documentation**
-
-See ./html/EnvironmentData.html for the EnvironmentData class documentation. To update this documentation, run `pdoc EnvironmentData.py -o docs/ --no-search` after installing [pandoc](https://pypi.org/project/pdoc/).
-
-**Automated Testing**
-
-Tests are saved in ./test and can be run with `python test/run.py`. See the [Testing](#testing) section above for more details on running and writing tests.
 
