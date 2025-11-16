@@ -296,7 +296,8 @@ class ConservAPIClient:
             response = requests.get(download_url)
             response.raise_for_status()
             csv_content = response.content
-            df = polars.read_csv(io.BytesIO(csv_content))
+            # Read all columns as strings to avoid schema mismatches during concatenation
+            df = polars.read_csv(io.BytesIO(csv_content), infer_schema=False)
             self.logger.info(f"Downloaded {df.shape[0]} rows, {df.shape[1]} columns")
 
             if df.shape[0] == 0:
@@ -637,7 +638,7 @@ class ConservAPIClient:
             raise ValueError(f"Humidity column not found. Available columns: {df.columns}")
         
         df = df.with_columns(
-            ((polars.col(temp_col) * 9 / 5) + 32).cast(polars.Float32).alias("SensorReadingF")
+            ((polars.col(temp_col).cast(polars.Float32) * 9 / 5) + 32).alias("SensorReadingF")
         )
 
         # SensorReadingRh
