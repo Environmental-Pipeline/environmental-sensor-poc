@@ -16,8 +16,8 @@ class EnvironmentData:
         data_path: str = "./data/",
         days_back: int = int(365 * 2),
         testing: bool = False,
-        coris_enabled: bool = False,
         conserv_enabled: bool = False,
+        coris_enabled: bool = False,
         licor_enabled: bool = False,
         home_directory: str = ".",
     ):
@@ -35,11 +35,11 @@ class EnvironmentData:
         testing : bool, default=False
             Create a class in "testing mode". Only a few sensors will be included so that tests can run quickly and use fewer API calls.
 
-        coris_enabled : bool, default=True
-            Enable Coris API integration for primary sensor data source.
-
         conserv_enabled : bool, default=False
             Enable Conserv API integration for additional sensor data sources.
+
+        coris_enabled : bool, default=True
+            Enable Coris API integration for primary sensor data source.
 
         licor_enabled : bool, default=False
             Enable LI-COR API integration for additional sensor data sources.
@@ -63,15 +63,15 @@ class EnvironmentData:
         self.testing = testing
         self.testing_sensor_ids = []
         self.out_of_scope = ['-80', 'Cryo tank', 'Water']
-        self.coris_enabled = coris_enabled
         self.conserv_enabled = conserv_enabled
+        self.coris_enabled = coris_enabled
         self.licor_enabled = licor_enabled
 
         # Check that at least one data source is enabled
-        if not (coris_enabled or conserv_enabled or licor_enabled):
+        if not (conserv_enabled or coris_enabled or licor_enabled):
             raise ValueError(
                 "At least one data source must be enabled. "
-                "Set coris_enabled=True, conserv_enabled=True, or licor_enabled=True"
+                "Set conserv_enabled=True, coris_enabled=True, or licor_enabled=True"
             )
 
         # Check that .env file exists before initializing clients
@@ -119,6 +119,15 @@ class EnvironmentData:
         else:
             self.update_cron_status("not-initialized")
 
+        # Initialize Conserv API client if enabled
+        self.conserv_client = None
+        if self.conserv_enabled:
+            try:
+                self.conserv_client = ConservAPIClient(self.logger, home_directory=self.home_directory)
+            except Exception as e:
+                self.logger.warning(f"Failed to initialize Conserv client: {e}")
+                self.conserv_enabled = False
+
         # Initialize Coris API client if enabled
         self.coris_client = None
         if self.coris_enabled:
@@ -128,15 +137,6 @@ class EnvironmentData:
             except Exception as e:
                 self.logger.warning(f"Failed to initialize Coris client: {e}")
                 self.coris_enabled = False
-
-        # Initialize Conserv API client if enabled
-        self.conserv_client = None
-        if self.conserv_enabled:
-            try:
-                self.conserv_client = ConservAPIClient(self.logger, home_directory=self.home_directory)
-            except Exception as e:
-                self.logger.warning(f"Failed to initialize Conserv client: {e}")
-                self.conserv_enabled = False
 
         # Initialize LI-COR API client if enabled
         self.licor_client = None
@@ -154,10 +154,10 @@ class EnvironmentData:
 
         # Debug: Show which data sources are actually enabled
         enabled_sources = []
-        if self.coris_enabled and self.coris_client:
-            enabled_sources.append("Coris")
         if self.conserv_enabled and self.conserv_client:
             enabled_sources.append("Conserv") 
+        if self.coris_enabled and self.coris_client:
+            enabled_sources.append("Coris")
         if self.licor_enabled and self.licor_client:
             enabled_sources.append("LI-COR")
         
@@ -241,27 +241,6 @@ class EnvironmentData:
         current_utc = self.get_current_utc()
         start_utc = current_utc - days_back * 24 * 60 * 60
 
-        # ============ CORIS HISTORICAL DATA PROCESSING ============
-        readings = []
-        if self.coris_enabled and self.coris_client:
-            # Get historical data from Coris API using the client
-            coris_readings = self.coris_client.get_historical_data_bulk(
-                acceptable_range=self.acceptable_range,
-                start_utc=start_utc,
-                end_utc=current_utc,
-                out_of_scope=self.out_of_scope,
-                testing=self.testing,
-                testing_sensor_ids=self.testing_sensor_ids
-            )
-
-            # Clean and validate the Coris data
-            for i, data in enumerate(coris_readings):
-                coris_readings[i] = self.clean_validate_sensors(
-                    sensors=data, step="initialize_database_coris"
-                )
-            
-            readings.extend(coris_readings)
-
         # ============ CONSERV HISTORICAL DATA PROCESSING ============
         conserv_readings = []
         if self.conserv_enabled and self.conserv_client:
@@ -295,6 +274,27 @@ class EnvironmentData:
             except Exception as e:
                 self.logger.warning(f"Failed to fetch Conserv historical data: {e}")
                 # Continue without Conserv data - don't fail the entire initialization
+
+        # ============ CORIS HISTORICAL DATA PROCESSING ============
+        readings = []
+        if self.coris_enabled and self.coris_client:
+            # Get historical data from Coris API using the client
+            coris_readings = self.coris_client.get_historical_data_bulk(
+                acceptable_range=self.acceptable_range,
+                start_utc=start_utc,
+                end_utc=current_utc,
+                out_of_scope=self.out_of_scope,
+                testing=self.testing,
+                testing_sensor_ids=self.testing_sensor_ids
+            )
+
+            # Clean and validate the Coris data
+            for i, data in enumerate(coris_readings):
+                coris_readings[i] = self.clean_validate_sensors(
+                    sensors=data, step="initialize_database_coris"
+                )
+            
+            readings.extend(coris_readings)
 
         # ============ LI-COR HISTORICAL DATA PROCESSING ============
         licor_readings = []
@@ -341,8 +341,8 @@ class EnvironmentData:
             print(f"DEBUG: LI-COR not enabled or client not initialized. Enabled: {self.licor_enabled}, Client: {self.licor_client}")
 
         # ============ COMBINE ALL DATA SOURCES ============
-        # Combine Coris, Conserv, and LI-COR readings into a single polars DataFrame
-        all_readings = readings + conserv_readings + licor_readings
+        # Combine Conserv, Coris, and LI-COR readings into a single polars DataFrame
+        all_readings = conserv_readings + readings + licor_readings
         dt = (
             polars.concat(all_readings, how="diagonal")
             if all_readings
@@ -549,39 +549,6 @@ class EnvironmentData:
         current_utc = self.get_current_utc()
         # self.logger.info(f"get_current_readings: {current_utc}")
 
-        # ============ CORIS DATA PROCESSING ============
-        coris_sensors = None
-        if self.coris_enabled and self.coris_client:
-            self.logger.info("Fetching current Coris data")
-            
-            # Get the current status from the Coris API using the client
-            coris_sensors = self.coris_client.get_current_readings(
-                out_of_scope=self.out_of_scope,
-                testing=self.testing,
-                testing_sensor_ids=self.testing_sensor_ids
-            )
-            
-            # Convert data types to match expected schema before validation
-            if not coris_sensors.is_empty():
-                for reading in self.acceptable_range:
-                    if reading in coris_sensors.columns:
-                        coris_sensors = coris_sensors.with_columns(
-                            polars.col(reading).cast(polars.Float32)
-                        )
-            
-            self.validate_sensors(
-                sensors=coris_sensors, utc=current_utc, step="get_current_readings_coris"
-            )
-        else:
-            # Create empty DataFrame with required schema when Coris is disabled
-            coris_sensors = polars.DataFrame()
-            self.logger.info("Coris integration is disabled")
-
-        # DEBUG: Log Coris schema types
-        # self.logger.info(
-        #     f"CORIS schema types: {dict(zip(coris_sensors.columns, [str(dtype) for dtype in coris_sensors.dtypes]))}"
-        # )
-
         # ============ CONSERV DATA PROCESSING ============
         conserv_sensors = None
         if self.conserv_enabled and self.conserv_client:
@@ -632,6 +599,39 @@ class EnvironmentData:
                 )
                 # Continue with Coris data only - don't fail the entire process
 
+        # ============ CORIS DATA PROCESSING ============
+        coris_sensors = None
+        if self.coris_enabled and self.coris_client:
+            self.logger.info("Fetching current Coris data")
+            
+            # Get the current status from the Coris API using the client
+            coris_sensors = self.coris_client.get_current_readings(
+                out_of_scope=self.out_of_scope,
+                testing=self.testing,
+                testing_sensor_ids=self.testing_sensor_ids
+            )
+            
+            # Convert data types to match expected schema before validation
+            if not coris_sensors.is_empty():
+                for reading in self.acceptable_range:
+                    if reading in coris_sensors.columns:
+                        coris_sensors = coris_sensors.with_columns(
+                            polars.col(reading).cast(polars.Float32)
+                        )
+            
+            self.validate_sensors(
+                sensors=coris_sensors, utc=current_utc, step="get_current_readings_coris"
+            )
+        else:
+            # Create empty DataFrame with required schema when Coris is disabled
+            coris_sensors = polars.DataFrame()
+            self.logger.info("Coris integration is disabled")
+
+        # DEBUG: Log Coris schema types
+        # self.logger.info(
+        #     f"CORIS schema types: {dict(zip(coris_sensors.columns, [str(dtype) for dtype in coris_sensors.dtypes]))}"
+        # )
+
         # ============ LI-COR DATA PROCESSING ============
         licor_sensors = None
         if self.licor_enabled and self.licor_client:
@@ -678,18 +678,18 @@ class EnvironmentData:
         data_sources = []
         source_info = []
 
-        # Add Coris data if enabled and available
-        if coris_sensors is not None and not coris_sensors.is_empty():
-            coris_sensors = self.enforce_schema(coris_sensors, "Coris_Current_Readings")
-            data_sources.append(coris_sensors)
-            source_info.append(f"CORIS: {coris_sensors.shape[0]} rows")
-
+        # Add Conserv data if enabled and available
         if conserv_sensors is not None and not conserv_sensors.is_empty():
             conserv_sensors = self.enforce_schema(
                 conserv_sensors, "Conserv_Current_Readings"
             )
             data_sources.append(conserv_sensors)
             source_info.append(f"CONSERV: {conserv_sensors.shape[0]} rows")
+
+        if coris_sensors is not None and not coris_sensors.is_empty():
+            coris_sensors = self.enforce_schema(coris_sensors, "Coris_Current_Readings")
+            data_sources.append(coris_sensors)
+            source_info.append(f"CORIS: {coris_sensors.shape[0]} rows")
 
         if licor_sensors is not None and not licor_sensors.is_empty():
             licor_sensors = self.enforce_schema(
