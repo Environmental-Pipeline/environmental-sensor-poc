@@ -1233,7 +1233,7 @@ class EnvironmentData:
 
             # Did we lose any sensors?
             missing = historical.filter(
-                historical["SensorID"].is_in(sensors["SensorID"].implode()).not_()
+                historical["SensorID"].is_in(sensors["SensorID"].unique()).not_()
             )
             if missing.shape[0] > 0:
                 errs.append(

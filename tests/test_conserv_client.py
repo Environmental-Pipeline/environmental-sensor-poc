@@ -19,6 +19,21 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Set up test logging to be less verbose
 logging.basicConfig(level=logging.WARNING)
 
+def find_env_directory():
+    """Find the directory containing the .env file by checking current and parent directories."""
+    current_dir = os.getcwd()
+    if os.path.exists(os.path.join(current_dir, '.env')):
+        return "."
+    elif os.path.exists(os.path.join(os.path.dirname(current_dir), '.env')):
+        return ".."
+    else:
+        # Check the directory where this test file is located
+        test_file_dir = os.path.dirname(os.path.abspath(__file__))
+        parent_dir = os.path.dirname(test_file_dir)
+        if os.path.exists(os.path.join(parent_dir, '.env')):
+            return parent_dir
+        return "."
+
 from clients.conserv_client import ConservAPIClient
 
 class TestConservClient(unittest.TestCase):
@@ -28,7 +43,7 @@ class TestConservClient(unittest.TestCase):
     def setUpClass(cls):
         """Set up test class with Conserv client in test mode."""
         try:
-            cls.client = ConservAPIClient()  # Initialize normally, use test parameter in method calls
+            cls.client = ConservAPIClient(home_directory=find_env_directory())  # Initialize normally, use test parameter in method calls
             cls.test_customer_id = 333  # Focus on customer 333 for quick tests
             
             # Verify customer 333 is available in test mode

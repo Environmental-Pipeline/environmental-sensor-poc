@@ -19,6 +19,21 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Set up test logging to be less verbose
 logging.basicConfig(level=logging.WARNING)
 
+def find_env_directory():
+    """Find the directory containing the .env file by checking current and parent directories."""
+    current_dir = os.getcwd()
+    if os.path.exists(os.path.join(current_dir, '.env')):
+        return "."
+    elif os.path.exists(os.path.join(os.path.dirname(current_dir), '.env')):
+        return ".."
+    else:
+        # Check the directory where this test file is located
+        test_file_dir = os.path.dirname(os.path.abspath(__file__))
+        parent_dir = os.path.dirname(test_file_dir)
+        if os.path.exists(os.path.join(parent_dir, '.env')):
+            return parent_dir
+        return "."
+
 try:
     from clients.licor_client import LicorClient
     LICOR_AVAILABLE = True
@@ -36,7 +51,7 @@ class TestLicorClient(unittest.TestCase):
         """Set up test fixtures for the entire test class."""
         cls.logger = logging.getLogger(__name__)
         try:
-            cls.client = LicorClient(logger=cls.logger)
+            cls.client = LicorClient(logger=cls.logger, home_directory=find_env_directory())
             cls.client_available = True
         except Exception as e:
             cls.logger.warning(f"Could not create LI-COR client: {e}")
@@ -60,14 +75,14 @@ class TestLicorClient(unittest.TestCase):
         # Verify required columns exist
         required_columns = [
             'DeviceID', 'DeviceName', 'SensorID', 
-            'SensorName', 'SensorType', 'source'
+            'SensorName', 'SensorType', 'Source'
         ]
         for col in required_columns:
             self.assertIn(col, devices_df.columns, 
                          f"DataFrame should contain column '{col}'")
         
         # Verify source column is correct
-        sources = devices_df['source'].unique().to_list()
+        sources = devices_df['Source'].unique().to_list()
         self.assertEqual(sources, ['LI-COR'], 
                         "All records should have source='LI-COR'")
         
@@ -87,14 +102,12 @@ class TestLicorClient(unittest.TestCase):
         if len(current_readings) > 0:
             # Verify required columns exist
             required_columns = [
-                'source', 'SensorID', 'DeviceName', 'SensorType', 'SensorReading'
+                'Source', 'SensorID', 'DeviceName', 'SensorType', 'SensorReading'
             ]
             for col in required_columns:
-                self.assertIn(col, current_readings.columns, 
-                             f"DataFrame should contain column '{col}'")
-            
-            # Verify source column is correct
-            sources = current_readings['source'].unique().to_list()
+                self.assertIn(col, current_readings.columns,
+                            f"DataFrame should contain column '{col}'")            # Verify source column is correct
+            sources = current_readings['Source'].unique().to_list()
             self.assertEqual(sources, ['LI-COR'],
                             "All records should have source='LI-COR'")            # Check that we have actual readings
             non_null_readings = current_readings.filter(
@@ -145,13 +158,13 @@ class TestLicorClient(unittest.TestCase):
                                     "Each item should be a Polars DataFrame")
                 
                 # Verify required columns
-                required_columns = ['SensorReadingUTC', 'SensorID', 'SensorType', 'source']
+                required_columns = ['SensorReadingUTC', 'SensorID', 'SensorType', 'Source']
                 for col in required_columns:
                     self.assertIn(col, df.columns, 
                                  f"Historical DataFrame should contain column '{col}'")
                 
                 # Verify source
-                sources = df['source'].unique().to_list()
+                sources = df['Source'].unique().to_list()
                 self.assertEqual(sources, ['LI-COR'],
                                 "All historical records should have source='LI-COR'")                # Verify timeframe - all timestamps should be within requested range
                 timestamps = df['SensorReadingUTC'].to_list()
@@ -202,14 +215,14 @@ class TestLicorClient(unittest.TestCase):
         # Verify required columns
         required_columns = [
             'SensorReadingUTC', 'SensorID', 'SensorType', 
-            'source', 'SensorReadingRh'
+            'Source', 'SensorReadingRh'
         ]
         for col in required_columns:
             self.assertIn(col, transformed.columns, 
                          f"Transformed DataFrame should contain column '{col}'")
         
         # Verify data values
-        self.assertEqual(transformed['source'].unique().to_list(), ['LI-COR'])
+        self.assertEqual(transformed['Source'].unique().to_list(), ['LI-COR'])
         self.assertEqual(transformed['SensorType'].unique().to_list(), ['RH'])
         self.assertEqual(transformed['SensorID'].unique().to_list(), ['licor:test-test-sensor-1'])
         
@@ -338,7 +351,7 @@ class TestLicorClient(unittest.TestCase):
     def test_client_creation_from_env(self):
         """Test client creation from environment variables."""
         # This test assumes LICOR_API_KEY is set
-        client = LicorClient()
+        client = LicorClient(home_directory=find_env_directory())
         self.assertIsInstance(client, LicorClient, 
                             "Should create a LicorClient instance")
         self.assertTrue(hasattr(client, 'api_key'), 
@@ -355,7 +368,7 @@ class TestLicorIntegration(unittest.TestCase):
         """Set up integration test fixtures."""
         cls.logger = logging.getLogger(__name__)
         try:
-            cls.client = LicorClient(logger=cls.logger)
+            cls.client = LicorClient(logger=cls.logger, home_directory=find_env_directory())
             cls.integration_available = True
         except Exception as e:
             cls.logger.warning(f"Integration tests not available: {e}")
@@ -401,8 +414,8 @@ class TestLicorIntegration(unittest.TestCase):
             combined_df = pl.concat(historical_list, how="diagonal")
             self.assertGreater(len(combined_df), 0, 
                               "Combined historical data should have readings")
-            self.assertIn('source', combined_df.columns)
-            self.assertEqual(combined_df['source'].unique().to_list(), ['LI-COR'])
+            self.assertIn('Source', combined_df.columns)
+            self.assertEqual(combined_df['Source'].unique().to_list(), ['LI-COR'])
             
             # Verify timeframe for integration test
             start_utc = int(start_time.timestamp())
