@@ -1,2 +1,2 @@
-*/1 * * * * cd /src/ && /usr/local/bin/python3 /src/jobs/1-pull.py # pull reading every minute.
-*/10 * * * * cd /src/ && /usr/local/bin/python3 /src/jobs/2-consolidate.py # consolidate into analytical tables every 10 minutes.
+*/15 * * * * cd /src/ && /usr/local/bin/python3 /src/jobs/1-pull.py # pull reading every 15 minutes, this is the frequency used by Conserv.
+45 * * * * cd /src/ && /usr/local/bin/python3 /src/jobs/2-consolidate.py # consolidate into analytical tables at the 45 minute mark each hour, targeting ready by the start of each hour.
