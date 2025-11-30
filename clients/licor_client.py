@@ -294,6 +294,12 @@ class LicorClient:
             self.logger.warning("No sensor data found in response")
             return polars.DataFrame()
         
+        # Extract device name from metadata upfront for use in record creation
+        device_name = None
+        if device_metadata is not None and not device_metadata.is_empty():
+            if "deviceName" in device_metadata.columns and len(device_metadata) > 0:
+                device_name = device_metadata.select("deviceName").item(0, 0)
+        
         all_readings = []
         
         for sensor_info in raw_data["sensors"]:
@@ -324,8 +330,9 @@ class LicorClient:
                         # Add schema columns - populate DeviceID with device serial when available
                         polars.lit(f"licor:{device_serial}" if device_serial else None).alias("DeviceID"),
                         polars.lit(None, dtype=polars.Int32).alias("customer_id"),
-                        polars.lit(None, dtype=polars.String).alias("SensorName"),
-                        polars.lit(None, dtype=polars.String).alias("DeviceName"),
+                        # Set SensorName from device metadata: DeviceName_SensorType (e.g., "RX Station 1_RH")
+                        polars.lit(f"{device_name}_{measurement_type}" if device_name else None, dtype=polars.String).alias("SensorName"),
+                        polars.lit(device_name, dtype=polars.String).alias("DeviceName"),
                         polars.lit(int(datetime.datetime.now(datetime.timezone.utc).timestamp())).alias("QueryUTC"),
                         polars.lit(True).alias("Historical"),
                     ])
@@ -372,19 +379,6 @@ class LicorClient:
         
         # Note: LI-COR API natively returns data in 15-minute intervals,
         # consistent with Coris (MinReadingSpacing=900) and Conserv (15-min exports)
-        
-        # Add device metadata if available 
-        # Note: For historical data, device names will be set to null since the
-        # device serial -> sensor serial mapping is not straightforward in LI-COR API
-        if device_metadata is not None and not device_metadata.is_empty():
-            # For now, we'll rely on the DeviceName being set in the get_devices_as_dataframe method
-            # The device metadata passed here is for a specific device, so we can use that device name
-            if "deviceName" in device_metadata.columns and len(device_metadata) > 0:
-                device_name = device_metadata.select("deviceName").item(0, 0)
-                if device_name:
-                    result = result.with_columns([
-                        polars.lit(device_name).alias("DeviceName")
-                    ])
         
         self.logger.info(f"Transformed {len(result)} readings from LI-COR data")
         return result
