@@ -8,6 +8,7 @@ to maintain compatibility with the EnvironmentData schema.
 ## Commands:
 - Create HTML documentation in `docs/clients`: `pdoc clients/conserv_client.py -o docs/ --no-search` 
 - Save API output to `samples/` folder: `python -c "from clients.conserv_client import ConservAPIClient; ConservAPIClient().sample_raw_data()"`
+- Test with `pytest tests/test_conserv_client.py`
 
 ## API Endpoints
 

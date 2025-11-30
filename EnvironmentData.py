@@ -7,6 +7,7 @@ Consolidates readings into an analytical database of parquet files that can be r
 ## Commands:
 - Create HTML documentation in `docs/clients`: `pdoc EnvironmentData.py -o docs/ --no-search` 
 - See experiments/1-examples-cron.ipynb for example usage.
+- Test with `pytest tests/test_EnvironmentData.py`
 """
 
 import os

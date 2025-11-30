@@ -7,6 +7,7 @@
 - If you are going to run python code, create a script to avoid syntax errors. Remove any test scripts you create. Make sure to activate the virtual environment at .venv before running python scripts; `& "C:\Users\super\Documents\savii\Analysis Tool\savii-data-scripts\.venv\Scripts\Activate.ps1"; python my_script.py`
 - To escape `"`, use `""`, not `\"`.
 - Only use functions if code is reused multiple times, or complex enough that it needs to be abstracted. Otherwise, keep it simple and keep code inline.
+- Some files list a testing file at the top. If you change a file, run the tests for that file to make sure nothing is broken.
 
 
 # If You Run PowerShell
