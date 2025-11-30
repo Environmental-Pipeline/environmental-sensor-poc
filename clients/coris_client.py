@@ -155,6 +155,10 @@ class CorisClient:
         self.cats_user_id = cats_user_id
         self.logger = logger or logging.getLogger(__name__)
         self.base_url = "https://cats.corismonitoring.com/api"
+        
+        # Reading interval in seconds (15 minutes = 900 seconds)
+        # Consistent with Conserv (15-min exports) and LI-COR (downsampled to 15 min)
+        self.reading_spacing_seconds = 900
     
     def get_current_utc(self) -> int:
         """
@@ -269,7 +273,7 @@ class CorisClient:
             f"ReadingType={reading_type}",
             f"StartUTC={start_utc}",
             f"EndUTC={end_utc}",
-            "MinReadingSpacing=600",  # every 10 minutes
+            f"MinReadingSpacing={self.reading_spacing_seconds}",
             "RequestedOutputFormat=raw",
         ])
         
@@ -280,7 +284,7 @@ class CorisClient:
             f"ReadingType={reading_type}",
             f"StartUTC={start_utc}",
             f"EndUTC={end_utc}",
-            "MinReadingSpacing=600",
+            f"MinReadingSpacing={self.reading_spacing_seconds}",
             "RequestedOutputFormat=raw",
         ])
         
@@ -521,7 +525,7 @@ class CorisClient:
                                     f"ReadingType={reading_type}",
                                     f"StartUTC={start_utc}",
                                     f"EndUTC={end_utc}",
-                                    "MinReadingSpacing=600",  # every 10 minutes
+                                    f"MinReadingSpacing={self.reading_spacing_seconds}",
                                     "RequestedOutputFormat=raw",
                                 ])
                                 
@@ -531,7 +535,7 @@ class CorisClient:
                                     f"ReadingType={reading_type}",
                                     f"StartUTC={start_utc}",
                                     f"EndUTC={end_utc}",
-                                    "MinReadingSpacing=600",
+                                    f"MinReadingSpacing={self.reading_spacing_seconds}",
                                     "RequestedOutputFormat=raw",
                                 ])
                                 

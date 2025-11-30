@@ -370,6 +370,9 @@ class LicorClient:
         # Concatenate all readings
         result = polars.concat(all_readings, how="diagonal")
         
+        # Note: LI-COR API natively returns data in 15-minute intervals,
+        # consistent with Coris (MinReadingSpacing=900) and Conserv (15-min exports)
+        
         # Add device metadata if available 
         # Note: For historical data, device names will be set to null since the
         # device serial -> sensor serial mapping is not straightforward in LI-COR API

@@ -96,6 +96,9 @@ class ConservAPIClient:
         self.poll_interval_seconds = 10  # How often to check export status (reduced from 30s)
         self.max_wait_minutes = 15  # Maximum time to wait for export completion
         
+        # Note: Conserv exports data in 15-minute increments natively.
+        # This is consistent with Coris (MinReadingSpacing=900) and LI-COR (downsampled to 15 min).
+        
         if logger:
             logger.info(f"Initialized Conserv client with {len(customers)} customers")
 
