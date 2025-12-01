@@ -1,7 +1,9 @@
 # ruff: noqa: E402
 # EnvironmentData is not in this folder, add its location to path so we can import it.
 import sys
-sys.path.append('/src/')
+import os
+sys.path.append('/src/')  # Docker
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # GitHub Actions
 
 def read_env_variable(var_name):
     with open('.env') as f:
