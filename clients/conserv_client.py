@@ -14,7 +14,7 @@ to maintain compatibility with the EnvironmentData schema.
 
 There are multiple Conserv customers (API keys). For each, we trigger an export, wait for it to process, and download the data. 
 
-- New customers can be added by adding a new API key in the `.env` file as `CONSERV_API_KEY_{customer_id}`.
+- Customers are configured via `CONSERV_API_KEYS` env var as a JSON array: `[{"id":123,"key":"abc"},...]`
 - Auth is handled by sending headers = {"x-api-key": api_key, ...}
 - Some customers are failing due to invalid keys. These are skipped with warnings logged.
 - Exports can only be 7 days so for historical data we chunk into 7-day windows. This will be very slow for large date ranges.
@@ -44,6 +44,7 @@ import datetime
 import polars
 import io
 import tqdm
+import json
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 import urllib3
@@ -65,7 +66,7 @@ class ConservAPIClient:
         home_directory : str, default="."
             Base directory for finding .env file
         """
-        # Read configuration dynamically from .env file
+        # Read configuration from CONSERV_API_KEYS env var (JSON array)
         customers = []
         env_file_path = os.path.join(home_directory, ".env")
         
@@ -74,12 +75,15 @@ class ConservAPIClient:
             with open(env_file_path) as f:
                 for line in f:
                     line = line.strip()
-                    if line.startswith("CONSERV_API_KEY_") and "=" in line:
-                        var_name, api_key = line.split("=", 1)
-                        api_key = api_key.strip()
-                        # Extract customer ID from variable name
-                        customer_id = int(var_name.replace("CONSERV_API_KEY_", ""))
-                        customers.append({'customer_id': customer_id, 'api_key': api_key})
+                    if line.startswith("CONSERV_API_KEYS=") and "=" in line:
+                        _, json_value = line.split("=", 1)
+                        api_keys_list = json.loads(json_value.strip())
+                        for entry in api_keys_list:
+                            customers.append({
+                                'customer_id': entry['id'],
+                                'api_key': entry['key']
+                            })
+                        break
         except FileNotFoundError:
             if logger:
                 logger.warning(
