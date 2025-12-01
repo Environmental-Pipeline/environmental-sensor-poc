@@ -11,3 +11,4 @@ samples/
 htmlcov/
 .coverage
 tests/data/
+.env-test
