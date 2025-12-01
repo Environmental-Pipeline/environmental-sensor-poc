@@ -1,0 +1,6 @@
+# Include all production dependencies
+-r requirements.txt
+
+# Dev/testing dependencies
+pytest
+pytest-cov

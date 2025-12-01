@@ -9,3 +9,5 @@ todo
 not-tracked
 out/
 samples/
+htmlcov/
+.coverage

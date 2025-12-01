@@ -1162,11 +1162,8 @@ class EnvironmentData:
         return_results: bool = False,
     ) -> list:
         """
-        Validate Sensor reading data: column data types, missing values, SensorReadingUTC close to QueryUTC,
-            no duplicated SensorReadingUTC, one SensorName per SensorID,
-            SensorReadingUTC_SecondsFromPrior less than 15 minutes,
-            all SensorID in historical data, no multiple names for SensorID.
-        Can be expanded to add more validation steps.
+        Validate Sensor reading data. Delegates to diagnostics.validate_sensors().
+        
         Failed validations are printed as errors to the log files, and surfaced as warnings.
 
         Parameters
@@ -1186,204 +1183,25 @@ class EnvironmentData:
         -------
         list : List of validation result dicts with keys: test_name, run_utc, result, details
         """
-
-        errs = []
-        validation_results = []
-        run_utc = self.get_current_utc()
-
-        # We expect missing values in the data, so we don't check for them.
-
-        # Is the data format as expected?
-        expect_types = {
-            "SensorReadingUTC": polars.Int64,
-            "QueryUTC": polars.Int32,
-            "Source": polars.String,
-            "DeviceID": polars.String,
-            "DeviceName": polars.String,
-            "SensorID": polars.String,
-            "SensorName": polars.String,
-            "SensorType": polars.String,
-            "Historical": polars.Boolean,
-        }
-        for reading in self.acceptable_range:
-            if reading in sensors.columns:
-                expect_types[reading] = (
-                    polars.Float32
-                )  # Fixed: Should be Float32 like existing data
-
-        # Check for required columns that must be present from clients
-        # Note: SensorReadingUTC_SecondsFromPrior is calculated later in consolidate_readings
-        missing_cols = [col for col in expect_types.keys() if col not in sensors.columns]
-        validation_results.append({
-            "test_name": "required_columns_present",
-            "run_utc": run_utc,
-            "result": "PASS" if len(missing_cols) == 0 else "FAIL",
-            "details": f"Sensor data is missing required columns: {missing_cols}. These columns must be provided by the data source client." if missing_cols else f"All {len(expect_types)} required columns are present in sensor data."
-        })
-        for col in missing_cols:
-            errs.append(f"Required column [{col}] is missing from sensor data.")
-
-        type_errors_found = False
-        type_error_details = []
-        for col in expect_types:
-            if col in sensors.columns:
-
-                # data type.
-                if sensors[col].dtype != expect_types[col]:
-                    if not type_errors_found:
-                        self.logger.info(f"{step} validation: correct column data types.")
-                        type_errors_found = True
-                    type_error_details.append(f"{col}: expected {expect_types[col]}, got {sensors[col].dtype}")
-                    errs.append(
-                        f"Unexpected data type for [{col}]. Expected [{expect_types[col]}] got [{sensors[col]}]."
-                    )
-
-        # Track column type validation
-        validation_results.append({
-            "test_name": "column_data_types",
-            "run_utc": run_utc,
-            "result": "PASS" if not type_errors_found else "FAIL",
-            "details": f"Column data type mismatches found: {'; '.join(type_error_details)}. This may indicate a bug in the data source client." if type_error_details else "All columns have the expected data types (e.g., SensorReadingUTC is Int64, Source is String)."
-        })
-
-        # Readings should have at least one non-null value from expect_types.
-        allnull = sensors[[x for x in expect_types if x in sensors.columns]].filter(
-            polars.all_horizontal(polars.all().is_null())
+        # Call the standalone validation function in diagnostics module
+        validation_results = diagnostics.validate_sensors(
+            sensors=sensors,
+            historical=historical,
+            utc=utc,
+            acceptable_range=self.acceptable_range,
+            logger=self.logger,
+            step=step,
         )
-        missing_count = allnull.shape[0]
-        validation_results.append({
-            "test_name": "non_null_values",
-            "run_utc": run_utc,
-            "result": "PASS" if missing_count == 0 else "WARN",
-            "details": f"{missing_count} sensor reading rows have all null values across required columns. These rows contain no usable data." if missing_count > 0 else f"Every sensor reading row has at least one non-null value in the {len(expect_types)} required columns."
-        })
-        if missing_count > 0:
-            self.logger.info(f"{step} validation: at least one non-null value in readings.")
-            # Note: Missing values are expected in sensor data (e.g., temperature-only vs humidity-only sensors)
-            # errs.append(f"{missing_count} missing values in [{col}].")
-
-        # Are the SensorReadingUTC close to the QueryUTC (the time the data was requested via API)?
-        if utc is not None:
-            maxdiff_minutes = (
-                numpy.max(numpy.abs(sensors["SensorReadingUTC"].to_numpy() - utc)) / 60
-            )
-            freshness_passed = maxdiff_minutes <= 5
-            validation_results.append({
-                "test_name": "reading_freshness",
-                "run_utc": run_utc,
-                "result": "PASS" if freshness_passed else "FAIL",
-                "details": f"The oldest sensor reading is {maxdiff_minutes:,.1f} minutes old, which exceeds the 5-minute freshness threshold. This may indicate stale data or API delays." if not freshness_passed else f"All sensor readings are within 5 minutes of the query time (oldest is {maxdiff_minutes:,.1f} min)."
-            })
-            if not freshness_passed:
-                errs.append(
-                    f"SensorReadingUTC is {maxdiff_minutes:,.0f} minutes old"
-                )
-            else:                
-                self.logger.info(
-                    f"{step} validation passed: SensorReadingUTC columns close to QueryUTC."
-                )
-
-        # Are there any duplicated SensorReadingUTC per SensorID?
-        if "SensorReadingUTC" in sensors.columns:
-            dup_mask = sensors[["SensorID", "SensorReadingUTC"]].is_duplicated()
-            dup_count = dup_mask.sum()
-            if dup_count > 0:
-                # Get examples of duplicates for debugging
-                dup_examples = sensors.filter(dup_mask).select(["SensorID", "SensorReadingUTC"]).head(5)
-                dup_list = [f"{r['SensorID']}@{r['SensorReadingUTC']}" for r in dup_examples.iter_rows(named=True)]
-                dup_details = f"Found {dup_count} duplicate readings (same sensor + timestamp). This may indicate duplicate API responses or data processing issues. Examples: {', '.join(dup_list)}"
-            else:
-                dup_details = "No duplicate readings found. Each sensor has unique timestamps."
-            validation_results.append({
-                "test_name": "no_duplicate_readings",
-                "run_utc": run_utc,
-                "result": "PASS" if dup_count == 0 else "FAIL",
-                "details": dup_details
-            })
-            if dup_count > 0:
-                errs.append(f"Count of duplicated SensorReadingUTC: {dup_count}.")
-            else:                
-                self.logger.info(
-                    f"{step} validation passed: no duplicated SensorReadingUTC per SensorID."
-                )
-
-        # Do any sensors have multiple names (indicating a change in name)?
-        name_dups = sensors[["SensorID", "SensorName"]].unique()
-        name_dups = name_dups.filter(name_dups["SensorID"].is_duplicated())
-        dup_count = name_dups[["SensorID"]].unique().shape[0]
-        if dup_count > 0:
-            # Get examples of sensors with multiple names for debugging
-            example_ids = name_dups[["SensorID"]].unique().head(3)["SensorID"].to_list()
-            examples = []
-            for sid in example_ids:
-                names = name_dups.filter(polars.col("SensorID") == sid)["SensorName"].to_list()
-                examples.append(f"{sid}: {names}")
-            name_details = f"{dup_count} sensors have inconsistent names across readings. This can happen when a sensor is renamed or when historical vs current data uses different naming. Examples: {'; '.join(examples)}"
-        else:
-            name_details = "All sensors have consistent names across all their readings."
-        validation_results.append({
-            "test_name": "sensor_name_consistency",
-            "run_utc": run_utc,
-            "result": "PASS" if dup_count == 0 else "FAIL",
-            "details": name_details
-        })
-        if dup_count > 0:
-            errs.append(f"Count of multiple names for SensorID: {dup_count}.")
-        else:            
-            self.logger.info(f"{step} validation passed: one SensorName per SensorID.")
-
-        # Time between readings should be less than fifteen minutes.
-        if "SensorReadingUTC_SecondsFromPrior" in sensors.columns:
-            badrows = sensors.filter(
-                sensors["SensorReadingUTC_SecondsFromPrior"] > 60 * 15
-            )
-            validation_results.append({
-                "test_name": "reading_interval_check",
-                "run_utc": run_utc,
-                "result": "PASS" if badrows.shape[0] == 0 else "WARN",
-                "details": f"{badrows.shape[0]} readings have more than 15 minutes between consecutive readings. This may indicate sensor downtime or data gaps." if badrows.shape[0] > 0 else "All consecutive readings are within 15 minutes of each other (expected interval)."
-            })
-            if badrows.shape[0] > 0:
-                errs.append(
-                    f"Count of SensorReadingUTC_SecondsFromPrior > 15 minutes: {badrows.shape[0]}."
-                )
-            else:                
-                self.logger.info(
-                    f"{step} validation passed: SensorReadingUTC_SecondsFromPrior less than 15 minutes."
-                )
-
-        # Comparisons to historical.
-        if historical.shape[0] > 0:
-
-            # Did we lose any sensors?
-            missing = historical.filter(
-                ~historical["SensorID"].is_in(sensors["SensorID"].unique().implode())
-            )
-            if missing.shape[0] > 0:
-                # Get examples of missing sensors for debugging
-                missing_ids = missing[["SensorID", "SensorName"]].unique().head(5)
-                missing_list = [f"{r['SensorID']} ({r['SensorName']})" for r in missing_ids.iter_rows(named=True)]
-                missing_details = f"{missing.shape[0]} sensors that existed in historical data are missing from current data. These sensors may be offline, removed, or filtered out. Examples: {', '.join(missing_list)}"
-            else:
-                missing_details = "All sensors from historical data are still present in current data."
-            validation_results.append({
-                "test_name": "no_missing_sensors",
-                "run_utc": run_utc,
-                "result": "PASS" if missing.shape[0] == 0 else "FAIL",
-                "details": missing_details
-            })
-            if missing.shape[0] > 0:
-                errs.append(
-                    f"Count of sensors missing from historical data: {missing.shape[0]}."
-                )
-            else:
-                self.logger.info(
-                    f"{step} validation passed: all SensorID in historical data (no dropped SensorID)."
-                )
-
+        
         # If return_results is True, return validation results without raising exceptions
         if return_results:
             return validation_results
+
+        # Collect errors from FAIL results
+        errs = []
+        for result in validation_results:
+            if result["result"] == "FAIL":
+                errs.append(f"{result['test_name']}: {result['details']}")
 
         # Log the errors and raise exception to stop processing with bad data.
         if len(errs) > 0:

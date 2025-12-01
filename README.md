@@ -16,7 +16,7 @@
 ```bash
 python -m venv .venv
 .venv/Scripts/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 ```
 
 **Docker**
@@ -48,8 +48,6 @@ pip install -r requirements.txt
 
 There are 2 primary ways of running this script: Direct, and via Docker. Using **Docker** will set up a cron task to pull data every minute, and you can use Jupyter to interact with the data pulled by and into the Docker container. For **Direct**, you will run code in Jupyter notebooks and it will only pull data once.
 
-
-
 **Direct**
 
 * Run `jupyter notebook` in the terminal to open Jupyter. You'll see two notebooks.
@@ -73,6 +71,13 @@ There are 2 primary ways of running this script: Direct, and via Docker. Using *
 ```bash
 docker stop $(docker ps -a -q)
 docker rm $(docker ps -a -q)
+```
+
+Or use this command to remove containers and start a clean one:
+```bash
+docker stop $(docker ps -a -q)
+docker rm $(docker ps -a -q)
+docker run --name sensorpull-run -p 8888:8888 sensorpull
 ```
 
 ## APIs
@@ -111,6 +116,12 @@ python tests/run.py
 
 # Or run individual test files
 python -m pytest tests/test_licor.py -v
+```
+
+To run a test with code coverage including creating a report at `htmlcov/index.html`.
+
+```bash
+coverage html --include="modules/*"
 ```
 
 ## Design Notes
