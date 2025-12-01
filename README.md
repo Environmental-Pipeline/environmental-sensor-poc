@@ -30,15 +30,25 @@ pip install -r requirements.txt
     - `Dockerfile` for creating the container and running repeated daily pulls.
     - `requirements.txt` listing Python package dependencies.
 - clients: Python classes for interacting with the various data sources.
+- modules: Other Python modules used by EnvironmentData.
 - docs: Additional documentation for the repo and for Python classes. Commands to update documentation are at the top of each file.
-- experiments: Code examples for working with the classes and data. 
-- jobs: Files for the Docker container to call during initialization and then scheduled via cron
+- experiments: Code examples for working with the classes and data.
+- jobs: Files for the Docker container to call during initialization and then scheduled via cron.
 - tests: Automated tests, see the README.md there for more information about automated testing.
-- unused: Old code files that are no longer actively used. 
+- unused: Old code files that are no longer actively used.
 
-## How To
+## How It Works
+
+- Instantiate the EnvironmentData class with `api = EnvironmentData()`, this will read information from `.env` and run the historical data pull if the `data/` folder is empty. 
+- Then, the `get_current_readings` method is called to get new readings. 
+- The `consolidate_readings` method will combine historical and new readings into analytical tables that are then explored using `duckdb` or any other technology that can explore `parquet` files. 
+- `consolidate_readings` will also create diagnostic files `validation-results.csv` (overall data validation checks like missing values, etc.) and `data/alerts.csv` (alert events where sensor readings were out of range or time between readings exceeded the expected duration). 
+
+## How To Run
 
 There are 2 primary ways of running this script: Direct, and via Docker. Using **Docker** will set up a cron task to pull data every minute, and you can use Jupyter to interact with the data pulled by and into the Docker container. For **Direct**, you will run code in Jupyter notebooks and it will only pull data once.
+
+
 
 **Direct**
 
@@ -71,6 +81,9 @@ See documentation at the top of each client file:
 - `clients/conserv_client.py`
 - `clients/coris_client.py`
 - `clients/licor_client.py`
+
+General notes:
+- CORIS and LI-COR pull historical data in 15-minute increments. Conserv takes an argument which we set to 15 minutes in order to keep data aligned between different sources. 
 
 **Adding New APIs**
 

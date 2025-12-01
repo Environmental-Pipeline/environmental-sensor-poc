@@ -11,6 +11,7 @@ RUN python3 -m pip install --no-cache-dir -r requirements.txt
 COPY EnvironmentData.py .env ./
 COPY experiments/2-examples-analysis.ipynb experiments/
 COPY clients clients/
+COPY modules modules/
 COPY jobs jobs/
 
 COPY jobs/cronjobs /etc/cron.d/cronjobs

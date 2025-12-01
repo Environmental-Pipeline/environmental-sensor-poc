@@ -50,7 +50,8 @@ class TestEnvironmentDataWorkflow(unittest.TestCase):
         """Set up the test environment for complete workflow test."""
         # Clear prior data to ensure clean test run
         cls.env_dir = find_env_directory()
-        cls.data_path = os.path.join(cls.env_dir, 'data')
+        # Use tests/data folder to avoid conflicts with production data
+        cls.data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
         if os.path.exists(cls.data_path):
             shutil.rmtree(cls.data_path)
         os.makedirs(cls.data_path, exist_ok=True)
