@@ -1,0 +1,68 @@
+name: Sensor Data Pull
+
+on:
+  schedule:
+    # Run every 15 minutes (same as cron job)
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+    # Allow manual trigger
+
+jobs:
+  pull-data:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: runner
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Create .env file
+        run: |
+          echo "DAYS_BACK=${{ vars.DAYS_BACK }}" >> .env
+          echo "TESTING=${{ vars.TESTING }}" >> .env
+          echo "CORIS_ENABLED=${{ vars.CORIS_ENABLED }}" >> .env
+          echo "CONSERV_ENABLED=${{ vars.CONSERV_ENABLED }}" >> .env
+          echo "LICOR_ENABLED=${{ vars.LICOR_ENABLED }}" >> .env
+          echo "CORIS_API_KEY=${{ secrets.CORIS_API_KEY }}" >> .env
+          echo "CONSERV_API_KEY=${{ secrets.CONSERV_API_KEY }}" >> .env
+          echo "LICOR_API_KEY=${{ secrets.LICOR_API_KEY }}" >> .env
+
+      - name: Check if initialized
+        id: check-init
+        run: |
+          if [ -f data/cron_status.txt ]; then
+            echo "initialized=true" >> $GITHUB_OUTPUT
+          else
+            echo "initialized=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run init script (only if data/cron_status.txt is missing)
+        if: steps.check-init.outputs.initialized == 'false'
+        run: python jobs/0-init.py
+
+      - name: Run pull script
+        if: steps.check-init.outputs.initialized == 'true'
+        run: python jobs/1-pull.py
+
+      - name: Run consolidate script
+        if: steps.check-init.outputs.initialized == 'true'
+        run: python jobs/2-consolidate.py
+
+      - name: Commit data to runner branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/
+          git diff --staged --quiet || git commit -m "Update sensor data - $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          git push origin runner
