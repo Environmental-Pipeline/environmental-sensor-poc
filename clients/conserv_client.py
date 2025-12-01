@@ -222,7 +222,7 @@ class ConservAPIClient:
     def export_data(
         self,
         api_key: str,
-        customer_id: int,
+        customer_id: str | int,
         start_time: datetime.datetime,
         end_time: datetime.datetime,
     ) -> Optional[polars.DataFrame]:
@@ -233,7 +233,7 @@ class ConservAPIClient:
         ----------
         api_key : str
             Customer API key
-        customer_id : int
+        customer_id : str | int
             Customer ID for data tagging
         start_time : datetime.datetime
             Start time for export (UTC)
@@ -332,7 +332,7 @@ class ConservAPIClient:
     def export_data_chunked(
         self,
         api_key: str,
-        customer_id: int,
+        customer_id: str | int,
         start_time: datetime.datetime,
         end_time: datetime.datetime,
     ) -> List[polars.DataFrame]:
@@ -343,7 +343,7 @@ class ConservAPIClient:
         ----------
         api_key : str
             Customer API key
-        customer_id : int
+        customer_id : str | int
             Customer ID for data tagging
         start_time : datetime.datetime
             Start time for export (UTC)

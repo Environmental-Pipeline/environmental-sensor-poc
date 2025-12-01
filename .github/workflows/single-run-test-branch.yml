@@ -45,7 +45,7 @@ jobs:
       - name: Run init script
         run: python jobs/0-init.py
 
-      - name: Wait 15 minutes
+      - name: Wait 15 minutes for new sensor readings to be gathered.
         run: sleep 900
 
       - name: Run pull script
