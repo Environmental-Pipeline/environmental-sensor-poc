@@ -1,0 +1,60 @@
+name: Sensor Data Pull
+
+on:
+  workflow_dispatch:
+    # Manual trigger only, restricted to test branch
+    branches:
+      - test
+
+jobs:
+  pull-data:
+    runs-on: ubuntu-latest
+    environment: test
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: test
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Create .env file
+        run: |
+          echo "DAYS_BACK=${{ vars.DAYS_BACK }}" >> .env
+          echo "TESTING=${{ vars.TESTING || 'False' }}" >> .env
+          echo "CORIS_ENABLED=${{ vars.CORIS_ENABLED || 'False' }}" >> .env
+          echo "CONSERV_ENABLED=${{ vars.CONSERV_ENABLED || 'False' }}" >> .env
+          echo "LICOR_ENABLED=${{ vars.LICOR_ENABLED || 'False' }}" >> .env
+          echo "CATS_USER_ID=${{ secrets.CATS_USER_ID }}" >> .env
+          echo "CORIS_API_KEY=${{ secrets.CORIS_API_KEY }}" >> .env
+          echo "CONSERV_API_KEYS=${{ secrets.CONSERV_API_KEYS }}" >> .env
+          echo "LICOR_API_KEY=${{ secrets.LICOR_API_KEY }}" >> .env
+
+      - name: Run init script
+        run: python jobs/0-init.py
+
+      - name: Wait 15 minutes
+        run: sleep 900
+
+      - name: Run pull script
+        run: python jobs/1-pull.py
+
+      - name: Run consolidate script
+        run: python jobs/2-consolidate.py
+
+      - name: Commit data to test branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/
+          git diff --staged --quiet || git commit -m "Update sensor data - $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          git push origin test
