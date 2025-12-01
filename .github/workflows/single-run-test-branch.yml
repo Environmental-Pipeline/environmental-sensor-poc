@@ -36,8 +36,13 @@ jobs:
           echo "LICOR_ENABLED=${{ vars.LICOR_ENABLED || 'False' }}" >> .env
           echo "CATS_USER_ID=${{ secrets.CATS_USER_ID }}" >> .env
           echo "CORIS_API_KEY=${{ secrets.CORIS_API_KEY }}" >> .env
-          echo "CONSERV_API_KEYS=${{ secrets.CONSERV_API_KEYS }}" >> .env
+          echo 'CONSERV_API_KEYS=${{ secrets.CONSERV_API_KEYS }}' >> .env
           echo "LICOR_API_KEY=${{ secrets.LICOR_API_KEY }}" >> .env
+
+      - name: Debug .env file
+        run: |
+          echo "=== .env contents (secrets masked) ==="
+          cat .env | sed 's/=.*/=***/'
 
       - name: Delete data folder for clean run
         run: rm -rf data/
