@@ -39,6 +39,9 @@ jobs:
           echo "CONSERV_API_KEYS=${{ secrets.CONSERV_API_KEYS }}" >> .env
           echo "LICOR_API_KEY=${{ secrets.LICOR_API_KEY }}" >> .env
 
+      - name: Delete data folder for clean run
+        run: rm -rf data/
+
       - name: Run init script
         run: python jobs/0-init.py
 
