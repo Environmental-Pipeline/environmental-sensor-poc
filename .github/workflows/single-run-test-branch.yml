@@ -2,12 +2,12 @@ name: Sensor Data Pull
 
 on:
   workflow_dispatch:
-    # Manual trigger only, restricted to test branch
+    # Manual trigger only, restricted to runner branch
 
 jobs:
   pull-data:
     runs-on: ubuntu-latest
-    environment: test
+    environment: main
     permissions:
       contents: write
     
@@ -15,7 +15,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: test
+          ref: runner
           fetch-depth: 0
 
       - name: Set up Python
@@ -69,10 +69,10 @@ jobs:
       - name: Run consolidate script
         run: python jobs/2-consolidate.py
 
-      - name: Commit data to test branch
+      - name: Commit data to runner branch
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/
           git diff --staged --quiet || git commit -m "Update sensor data - $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
-          git push origin test
+          git push origin runner
