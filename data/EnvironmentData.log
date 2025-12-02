@@ -1,0 +1,15 @@
+2025-12-01 18:34:36,629 - EnvironmentData - INFO - Initialized Conserv client with 1 customers
+2025-12-01 18:34:36,630 - EnvironmentData - WARNING - Failed to initialize LI-COR client: LICOR_API_KEY not found in .env file at ..\.env. If running from a subdirectory, set home_directory parameter to parent directory (e.g., home_directory='..').
+2025-12-01 18:34:36,630 - EnvironmentData - INFO - Enabled data sources: ['Conserv', 'Coris']
+2025-12-01 18:34:36,631 - EnvironmentData - INFO - Fetching Conserv historical data for all customers
+2025-12-01 18:34:36,631 - EnvironmentData - INFO - Fetching Conserv data for period: 1764034476 to 1764639276
+2025-12-01 18:34:36,631 - EnvironmentData - INFO - Running in test mode - only processing first customer: unknown
+2025-12-01 18:34:36,644 - EnvironmentData - INFO - Fetching data for customer unknown
+2025-12-01 18:34:36,644 - EnvironmentData - INFO - Exporting chunk for customer unknown: 2025-11-25 01:34:36+00:00 to 2025-12-02 01:34:36+00:00
+2025-12-01 18:34:36,644 - EnvironmentData - INFO - Starting export for customer unknown: 2025-11-25 01:34:36+00:00 to 2025-12-02 01:34:36+00:00
+2025-12-01 18:34:36,644 - EnvironmentData - INFO - Conserv API POST https://api.conserv.io/v1/sensors/export headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-01 18:34:37,224 - EnvironmentData - INFO - Conserv export launched: e7b2cfa4-fc23-45ad-a166-08957b027bd1
+2025-12-01 18:34:37,226 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/e7b2cfa4-fc23-45ad-a166-08957b027bd1/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-01 18:34:47,702 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/e7b2cfa4-fc23-45ad-a166-08957b027bd1/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-01 18:34:58,115 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/e7b2cfa4-fc23-45ad-a166-08957b027bd1/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-01 18:35:08,496 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/e7b2cfa4-fc23-45ad-a166-08957b027bd1/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
