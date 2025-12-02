@@ -218,7 +218,7 @@ def validate_sensors(
 
     # Check for missing sensors from historical
     if historical.shape[0] > 0 and "SensorID" in sensors.columns and "SensorID" in historical.columns:
-        current_sensor_ids = sensors["SensorID"].unique()
+        current_sensor_ids = sensors["SensorID"].unique().to_list()
         missing = historical.filter(
             ~historical["SensorID"].is_in(current_sensor_ids)
         )
