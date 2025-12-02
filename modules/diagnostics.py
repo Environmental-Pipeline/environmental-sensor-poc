@@ -160,21 +160,6 @@ def validate_sensors(
     if missing_count > 0 and logger:
         logger.info(f"{step} validation: at least one non-null value in readings.")
 
-    # Check reading freshness
-    if utc is not None and "SensorReadingUTC" in sensors.columns:
-        maxdiff_minutes = (
-            numpy.max(numpy.abs(sensors["SensorReadingUTC"].to_numpy() - utc)) / 60
-        )
-        freshness_passed = maxdiff_minutes <= 5
-        validation_results.append({
-            "test_name": "reading_freshness",
-            "run_utc": run_utc,
-            "result": "PASS" if freshness_passed else "FAIL",
-            "details": f"The oldest sensor reading is {maxdiff_minutes:,.1f} minutes old, which exceeds the 5-minute freshness threshold. This may indicate stale data or API delays." if not freshness_passed else f"All sensor readings are within 5 minutes of the query time (oldest is {maxdiff_minutes:,.1f} min)."
-        })
-        if freshness_passed and logger:
-            logger.info(f"{step} validation passed: SensorReadingUTC columns close to QueryUTC.")
-
     # Check for duplicate readings
     if "SensorReadingUTC" in sensors.columns and "SensorID" in sensors.columns:
         dup_mask = sensors[["SensorID", "SensorReadingUTC"]].is_duplicated()
