@@ -3,16 +3,13 @@ name: Sensor Data Pull
 on:
   workflow_dispatch:
     # Manual trigger only, restricted to test branch
-    branches:
-      - test
-
-permissions:
-  contents: write
 
 jobs:
   pull-data:
     runs-on: ubuntu-latest
-    environment: main
+    environment: test
+    permissions:
+      contents: write
     
     steps:
       - name: Checkout repository
