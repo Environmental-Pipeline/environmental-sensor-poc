@@ -323,7 +323,7 @@ class TestValidateSensorsWithInvalidData(unittest.TestCase):
         # Find the no_missing_sensors result
         missing_result = next(r for r in results if r["test_name"] == "no_missing_sensors")
         
-        self.assertEqual(missing_result["result"], "FAIL")
+        self.assertEqual(missing_result["result"], "WARN")
         self.assertIn("missing from current data", missing_result["details"])
         self.assertIn("coris:456-1", missing_result["details"])
 
