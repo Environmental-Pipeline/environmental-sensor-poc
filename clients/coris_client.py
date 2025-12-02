@@ -116,25 +116,19 @@ class CorisClient:
         # Read API key from environment variables
         env_file_path = os.path.join(home_directory, ".env")
         api_key = None
-        try:
-            with open(env_file_path) as f:
-                for line in f:
-                    if line.startswith("CORIS_API_KEY"):
-                        api_key = line.split("=", 1)[1].strip()
-                        break
-        except FileNotFoundError:
-            pass
+        with open(env_file_path) as f:
+            for line in f:
+                if line.startswith("CORIS_API_KEY"):
+                    api_key = line.split("=", 1)[1].strip()
+                    break
         
         # Read CATS User ID from environment variables
         cats_user_id_str = None
-        try:
-            with open(env_file_path) as f:
-                for line in f:
-                    if line.startswith("CATS_USER_ID"):
-                        cats_user_id_str = line.split("=", 1)[1].strip()
-                        break
-        except FileNotFoundError:
-            pass
+        with open(env_file_path) as f:
+            for line in f:
+                if line.startswith("CATS_USER_ID"):
+                    cats_user_id_str = line.split("=", 1)[1].strip()
+                    break
         
         if not api_key:
             raise ValueError(
@@ -145,11 +139,6 @@ class CorisClient:
             raise ValueError(
                 f"CATS_USER_ID not found in environment or .env file at {env_file_path}. "
                 f"If running from a subdirectory, set home_directory parameter to parent directory (e.g., home_directory='..').")
-        
-        try:
-            cats_user_id = int(cats_user_id_str)
-        except ValueError:
-            raise ValueError(f"CATS_USER_ID must be an integer, got: {cats_user_id_str}")
         
         self.api_key = api_key
         self.cats_user_id = cats_user_id
