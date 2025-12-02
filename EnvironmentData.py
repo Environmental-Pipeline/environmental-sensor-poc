@@ -1418,7 +1418,7 @@ class EnvironmentData:
                 )
 
         # Write the table to a file.
-        sensors = polars.DataFrame(sensors).unique()
+        sensors = polars.DataFrame(sensors, infer_schema_length=None).unique()
         sensors = sensors.sort(
             ["BuildingID", "Building", "Room", "DeviceSerialFromName", "SensorName"]
         )
