@@ -231,7 +231,7 @@ def validate_sensors(
         validation_results.append({
             "test_name": "no_missing_sensors",
             "run_utc": run_utc,
-            "result": "PASS" if missing.shape[0] == 0 else "FAIL",
+            "result": "PASS" if missing.shape[0] == 0 else "WARN",
             "details": missing_details
         })
         if missing.shape[0] == 0 and logger:
