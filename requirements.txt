@@ -2,11 +2,3 @@ polars
 tdqm
 requests
 numpy
-pdoc3 
-#unittest # optional to run tests. breaks Docker for some reason.
-#spyder-kernels==3.0.* # optional if you plan to use the Spyder IDE.
-
-# optional for analytics:
-notebook
-duckdb 
-seaborn

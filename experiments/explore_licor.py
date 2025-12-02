@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
 """
-Hobolink API Explorer
+LI-COR API Explorer
 
-This script runs comprehensive diagnostics on the Hobolink API endpoints
-and saves sample responses for analysis and development purposes.
-Now includes unlimited historical data pulls without date restrictions.
+Create formatted output to understand the data available via the LI-COR API.
 
 Usage:
     # Sample run (first 3 devices only)
-    python test/explore_hobolink.py
+    python experiments/explore_licor.py
     
     # Full run (all devices - comprehensive analysis)
-    python test/explore_hobolink.py --all-devices
+    python experiments/explore_licor.py --all-devices
 
 Arguments:
     --all-devices    Run comprehensive analysis on all available devices
@@ -25,8 +23,8 @@ Features:
     - All devices mode: Complete analysis of all available devices
 
 Requirements:
-    - HOBOLINK_API_KEY environment variable must be set
-    - Creates samples/ directory for storing API responses and CSV exports
+    - LICOR_API_KEY environment variable must be set
+    - Createsn samples/ directory for storing API responses and CSV exports
 """
 
 import os
@@ -35,10 +33,10 @@ import logging
 import json
 import argparse
 
-# Add parent directory to path to import hobolink_client
+# Add parent directory to path to import licor_client
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from hobolink_client import create_hobolink_client_from_env
+from clients.licor_client import LicorClient
 
 
 def diagnose_api_endpoints_unlimited(client, save_samples: bool = True, all_devices_mode: bool = False):
@@ -55,7 +53,7 @@ def diagnose_api_endpoints_unlimited(client, save_samples: bool = True, all_devi
     
     try:
         print("=" * 60)
-        print("HOBOLINK API ENDPOINT DIAGNOSTICS (UNLIMITED)")
+        print("LI-COR API ENDPOINT DIAGNOSTICS (UNLIMITED)")
         print("=" * 60)
         
         # 1. Devices endpoint
@@ -63,11 +61,11 @@ def diagnose_api_endpoints_unlimited(client, save_samples: bool = True, all_devi
         print("-" * 30)
         print("Endpoint: GET /devices?includeSensors=true")
         
-        devices_response = client.get_devices(include_sensors=True)
+        devices_response = client.get_devices()
         
         # Save devices response to file
         if save_samples and samples_dir:
-            devices_file = os.path.join(samples_dir, "hobolink_devices_response.json")
+            devices_file = os.path.join(samples_dir, "licor_devices_response.json")
             try:
                 with open(devices_file, 'w', encoding='utf-8') as f:
                     json.dump(devices_response, f, indent=2, default=str)
@@ -159,12 +157,12 @@ def diagnose_api_endpoints_unlimited(client, save_samples: bool = True, all_devi
                 print(f"Sample mode: Will get data from ALL sensors in first 3 devices ({len(candidate_sensors)} sensors)")
             
             # Get date range using DAYS_BACK environment variable (like other parts of the system)
-            # Note: Hobolink API limits historical data to less than 1 year maximum
+            # Note: LI-COR API limits historical data to less than 1 year maximum
             days_back_env = int(os.getenv('DAYS_BACK', 364))
             days_back = min(days_back_env, 364)  # Cap at 364 days to be safe with API limitation
             
             if days_back_env > 364:
-                print(f"WARNING: DAYS_BACK={days_back_env} exceeds Hobolink API 1-year limit")
+                print(f"WARNING: DAYS_BACK={days_back_env} exceeds LI-COR API 1-year limit")
                 print(f"Using maximum safe value: {days_back} days")
             import datetime
             now = datetime.datetime.now(datetime.timezone.utc)
@@ -236,7 +234,7 @@ def diagnose_api_endpoints_unlimited(client, save_samples: bool = True, all_devi
                             
                             # Save successful data response to file
                             if save_samples and samples_dir:
-                                data_file = os.path.join(samples_dir, f"hobolink_{days_back}day_data_{device_serial}_{sensor_serial}.json")
+                                data_file = os.path.join(samples_dir, f"licor_{days_back}day_data_{device_serial}_{sensor_serial}.json")
                                 try:
                                     with open(data_file, 'w', encoding='utf-8') as f:
                                         json.dump(data_response, f, indent=2, default=str)
@@ -365,7 +363,7 @@ def diagnose_api_endpoints_unlimited(client, save_samples: bool = True, all_devi
                         # Write CSV file
                         if csv_data:
                             import csv
-                            csv_file = os.path.join(samples_dir, f"hobolink_{days_back}day_readings.csv")
+                            csv_file = os.path.join(samples_dir, f"licor_{days_back}day_readings.csv")
                             
                             with open(csv_file, 'w', newline='', encoding='utf-8') as f:
                                 if csv_data:  # Check if we have data
@@ -464,7 +462,7 @@ def diagnose_api_endpoints_unlimited(client, save_samples: bool = True, all_devi
                 csv_files = []
                 
                 for file in os.listdir(samples_dir):
-                    if file.startswith('hobolink_'):
+                    if file.startswith('licor_'):
                         file_path = os.path.join(samples_dir, file)
                         file_size = os.path.getsize(file_path)
                         if file.endswith('.json'):
@@ -490,8 +488,8 @@ def diagnose_api_endpoints_unlimited(client, save_samples: bool = True, all_devi
 
 
 def main():
-    """Run Hobolink API exploration with historical data pulls."""
-    parser = argparse.ArgumentParser(description='Hobolink API Explorer')
+    """Run LI-COR API exploration with historical data pulls."""
+    parser = argparse.ArgumentParser(description='LI-COR API Explorer')
     parser.add_argument('--all-devices', action='store_true',
                        help='Run comprehensive analysis on all available devices')
     parser.add_argument('--days-back', type=int, default=364,
@@ -509,7 +507,7 @@ def main():
     all_devices_mode = args.all_devices
     mode_text = "ALL DEVICES" if all_devices_mode else f"{days_back}-DAY"
     print("=" * 60)
-    print(f"HOBOLINK API EXPLORER ({mode_text} HISTORICAL DATA)")
+    print(f"LI-COR API EXPLORER ({mode_text} HISTORICAL DATA)")
     print("=" * 60)
     
     # Set up logging
@@ -520,8 +518,8 @@ def main():
     
     try:
         # Create client
-        print("Creating Hobolink client...")
-        client = create_hobolink_client_from_env()
+        print("Creating LI-COR client...")
+        client = LicorClient()
         
         # Run historical diagnostics with sample saving
         print(f"Running {days_back}-day historical data exploration...")
@@ -534,7 +532,7 @@ def main():
         
     except Exception as e:
         print(f"✗ Error during exploration: {e}")
-        print("Make sure HOBOLINK_API_KEY environment variable is set")
+        print("Make sure LICOR_API_KEY environment variable is set")
         return 1
     
     return 0

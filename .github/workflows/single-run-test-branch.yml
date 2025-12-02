@@ -3,13 +3,13 @@ name: Sensor Data Pull
 on:
   workflow_dispatch:
     # Manual trigger only, restricted to test branch
-    branches:
-      - test
 
 jobs:
   pull-data:
     runs-on: ubuntu-latest
     environment: test
+    permissions:
+      contents: write
     
     steps:
       - name: Checkout repository
@@ -28,21 +28,39 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Create .env file
+        env:
+          DAYS_BACK: ${{ vars.DAYS_BACK }}
+          TESTING: ${{ vars.TESTING || 'False' }}
+          CORIS_ENABLED: ${{ vars.CORIS_ENABLED || 'False' }}
+          CONSERV_ENABLED: ${{ vars.CONSERV_ENABLED || 'False' }}
+          LICOR_ENABLED: ${{ vars.LICOR_ENABLED || 'False' }}
+          CATS_USER_ID: ${{ secrets.CATS_USER_ID }}
+          CORIS_API_KEY: ${{ secrets.CORIS_API_KEY }}
+          CONSERV_API_KEYS: ${{ secrets.CONSERV_API_KEYS }}
+          LICOR_API_KEY: ${{ secrets.LICOR_API_KEY }}
         run: |
-          echo "DAYS_BACK=${{ vars.DAYS_BACK }}" >> .env
-          echo "TESTING=${{ vars.TESTING || 'False' }}" >> .env
-          echo "CORIS_ENABLED=${{ vars.CORIS_ENABLED || 'False' }}" >> .env
-          echo "CONSERV_ENABLED=${{ vars.CONSERV_ENABLED || 'False' }}" >> .env
-          echo "LICOR_ENABLED=${{ vars.LICOR_ENABLED || 'False' }}" >> .env
-          echo "CATS_USER_ID=${{ secrets.CATS_USER_ID }}" >> .env
-          echo "CORIS_API_KEY=${{ secrets.CORIS_API_KEY }}" >> .env
-          echo "CONSERV_API_KEYS=${{ secrets.CONSERV_API_KEYS }}" >> .env
-          echo "LICOR_API_KEY=${{ secrets.LICOR_API_KEY }}" >> .env
+          echo "DAYS_BACK=$DAYS_BACK" >> .env
+          echo "TESTING=$TESTING" >> .env
+          echo "CORIS_ENABLED=$CORIS_ENABLED" >> .env
+          echo "CONSERV_ENABLED=$CONSERV_ENABLED" >> .env
+          echo "LICOR_ENABLED=$LICOR_ENABLED" >> .env
+          echo "CATS_USER_ID=$CATS_USER_ID" >> .env
+          echo "CORIS_API_KEY=$CORIS_API_KEY" >> .env
+          echo "CONSERV_API_KEYS=$CONSERV_API_KEYS" >> .env
+          echo "LICOR_API_KEY=$LICOR_API_KEY" >> .env
+
+      - name: Debug .env file
+        run: |
+          echo "=== .env contents (secrets masked) ==="
+          cat .env | sed 's/=.*/=***/'
+
+      - name: Delete data folder for clean run
+        run: rm -rf data/
 
       - name: Run init script
         run: python jobs/0-init.py
 
-      - name: Wait 15 minutes
+      - name: Wait 15 minutes for new sensor readings to be gathered.
         run: sleep 900
 
       - name: Run pull script
