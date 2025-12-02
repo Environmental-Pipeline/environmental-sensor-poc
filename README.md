@@ -88,6 +88,54 @@ docker rm $(docker ps -a -q)
 docker run --name sensorpull-run -p 8888:8888 sensorpull
 ```
 
+**Docker Compose (Recommended)**
+
+For easier deployment, use Docker Compose:
+
+```bash
+# Create .env file with your API keys first, then:
+docker-compose up -d          # Start in background
+docker-compose logs -f        # View logs
+docker-compose down           # Stop and remove
+```
+
+**Yale Spinup Windows VM Deployment**
+
+For deploying on a Yale Spinup Windows VM:
+
+1. **Request a Windows VM** from [Yale Spinup](https://spinup.yale.edu) with Docker Desktop installed.
+
+2. **Configure Docker IP Range** - Yale's VPN uses 172.16.0.0/12 which conflicts with Docker's default range. Create or edit `C:\ProgramData\docker\config\daemon.json`:
+   ```json
+   {
+     "default-address-pools": [
+       {"base": "192.168.200.0/24", "size": 24}
+     ]
+   }
+   ```
+   Then restart Docker Desktop.
+
+3. **Clone the repository** and create your `.env` file:
+   ```powershell
+   git clone https://github.com/Environmental-Pipeline/environmental-sensor-poc.git
+   cd environmental-sensor-poc
+   # Create .env file with your API credentials
+   ```
+
+4. **Build and run** using Docker Compose:
+   ```powershell
+   docker-compose up -d
+   ```
+
+5. **Access Jupyter** at http://localhost:8888 to explore the data.
+
+6. **View logs** with:
+   ```powershell
+   docker-compose logs -f
+   ```
+
+The container uses a Python-based scheduler (not cron) for better Windows compatibility. Data pulls run every 15 minutes, and consolidation runs at the 45-minute mark of each hour.
+
 ## APIs
 
 See documentation at the top of each client file:
@@ -134,12 +182,12 @@ coverage html --include="modules/*"
 
 ## Design Notes
 
-**cron and API key security**
+**Scheduling and API key security**
 
-* The typical method of giving keys to containers is through environment variables. cron jobs do not have access to environment variables, so there is no fully secure way to run a cron job that uses key-based authentication. 
-* The method I selected is to copy an untracked .env file into the container. This prevents the key from being saved in the GitHub repo. But anyone who gains access to the container itself would have access to the key. The odds of this happening are low, and the risk is also low if the key only allows reading data, not editing it. 
+* The container uses a Python-based scheduler (`jobs/scheduler.py`) instead of cron for better cross-platform compatibility (Windows, Linux, cloud containers).
+* API keys are passed via environment variables or a `.env` file. The `.env` file is not tracked in git to prevent accidental exposure.
+* When using Docker Compose, credentials can be passed via environment variables (more secure) or mounted `.env` file.
 * Security can be enhanced by only allowing the key to be used from white-listed IP addresses. 
-* Consider using a cloud service to schedule jobs instead of cron because cloud jobs can be set up using environment variables. 
 
 **polars vs pandas**
 
