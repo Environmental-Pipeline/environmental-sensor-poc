@@ -2,12 +2,3 @@ polars
 tdqm
 requests
 numpy
-pdoc
-
-# optional if you plan to use the Spyder IDE.
-#spyder-kernels==3.0.* 
-
-# optional for analytics:
-notebook
-duckdb 
-seaborn
