@@ -46,13 +46,21 @@ pip install -r requirements-dev.txt
 
 ## How To Run
 
-There are 2 primary ways of running this script: Direct, and via Docker. Using **Docker** will set up a cron task to pull data every minute, and you can use Jupyter to interact with the data pulled by and into the Docker container. For **Direct**, you will run code in Jupyter notebooks and it will only pull data once.
+There are 3 ways to running this tool: Direct, via GitHub Actions, and via Docker. Using **Docker** will set up a cron task to pull data every minute, and you can use Jupyter to interact with the data pulled by and into the Docker container. For **Direct**, you will run code in Jupyter notebooks and it will only pull data once.
 
 **Direct**
 
 * Run `jupyter notebook` in the terminal to open Jupyter. You'll see two notebooks.
 * Open `1-examples-cron.ipynb` and choose Kernel > Restart Kernel and Clear Output of All Cells to reset the notebook. Then, run each code block to see what it does and understand how to work with the EnvironmentData class. 
 * Open `2-examples-analysis.ipynb` to learn how to interact with the database to perform certain queries. You can also provide this file to an AI agent to help it understand how to work with the data. 
+
+**GitHub Actions**
+
+A GitHub action has been set up at [Sensor Data Pull](https://github.com/Environmental-Pipeline/environmental-sensor-poc/actions/workflows/single-run-test-branch.yml). To use it, go to `Run workflow` and select either the `runner` or `test` branch. The `runner` branch will use the [main](https://github.com/Environmental-Pipeline/environmental-sensor-poc/settings/environments/10336798976/edit) environment while test will use [test](https://github.com/Environmental-Pipeline/environmental-sensor-poc/settings/environments/10337000551/edit).
+
+This action will delete the data folder from the selected branch, run the data pipeline using the selected environment variables (using init, then waiting 15 minutes for new readings and running get_current_readings and consolidate_readings), and update the repository with the new data in the `data/` folder. 
+
+You can then checkout and pull the branch to get the new data. 
 
 **Docker**
 

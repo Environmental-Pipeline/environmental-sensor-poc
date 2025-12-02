@@ -135,32 +135,17 @@ class EnvironmentData:
         # Initialize Conserv API client if enabled
         self.conserv_client = None
         if self.conserv_enabled:
-            try:
-                self.conserv_client = ConservAPIClient(self.logger, home_directory=self.home_directory)
-            except Exception as e:
-                self.logger.warning(f"Failed to initialize Conserv client: {e}")
-                self.conserv_enabled = False
+            self.conserv_client = ConservAPIClient(self.logger, home_directory=self.home_directory)
 
         # Initialize Coris API client if enabled
         self.coris_client = None
         if self.coris_enabled:
-            try:
-                self.coris_client = CorisClient(self.logger, home_directory=self.home_directory)
-                # self.logger.info("Coris API client initialized successfully")
-            except Exception as e:
-                self.logger.warning(f"Failed to initialize Coris client: {e}")
-                self.coris_enabled = False
+            self.coris_client = CorisClient(self.logger, home_directory=self.home_directory)
 
         # Initialize LI-COR API client if enabled
         self.licor_client = None
         if self.licor_enabled:
-            try:
-                self.licor_client = LicorClient(self.logger, home_directory=self.home_directory)
-                # self.logger.info("LI-COR API client initialized successfully")
-            except Exception as e:
-                self.logger.warning(f"Failed to initialize LI-COR client: {e}")
-                print(f"DEBUG: Failed to initialize LI-COR client: {e}")
-                self.licor_enabled = False
+            self.licor_client = LicorClient(self.logger, home_directory=self.home_directory)
 
         # Set up the readings data structure that will be used throughout.
         self.acceptable_range = {"SensorReadingF": [], "SensorReadingRh": []}
@@ -509,7 +494,6 @@ class EnvironmentData:
 
         # Apply schema enforcement
         conversion_exprs = []
-        failed = False
 
         for column in df.columns:
             if column in master_schema:
@@ -521,45 +505,35 @@ class EnvironmentData:
                         f"{column}: {current_type} -> {target_type}"
                     )
 
-                    try:
-                        # Handle specific conversion cases
-                        if target_type == polars.Null:
-                            # Keep null columns as-is
-                            continue
-                        elif str(current_type).startswith("Int") and str(
-                            target_type
-                        ).startswith("Int"):
-                            # Int64 -> Int32 or vice versa (check for overflow)
-                            conversion_exprs.append(
-                                polars.col(column).cast(target_type, strict=False)
-                            )
-                        elif str(current_type).startswith("Float") and str(
-                            target_type
-                        ).startswith("Float"):
-                            # Float64 -> Float32 or vice versa
-                            conversion_exprs.append(
-                                polars.col(column).cast(target_type)
-                            )
-                        else:
-                            # Generic conversion
-                            conversion_exprs.append(
-                                polars.col(column).cast(target_type, strict=False)
-                            )
-
-                    except Exception as conv_error:
-                        self.logger.error(
-                            f"Schema validation failed for {step_name}: Failed to convert {column}: {conv_error}"
-                        )
-                        failed = True
-                        # Keep original column if conversion fails
+                    # Handle specific conversion cases
+                    if target_type == polars.Null:
+                        # Keep null columns as-is
                         continue
+                    elif str(current_type).startswith("Int") and str(
+                        target_type
+                    ).startswith("Int"):
+                        # Int64 -> Int32 or vice versa (check for overflow)
+                        conversion_exprs.append(
+                            polars.col(column).cast(target_type, strict=False)
+                        )
+                    elif str(current_type).startswith("Float") and str(
+                        target_type
+                    ).startswith("Float"):
+                        # Float64 -> Float32 or vice versa
+                        conversion_exprs.append(
+                            polars.col(column).cast(target_type)
+                        )
+                    else:
+                        # Generic conversion
+                        conversion_exprs.append(
+                            polars.col(column).cast(target_type, strict=False)
+                        )
 
         # Apply all conversions at once
         if conversion_exprs:
             df = df.with_columns(conversion_exprs)
 
-        if not failed:
-            self.logger.info(f"validation passed for {step_name}: Schema enforcement completed")
+        self.logger.info(f"validation passed for {step_name}: Schema enforcement completed")
 
         return df
 
@@ -733,16 +707,7 @@ class EnvironmentData:
             for info in source_info:
                 self.logger.info(f"  {info}")
 
-            try:
-                all_sensors = polars.concat(data_sources, how="diagonal")
-                # total_rows = sum(df.shape[0] for df in data_sources)
-                # self.logger.info(
-                #     f"MERGE SUCCESS: Combined current readings from {len(data_sources)} sources = {all_sensors.shape[0]} total (expected: {total_rows})"
-                # )
-            except Exception as merge_error:
-                self.logger.error(f"MERGE FAILED even with schema gate: {merge_error}")
-                self.logger.error("Falling back to first available data source")
-                all_sensors = data_sources[0] if data_sources else polars.DataFrame()
+            all_sensors = polars.concat(data_sources, how="diagonal")
         elif len(data_sources) == 1:
             all_sensors = data_sources[0]
             self.logger.info(f"Current readings: {source_info[0]} only")
