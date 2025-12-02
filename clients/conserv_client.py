@@ -85,10 +85,9 @@ class ConservAPIClient:
                             })
                         break
         except FileNotFoundError:
-            if logger:
-                logger.warning(
-                    f"No .env file found at {env_file_path}. "
-                    f"If running from a subdirectory, set home_directory parameter to parent directory (e.g., home_directory='..').")
+            raise ValueError(
+                    f"No .env file found at {env_file_path}. If running from a subdirectory, set home_directory parameter to parent directory (e.g., home_directory='..')."
+            )
 
         if not customers:
             raise ValueError("No Conserv API keys found in .env file")
@@ -190,34 +189,29 @@ class ConservAPIClient:
         Optional[str]
             Export UUID for polling status, or None if launch failed
         """
-        try:
-            # Validate window size
-            window_days = (end_time - start_time).days
-            if window_days > self.max_window_days:
-                raise ValueError(
-                    f"Export window of {window_days} days exceeds maximum of {self.max_window_days} days"
-                )
 
-            response = self._make_api_request(
-                "POST", 
-                "/v1/sensors/export", 
-                api_key, 
-                json={"start": start_time.isoformat(), "end": end_time.isoformat()}
+        # Validate window size
+        window_days = (end_time - start_time).days
+        if window_days > self.max_window_days:
+            raise ValueError(
+                f"Export window of {window_days} days exceeds maximum of {self.max_window_days} days"
             )
 
-            result = response.json()
+        response = self._make_api_request(
+            "POST", 
+            "/v1/sensors/export", 
+            api_key, 
+            json={"start": start_time.isoformat(), "end": end_time.isoformat()}
+        )
 
-            uuid = result.get("uuid")
-            if not uuid:
-                raise ValueError(f"No UUID returned from export launch: {result}")
+        result = response.json()
 
-            self.logger.info(f"Conserv export launched: {uuid}")
-            return uuid
-            
-        except Exception as e:
-            self.logger.error(f"Failed to launch export: {e}")
-            return None
+        uuid = result.get("uuid")
+        if not uuid:
+            raise ValueError(f"No UUID returned from export launch: {result}")
 
+        self.logger.info(f"Conserv export launched: {uuid}")
+        return uuid
 
     def export_data(
         self,
@@ -245,89 +239,85 @@ class ConservAPIClient:
         Optional[polars.DataFrame]
             Sensor data with customer_id added, or None if no data found
         """
-        try:
-            self.logger.info(
-                f"Starting export for customer {customer_id}: {start_time} to {end_time}"
-            )
+        
+        self.logger.info(
+            f"Starting export for customer {customer_id}: {start_time} to {end_time}"
+        )
 
-            # Launch export
-            uuid = self.launch_export(api_key, start_time, end_time)
-            if uuid is None:
-                return None
+        # Launch export
+        uuid = self.launch_export(api_key, start_time, end_time)
+        if uuid is None:
+            return None
 
-            # Wait for completion - inline wait_for_export_completion
-            wait_start_time = time.time()
-            max_wait_seconds = self.max_wait_minutes * 60
-            query_utc = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
+        # Wait for completion - inline wait_for_export_completion
+        wait_start_time = time.time()
+        max_wait_seconds = self.max_wait_minutes * 60
+        query_utc = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
 
-            while time.time() - wait_start_time < max_wait_seconds:
-                # Check export status - inline check_export_status
-                response = self._make_api_request(
-                    "GET", f"/v1/sensors/export/{uuid}/status", api_key
-                )
-                result = response.json()
-                status = result.get("status")
-                if not status:
-                    raise ValueError(f"No status returned for export {uuid}: {result}")
-
-                if status == "completed":
-                    export_duration = time.time() - wait_start_time
-                    self.logger.info(f"Export {uuid} completed successfully in {export_duration:.1f} seconds")
-                    break
-                elif status == "failed":
-                    self.logger.error(f"Export {uuid} failed")
-                    return None
-                elif status in ("pending", "processing", "queued"):
-                    # Don't log individual status checks to reduce noise
-                    time.sleep(self.poll_interval_seconds)
-                else:
-                    raise ValueError(f"Unknown export status: {status}")
-            else:
-                raise TimeoutError(
-                    f"Export {uuid} did not complete within {self.max_wait_minutes} minutes"
-                )
-
-            # Add delay to ensure download URL is ready after export completion
-            time.sleep(5)
-
-            # Get download URL - inline get_download_url
+        while time.time() - wait_start_time < max_wait_seconds:
+            # Check export status - inline check_export_status
             response = self._make_api_request(
-                "POST", f"/v1/sensors/export/{uuid}/download", api_key
+                "GET", f"/v1/sensors/export/{uuid}/status", api_key
             )
             result = response.json()
-            download_url = result.get("url")
-            if not download_url:
-                raise ValueError(f"No download URL returned for export {uuid}: {result}")
+            status = result.get("status")
+            if not status:
+                raise ValueError(f"No status returned for export {uuid}: {result}")
 
-            # Download and parse data - inline download_export_data
-            self.logger.info("Downloading export data from S3")
-            response = requests.get(download_url)
-            response.raise_for_status()
-            csv_content = response.content
-            # Read all columns as strings to avoid schema mismatches during concatenation
-            df = polars.read_csv(io.BytesIO(csv_content), infer_schema=False)
-            self.logger.info(f"Downloaded {df.shape[0]} rows, {df.shape[1]} columns")
-
-            if df.shape[0] == 0:
-                self.logger.info(f"No data found for customer {customer_id}")
+            if status == "completed":
+                export_duration = time.time() - wait_start_time
+                self.logger.info(f"Export {uuid} completed successfully in {export_duration:.1f} seconds")
+                break
+            elif status == "failed":
+                self.logger.error(f"Export {uuid} failed")
                 return None
-
-                # Add customer_id and QueryUTC columns
-            df = df.with_columns(
-                [
-                    polars.lit(customer_id).alias("customer_id"),
-                    polars.lit(query_utc).alias("QueryUTC"),
-                ]
+            elif status in ("pending", "processing", "queued"):
+                # Don't log individual status checks to reduce noise
+                time.sleep(self.poll_interval_seconds)
+            else:
+                raise ValueError(f"Unknown export status: {status}")
+        else:
+            raise TimeoutError(
+                f"Export {uuid} did not complete within {self.max_wait_minutes} minutes"
             )
 
-            self.logger.info(
-                f"Successfully exported {df.shape[0]} rows for customer {customer_id}"
-            )
-            return df
+        # Add delay to ensure download URL is ready after export completion
+        time.sleep(5)
 
-        except Exception as e:
-            self.logger.error(f"Export failed for customer {customer_id}: {e}")
+        # Get download URL - inline get_download_url
+        response = self._make_api_request(
+            "POST", f"/v1/sensors/export/{uuid}/download", api_key
+        )
+        result = response.json()
+        download_url = result.get("url")
+        if not download_url:
+            raise ValueError(f"No download URL returned for export {uuid}: {result}")
+
+        # Download and parse data - inline download_export_data
+        self.logger.info("Downloading export data from S3")
+        response = requests.get(download_url)
+        response.raise_for_status()
+        csv_content = response.content
+        # Read all columns as strings to avoid schema mismatches during concatenation
+        df = polars.read_csv(io.BytesIO(csv_content), infer_schema=False)
+        self.logger.info(f"Downloaded {df.shape[0]} rows, {df.shape[1]} columns")
+
+        if df.shape[0] == 0:
+            self.logger.info(f"No data found for customer {customer_id}")
             return None
+
+            # Add customer_id and QueryUTC columns
+        df = df.with_columns(
+            [
+                polars.lit(customer_id).alias("customer_id"),
+                polars.lit(query_utc).alias("QueryUTC"),
+            ]
+        )
+
+        self.logger.info(
+            f"Successfully exported {df.shape[0]} rows for customer {customer_id}"
+        )
+        return df
 
     def export_data_chunked(
         self,
@@ -390,7 +380,7 @@ class ConservAPIClient:
         hours_back : int, default=6
             How many hours back to retrieve data
         test : bool, default=False
-            If True, only use customer 333 for testing
+            If True, only use the first customer for testing
             
         Returns
         -------
@@ -403,12 +393,12 @@ class ConservAPIClient:
 
     def get_current_readings(self, test: bool = False) -> Optional[polars.DataFrame]:
         """
-        Get current readings from all customers (or just customer 333 if test=True) for the last 30 minutes.
+        Get current readings from all customers (or just the first customer if test=True) for the last 30 minutes.
         
         Parameters
         ----------
         test : bool, default=False
-            If True, only use customer 333 for testing
+            If True, only use the first customer for testing
             
         Returns
         -------
@@ -421,11 +411,9 @@ class ConservAPIClient:
         # Filter customers based on test mode
         customers_to_process = self.customers
         if test:
-            customers_to_process = [c for c in self.customers if c['customer_id'] == 333]
-            if not customers_to_process:
-                raise ValueError("Test mode requires customer 333 to be configured")
+            customers_to_process = self.customers[:1]  # Only first customer
             if self.logger:
-                self.logger.info("Running in test mode - only processing customer 333")
+                self.logger.info(f"Running in test mode - only processing first customer: {customers_to_process[0]['customer_id']}")
         
         all_customer_data = []
         
@@ -508,12 +496,12 @@ class ConservAPIClient:
         end_utc : int
             End time as UTC timestamp in seconds
         test : bool, default=False
-            If True, only use customer 333 for testing
+            If True, only use the first customer for testing
 
         Returns
         -------
         Optional[polars.DataFrame]
-            Combined historical data from all customers (or just 333 if test=True) for the specified period
+            Combined historical data from all customers (or just first if test=True) for the specified period
         """
         if self.logger:
             self.logger.info(
@@ -531,11 +519,9 @@ class ConservAPIClient:
         # Filter customers based on test mode
         customers_to_process = self.customers
         if test:
-            customers_to_process = [c for c in self.customers if c['customer_id'] == 333]
-            if not customers_to_process:
-                raise ValueError("Test mode requires customer 333 to be configured")
+            customers_to_process = self.customers[:1]  # Only first customer
             if self.logger:
-                self.logger.info("Running in test mode - only processing customer 333")
+                self.logger.info(f"Running in test mode - only processing first customer: {customers_to_process[0]['customer_id']}")
 
         # Process each customer with progress bar
         pbar = tqdm.tqdm(total=len(customers_to_process), desc="Gathering Conserv historical data")
@@ -738,7 +724,7 @@ class ConservAPIClient:
         """
         Generate sample raw API data for testing and exploration.
         
-        Downloads actual data from customer 333 and saves it to samples/conserv/ directory.
+        Downloads actual data from the first customer and saves it to samples/conserv/ directory.
         """
         if not self.customers:
             raise ValueError("No Conserv customers configured")
@@ -749,15 +735,11 @@ class ConservAPIClient:
         
         print(f"📅 Time range: {start_time} to {end_time}")
         
-        # Use customer 333 which we know works
-        target_customer = None
-        for customer in self.customers:
-            if customer['customer_id'] == 333:
-                target_customer = customer
-                break
+        # Use the first available customer. Ideally this will be customer 333 since it has data.
+        if not self.customers:
+            raise ValueError("No Conserv customers configured")
         
-        if target_customer is None:
-            raise ValueError("Customer 333 not found - sample_raw_data requires working customer 333")
+        target_customer = self.customers[0]
         
         customer_id = target_customer['customer_id']
         api_key = target_customer['api_key']

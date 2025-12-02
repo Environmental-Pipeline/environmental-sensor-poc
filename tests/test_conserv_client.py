@@ -3,7 +3,7 @@
 Test suite for Conserv API client integration.
 
 This module contains tests for the ConservAPIClient class focused on quick testing
-using customer 333 and short time periods.
+using the first customer and short time periods.
 """
 
 import unittest
@@ -44,17 +44,13 @@ class TestConservClient(unittest.TestCase):
         """Set up test class with Conserv client in test mode."""
         try:
             cls.client = ConservAPIClient(home_directory=find_env_directory())  # Initialize normally, use test parameter in method calls
-            cls.test_customer_id = 333  # Focus on customer 333 for quick tests
             
-            # Verify customer 333 is available in test mode
-            cls.test_customer = None
-            for customer in cls.client.customers:
-                if customer['customer_id'] == cls.test_customer_id:
-                    cls.test_customer = customer
-                    break
-                    
-            if not cls.test_customer:
-                raise unittest.SkipTest("Customer 333 not available for testing")
+            # Use the first available customer for testing. Ideally this will be customer 333 since they have data. 
+            if not cls.client.customers:
+                raise unittest.SkipTest("No customers available for testing")
+            
+            cls.test_customer = cls.client.customers[0]
+            cls.test_customer_id = cls.test_customer['customer_id']
                 
             print(f"[OK] Conserv client initialized with customer {cls.test_customer_id} available")
             
@@ -69,12 +65,12 @@ class TestConservClient(unittest.TestCase):
         print(f"   [OK] Client has {len(self.client.customers)} customers available")
 
     def test_get_current_readings(self):
-        """Test get_current_readings method (test mode)."""
+        """Test get_current_readings method."""
         try:
             print("   [TEST] Testing current readings retrieval via get_current_readings...")
             
-            # Use get_current_readings with test=True to only use customer 333
-            df = self.client.get_current_readings(test=True)  # Last 30 minutes (hardcoded)
+            # Use get_current_readings with the first available customer
+            df = self.client.get_current_readings()  # Last 30 minutes (hardcoded)
             
             # Assert that we actually get data back
             self.assertIsNotNone(df, "get_current_readings should not return None")
@@ -118,8 +114,8 @@ class TestConservClient(unittest.TestCase):
             start_utc = int(start_time.timestamp())
             end_utc = int(end_time.timestamp())
             
-            # Get historical data with test=True to only use customer 333
-            df = self.client.get_historical_data(start_utc, end_utc, test=True)
+            # Get historical data with the first available customer
+            df = self.client.get_historical_data(start_utc, end_utc)
             
             # Assert that we actually get data back
             self.assertIsNotNone(df, "get_historical_data should not return None")

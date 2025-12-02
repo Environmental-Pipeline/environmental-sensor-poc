@@ -116,25 +116,19 @@ class CorisClient:
         # Read API key from environment variables
         env_file_path = os.path.join(home_directory, ".env")
         api_key = None
-        try:
-            with open(env_file_path) as f:
-                for line in f:
-                    if line.startswith("CORIS_API_KEY"):
-                        api_key = line.split("=", 1)[1].strip()
-                        break
-        except FileNotFoundError:
-            pass
+        with open(env_file_path) as f:
+            for line in f:
+                if line.startswith("CORIS_API_KEY"):
+                    api_key = line.split("=", 1)[1].strip()
+                    break
         
         # Read CATS User ID from environment variables
         cats_user_id_str = None
-        try:
-            with open(env_file_path) as f:
-                for line in f:
-                    if line.startswith("CATS_USER_ID"):
-                        cats_user_id_str = line.split("=", 1)[1].strip()
-                        break
-        except FileNotFoundError:
-            pass
+        with open(env_file_path) as f:
+            for line in f:
+                if line.startswith("CATS_USER_ID"):
+                    cats_user_id_str = line.split("=", 1)[1].strip()
+                    break
         
         if not api_key:
             raise ValueError(
@@ -146,13 +140,8 @@ class CorisClient:
                 f"CATS_USER_ID not found in environment or .env file at {env_file_path}. "
                 f"If running from a subdirectory, set home_directory parameter to parent directory (e.g., home_directory='..').")
         
-        try:
-            cats_user_id = int(cats_user_id_str)
-        except ValueError:
-            raise ValueError(f"CATS_USER_ID must be an integer, got: {cats_user_id_str}")
-        
         self.api_key = api_key
-        self.cats_user_id = cats_user_id
+        self.cats_user_id = cats_user_id_str
         self.logger = logger or logging.getLogger(__name__)
         self.base_url = "https://cats.corismonitoring.com/api"
         
@@ -452,148 +441,138 @@ class CorisClient:
         """
         results = {}
         
-        try:
-            print("🔍 Fetching raw sensor data...")
-            # Get raw sensors data - make direct API call to get raw response
-            url = f'{self.base_url}/cats/user/?ApiKey={self.api_key}&CatsUserID={self.cats_user_id}'
+        print("🔍 Fetching raw sensor data...")
+        # Get raw sensors data - make direct API call to get raw response
+        url = f'{self.base_url}/cats/user/?ApiKey={self.api_key}&CatsUserID={self.cats_user_id}'
+        
+        self.logger.info(
+            "API call: https://cats.corismonitoring.com/api/cats/user/?ApiKey=XXXX&CatsUserID=XXXX"
+        )
+        
+        response = requests.get(url)
+        
+        if not response.ok:
+            error_msg = f"Error getting sensors: {response.json()}"
+            self.logger.error(error_msg)
+            raise Exception(error_msg)
+        
+        raw_sensors = response.json()
+        results['sensors'] = raw_sensors
+        
+        if save_to_samples:
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"raw_sensors_response_{timestamp}.json"
+            filepath = Path(__file__).parent.parent / "samples" / "coris" / filename
+            filepath.parent.mkdir(parents=True, exist_ok=True)
+            with open(filepath, 'w') as f:
+                json.dump(raw_sensors, f, indent=2, default=str)
+            print(f"Saved sensors data to: {filepath}")
+        
+        sensors_data = raw_sensors.get('Sensors', [])
+        print(f"✅ Retrieved {len(sensors_data)} sensors")
+        
+        # Try to get sample historical data from multiple sensors
+        historical_data_samples = []
+        max_sensors = 3  # Sample up to 3 sensors
+        sensors_sampled = 0
+        
+        if len(sensors_data) > 0:
+            print(f"🔍 Fetching historical data from up to {max_sensors} sensors...")
             
-            self.logger.info(
-                "API call: https://cats.corismonitoring.com/api/cats/user/?ApiKey=XXXX&CatsUserID=XXXX"
-            )
+            # Get last 24 hours for quick sample
+            end_time = datetime.datetime.now(datetime.timezone.utc)
+            start_time = end_time - datetime.timedelta(hours=24)
+            start_utc = int(start_time.timestamp())
+            end_utc = int(end_time.timestamp())
             
-            response = requests.get(url)
+            # Common reading types to sample
+            reading_types = ['SensorReadingF', 'SensorReadingRh', 'SensorReadingC']
             
-            if not response.ok:
-                error_msg = f"Error getting sensors: {response.json()}"
-                self.logger.error(error_msg)
-                raise Exception(error_msg)
-            
-            raw_sensors = response.json()
-            results['sensors'] = raw_sensors
-            
-            if save_to_samples:
-                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                filename = f"raw_sensors_response_{timestamp}.json"
-                filepath = Path(__file__).parent.parent / "samples" / "coris" / filename
-                filepath.parent.mkdir(parents=True, exist_ok=True)
-                with open(filepath, 'w') as f:
-                    json.dump(raw_sensors, f, indent=2, default=str)
-                print(f"Saved sensors data to: {filepath}")
-            
-            sensors_data = raw_sensors.get('Sensors', [])
-            print(f"✅ Retrieved {len(sensors_data)} sensors")
-            
-            # Try to get sample historical data from multiple sensors
-            historical_data_samples = []
-            max_sensors = 3  # Sample up to 3 sensors
-            sensors_sampled = 0
-            
-            if len(sensors_data) > 0:
-                print(f"🔍 Fetching historical data from up to {max_sensors} sensors...")
+            for sensor in sensors_data:
+                if sensors_sampled >= max_sensors:
+                    break
                 
-                # Get last 24 hours for quick sample
-                end_time = datetime.datetime.now(datetime.timezone.utc)
-                start_time = end_time - datetime.timedelta(hours=24)
-                start_utc = int(start_time.timestamp())
-                end_utc = int(end_time.timestamp())
+                sensor_id = sensor.get('SensorID')
+                sensor_name = sensor.get('SensorName', 'Unknown Sensor')
                 
-                # Common reading types to sample
-                reading_types = ['SensorReadingF', 'SensorReadingRh', 'SensorReadingC']
+                if not sensor_id:
+                    continue
                 
-                for sensor in sensors_data:
-                    if sensors_sampled >= max_sensors:
-                        break
-                    
-                    sensor_id = sensor.get('SensorID')
-                    sensor_name = sensor.get('SensorName', 'Unknown Sensor')
-                    
-                    if not sensor_id:
-                        continue
-                    
-                    print(f"\n📊 Sensor: {sensor_name} (ID: {sensor_id})")
-                    
-                    # Try to get data for different reading types
-                    for reading_type in reading_types:
-                        # Check if this sensor has this reading type
-                        if reading_type in sensor and sensor.get(reading_type) is not None:
-                            print(f"  🔍 Fetching {reading_type} data...")
+                print(f"\n📊 Sensor: {sensor_name} (ID: {sensor_id})")
+                
+                # Try to get data for different reading types
+                for reading_type in reading_types:
+                    # Check if this sensor has this reading type
+                    if reading_type in sensor and sensor.get(reading_type) is not None:
+                        print(f"  🔍 Fetching {reading_type} data...")
+                        
+                        url = "&".join([
+                            f'{self.base_url}/sensor/historical/?ApiKey={self.api_key}',
+                            f"SensorID={sensor_id}",
+                            f"ReadingType={reading_type}",
+                            f"StartUTC={start_utc}",
+                            f"EndUTC={end_utc}",
+                            f"MinReadingSpacing={self.reading_spacing_seconds}",
+                            "RequestedOutputFormat=raw",
+                        ])
+                        
+                        logurl = "&".join([
+                            "https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX",
+                            f"SensorID={sensor_id}",
+                            f"ReadingType={reading_type}",
+                            f"StartUTC={start_utc}",
+                            f"EndUTC={end_utc}",
+                            f"MinReadingSpacing={self.reading_spacing_seconds}",
+                            "RequestedOutputFormat=raw",
+                        ])
+                        
+                        self.logger.info(f"API call: {logurl}")
+                        response = requests.get(url)
+                        
+                        if response.ok:
+                            # Store raw response text since it's CSV data
+                            raw_historical_data = response.text
                             
-                            try:
-                                url = "&".join([
-                                    f'{self.base_url}/sensor/historical/?ApiKey={self.api_key}',
-                                    f"SensorID={sensor_id}",
-                                    f"ReadingType={reading_type}",
-                                    f"StartUTC={start_utc}",
-                                    f"EndUTC={end_utc}",
-                                    f"MinReadingSpacing={self.reading_spacing_seconds}",
-                                    "RequestedOutputFormat=raw",
-                                ])
-                                
-                                logurl = "&".join([
-                                    "https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX",
-                                    f"SensorID={sensor_id}",
-                                    f"ReadingType={reading_type}",
-                                    f"StartUTC={start_utc}",
-                                    f"EndUTC={end_utc}",
-                                    f"MinReadingSpacing={self.reading_spacing_seconds}",
-                                    "RequestedOutputFormat=raw",
-                                ])
-                                
-                                self.logger.info(f"API call: {logurl}")
-                                response = requests.get(url)
-                                
-                                if response.ok:
-                                    # Store raw response text since it's CSV data
-                                    raw_historical_data = response.text
-                                    
-                                    historical_data_samples.append({
-                                        'sensor_id': sensor_id,
-                                        'sensor_name': sensor_name,
-                                        'reading_type': reading_type,
-                                        'raw_data': raw_historical_data
-                                    })
-                                    
-                                    if save_to_samples:
-                                        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                                        filename = f"raw_historical_data_{sensor_id}_{reading_type}_{timestamp}.csv"
-                                        filepath = Path(__file__).parent.parent / "samples" / "coris" / filename
-                                        filepath.parent.mkdir(parents=True, exist_ok=True)
-                                        with open(filepath, 'w') as f:
-                                            f.write(raw_historical_data)
-                                        print(f"    💾 Saved to: {filepath}")
-                                    
-                                    print(f"    ✅ Retrieved {reading_type} data for sensor {sensor_id}")
-                                    
-                                    # Only sample one reading type per sensor to avoid too much data
-                                    break
-                                    
-                                else:
-                                    print(f"    ⚠️ Could not get {reading_type} data: HTTP {response.status_code}")
-                                    
-                            except Exception as e:
-                                print(f"    ⚠️ Could not get {reading_type} data for sensor {sensor_id}: {e}")
-                                continue
-                    
-                    sensors_sampled += 1
-            
-            results['historical_data_samples'] = historical_data_samples
-            
-            # Print summary
-            print(f"\n📋 Sample Data Summary:")
-            print(f"   • Sensors: {len(sensors_data)} found")
-            print(f"   • Historical data samples: {len(historical_data_samples)} collected from {sensors_sampled} sensors")
-            
-            if historical_data_samples:
-                for i, sample in enumerate(historical_data_samples, 1):
-                    print(f"     {i}. {sample['sensor_name']} - {sample['reading_type']} (ID: {sample['sensor_id']})")
-            
-            if save_to_samples:
-                print(f"   • Files saved to: samples/coris/")
-            
-            return results
-            
-        except Exception as e:
-            print(f"❌ Error generating sample data: {e}")
-            raise
+                            historical_data_samples.append({
+                                'sensor_id': sensor_id,
+                                'sensor_name': sensor_name,
+                                'reading_type': reading_type,
+                                'raw_data': raw_historical_data
+                            })
+                            
+                            if save_to_samples:
+                                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                                filename = f"raw_historical_data_{sensor_id}_{reading_type}_{timestamp}.csv"
+                                filepath = Path(__file__).parent.parent / "samples" / "coris" / filename
+                                filepath.parent.mkdir(parents=True, exist_ok=True)
+                                with open(filepath, 'w') as f:
+                                    f.write(raw_historical_data)
+                                print(f"    💾 Saved to: {filepath}")
+                            
+                            print(f"    ✅ Retrieved {reading_type} data for sensor {sensor_id}")
+                            
+                            # Only sample one reading type per sensor to avoid too much data
+                            break
+                            
+                        else:
+                            print(f"    ⚠️ Could not get {reading_type} data: HTTP {response.status_code}")
+                
+                sensors_sampled += 1
+        
+        results['historical_data_samples'] = historical_data_samples
+        
+        # Print summary
+        print(f"\n📋 Sample Data Summary:")
+        print(f"   • Sensors: {len(sensors_data)} found")
+        print(f"   • Historical data samples: {len(historical_data_samples)} collected from {sensors_sampled} sensors")
+        
+        if historical_data_samples:
+            for i, sample in enumerate(historical_data_samples, 1):
+                print(f"     {i}. {sample['sensor_name']} - {sample['reading_type']} (ID: {sample['sensor_id']})")
+        
+        if save_to_samples:
+            print(f"   • Files saved to: samples/coris/")
+        
+        return results
 
 
