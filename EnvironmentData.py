@@ -1637,13 +1637,13 @@ class EnvironmentData:
 
     def export_to_excel(self):
         """
-        Export consolidated data to Excel using the template at templates/consolidated-data.xlsx.
+        Export consolidated data to Excel using the template at templates/consolidated-data-template.xlsx.
         Fills in sheets: sensors, devices, utcs, device_readings_daily, and device_readings_last1000.
         Saves the result to data/data.xlsx.
         """
         import shutil
         
-        template_path = f"{self.home_directory}/templates/consolidated-data.xlsx"
+        template_path = f"{self.home_directory}/templates/consolidated-data-template.xlsx"
         output_path = f"{self.data_path}/consolidated-data.xlsx"
         
         # Copy template to output location
@@ -1659,14 +1659,19 @@ class EnvironmentData:
         device_readings_daily = polars.read_parquet(f"{self.data_path}/device_readings_daily.parquet")
         device_readings = polars.read_parquet(f"{self.data_path}/device_readings.parquet")
         
-        # Get last 1000 device readings (most recent)
-        device_readings_last1000 = device_readings.sort("SensorReadingUTC", descending=True).head(1000)
+        # Get last 1000 device readings (most recent) and join with utcs for datetime_est
+        device_readings_last1000 = (
+            device_readings.sort("SensorReadingUTC", descending=True).head(1000)
+            .join(utcs.select(["UTC", "datetime_est"]), left_on="SensorReadingUTC", right_on="UTC", how="left")
+            .rename({"datetime_est": "reading_datetime_est"})
+            .join(utcs.select(["UTC", "datetime_est"]), left_on="QueryUTC", right_on="UTC", how="left")
+            .rename({"datetime_est": "query_datetime_est"})
+        )
         
         # Map sheet names to data
         sheet_data = {
             "sensors": sensors,
             "devices": devices,
-            "utcs": utcs,
             "device_readings_daily": device_readings_daily,
             "device_readings_last1000": device_readings_last1000,
         }
@@ -1674,11 +1679,6 @@ class EnvironmentData:
         for sheet_name, df in sheet_data.items():
             if sheet_name in wb.sheetnames:
                 ws = wb[sheet_name]
-                
-                # Clear existing data (keep row 1 as header)
-                for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
-                    for cell in row:
-                        cell.value = None
                 
                 # Write column headers in row 1
                 for col_idx, col_name in enumerate(df.columns, start=1):
