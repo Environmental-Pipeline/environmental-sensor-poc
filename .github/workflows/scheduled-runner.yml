@@ -67,12 +67,15 @@ jobs:
         if: steps.check-active.outputs.active == 'true'
         id: check-status
         run: |
-          if [ -f "data/cron_status.txt" ]; then
+          if [ -f "data/init.lock" ]; then
+            echo "Lock file exists - initialization in progress, skipping this run"
+            echo "action=skip" >> $GITHUB_OUTPUT
+          elif [ -f "data/cron_status.txt" ]; then
             STATUS=$(cat data/cron_status.txt)
             echo "status=$STATUS" >> $GITHUB_OUTPUT
-            if [ "$STATUS" == "initializing" ]; then
-              echo "Initialization in progress, skipping this run"
-              echo "action=skip" >> $GITHUB_OUTPUT
+            if [ "$STATUS" == "not-initialized" ]; then
+              echo "cron_status.txt shows not-initialized - will run init"
+              echo "action=init" >> $GITHUB_OUTPUT
             else
               echo "cron_status.txt exists with status: $STATUS - will run pull and consolidate"
               echo "action=pull" >> $GITHUB_OUTPUT
@@ -82,20 +85,24 @@ jobs:
             echo "action=init" >> $GITHUB_OUTPUT
           fi
 
-      - name: Set initializing status and commit
+      - name: Set lock file and commit
         if: steps.check-active.outputs.active == 'true' && steps.check-status.outputs.action == 'init'
         run: |
           mkdir -p data
-          echo "initializing" > data/cron_status.txt
+          date -u +'%Y-%m-%d %H:%M:%S UTC' > data/init.lock
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/cron_status.txt
+          git add data/init.lock
           git commit -m "Start initialization - $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
           git push origin runner
 
       - name: Run initialization
         if: steps.check-active.outputs.active == 'true' && steps.check-status.outputs.action == 'init'
         run: python jobs/0-init.py
+
+      - name: Remove lock file
+        if: steps.check-active.outputs.active == 'true' && steps.check-status.outputs.action == 'init'
+        run: rm -f data/init.lock
 
       - name: Run pull and consolidate
         if: steps.check-active.outputs.active == 'true' && steps.check-status.outputs.action == 'pull'
