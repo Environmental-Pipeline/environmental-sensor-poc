@@ -1273,7 +1273,8 @@ class EnvironmentData:
             "CSC": "Collection Studies Center (West Campus)",
         }
 
-        # Sensor Info - include all required columns for validation
+        # Sensor Info - only include sensor metadata columns (not reading-specific columns)
+        # This ensures we get truly unique sensors, not one row per reading
         columns_to_read = [
             "SensorName",
             "SensorID",
@@ -1281,9 +1282,6 @@ class EnvironmentData:
             "DeviceName",
             "SensorType",
             "Source",
-            "SensorReadingUTC",
-            "QueryUTC",
-            "Historical"
         ]
             
         sensors_data = polars.read_parquet(
@@ -1330,9 +1328,6 @@ class EnvironmentData:
                         "SensorID": sensor["SensorID"],
                         "DeviceID": sensor["DeviceID"],
                         "DeviceName": sensor["DeviceName"],
-                        "SensorReadingUTC": sensor["SensorReadingUTC"],
-                        "QueryUTC": sensor["QueryUTC"],
-                        "Historical": sensor["Historical"],
                         "BuildingID": info[1],
                         "Building": (
                             building_name_map[info[1]]
@@ -1359,9 +1354,6 @@ class EnvironmentData:
                         "SensorID": sensor["SensorID"],
                         "DeviceID": sensor["DeviceID"],
                         "DeviceName": sensor["DeviceName"],
-                        "SensorReadingUTC": sensor["SensorReadingUTC"],
-                        "QueryUTC": sensor["QueryUTC"],
-                        "Historical": sensor["Historical"],
                         "BuildingID": info[1],
                         "Building": (
                             building_name_map[info[1]]
@@ -1388,9 +1380,6 @@ class EnvironmentData:
                         "SensorID": sensor["SensorID"],
                         "DeviceID": sensor["DeviceID"],
                         "DeviceName": sensor["DeviceName"],
-                        "SensorReadingUTC": sensor["SensorReadingUTC"],
-                        "QueryUTC": sensor["QueryUTC"],
-                        "Historical": sensor["Historical"],
                         "BuildingID": "FLOATER",
                         "Building": (
                             building_name_map[info[1]]
@@ -1420,9 +1409,6 @@ class EnvironmentData:
                         "SensorID": sensor["SensorID"], 
                         "DeviceID": sensor["DeviceID"],
                         "DeviceName": sensor["DeviceName"],
-                        "SensorReadingUTC": sensor["SensorReadingUTC"],
-                        "QueryUTC": sensor["QueryUTC"],
-                        "Historical": sensor["Historical"],
                         "BuildingID": "MALFORMED",
                         "Building": "Unknown",
                         "Room": "Unknown", 
@@ -1497,10 +1483,11 @@ class EnvironmentData:
         ).sort(["BuildingID", "Room", "DeviceName"])
         
         # Get sensor information for each device from the sensors lookup table
+        # Use unique() to avoid duplicates before joining into comma-separated lists
         device_sensors_lookup = sensors.group_by("DeviceID").agg([
-            polars.col("SensorID").str.join(", ").alias("Sensors"),
-            polars.col("SensorName").str.join(", ").alias("SensorNames"),
-            polars.col("SensorType").str.join(", ").alias("SensorTypes")
+            polars.col("SensorID").unique().sort().str.join(", ").alias("SensorIDs"),
+            polars.col("SensorName").unique().sort().str.join(", ").alias("SensorNames"),
+            polars.col("SensorType").unique().sort().str.join(", ").alias("SensorTypes")
         ])
         
         # Join sensor information to devices
@@ -1508,7 +1495,7 @@ class EnvironmentData:
         
         devices = self.relocate(
             devices,
-            ["Source", "DeviceID", "DeviceName", "Sensors", "SensorNames", "SensorTypes", "DeviceSerialFromName", "BuildingID", "Building", "Room", "CardinalDirection"],
+            ["Source", "DeviceID", "DeviceName", "SensorIDs", "SensorNames", "SensorTypes", "DeviceSerialFromName", "BuildingID", "Building", "Room", "CardinalDirection"],
         )
         devices.write_parquet(f"{self.data_path}/devices.parquet")
 

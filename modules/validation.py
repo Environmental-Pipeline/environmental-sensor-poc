@@ -99,21 +99,34 @@ def validate_sensors(
     validation_results = []
     run_utc = get_current_utc()
 
-    # Expected column types
-    expect_types = {
-        "SensorReadingUTC": polars.Int64,
-        "QueryUTC": polars.Int32,
-        "Source": polars.String,
-        "DeviceID": polars.String,
-        "DeviceName": polars.String,
-        "SensorID": polars.String,
-        "SensorName": polars.String,
-        "SensorType": polars.String,
-        "Historical": polars.Boolean,
-    }
-    for reading in acceptable_range:
-        if reading in sensors.columns:
-            expect_types[reading] = polars.Float32
+    # Expected column types - different for lookup tables vs readings
+    # For lookup tables (step="update_lookups"), we don't have reading-specific columns
+    if step == "update_lookups":
+        # Sensors lookup table - only sensor metadata columns
+        expect_types = {
+            "Source": polars.String,
+            "DeviceID": polars.String,
+            "DeviceName": polars.String,
+            "SensorID": polars.String,
+            "SensorName": polars.String,
+            "SensorType": polars.String,
+        }
+    else:
+        # Full sensor readings - includes reading-specific columns
+        expect_types = {
+            "SensorReadingUTC": polars.Int64,
+            "QueryUTC": polars.Int32,
+            "Source": polars.String,
+            "DeviceID": polars.String,
+            "DeviceName": polars.String,
+            "SensorID": polars.String,
+            "SensorName": polars.String,
+            "SensorType": polars.String,
+            "Historical": polars.Boolean,
+        }
+        for reading in acceptable_range:
+            if reading in sensors.columns:
+                expect_types[reading] = polars.Float32
 
     # Check for required columns that must be present from clients
     missing_cols = [col for col in expect_types.keys() if col not in sensors.columns]
