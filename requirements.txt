@@ -2,3 +2,4 @@ polars
 tdqm
 requests
 numpy
+openpyxl

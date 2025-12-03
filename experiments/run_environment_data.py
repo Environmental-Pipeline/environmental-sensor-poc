@@ -1,33 +1,35 @@
+# Usage: python experiments/run_environment_data.py
+
 # Clear prior data. 
-import os
-import sys
-import shutil
+import os, sys, shutil
 
-# Add parent directory to Python path to import EnvironmentData
-# Get the current working directory and go up one level to the project root
-current_dir = os.getcwd()
-if 'experiments' in current_dir:
-    # If we're in experiments folder, go up one level
-    parent_dir = os.path.dirname(current_dir)
-else:
-    # If we're already in project root, use current directory
-    parent_dir = current_dir
+# Add parent directory to Python path to import EnvironmentData.
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-sys.path.append(parent_dir)
-
+# Get the EnvironmentData class.
 from EnvironmentData import EnvironmentData 
 
 # The project adds to existing data so we need to clear that data to get a solid test from scratch.
-data_path = os.path.join(parent_dir, 'data')
-if os.path.exists(data_path):
-    shutil.rmtree(data_path)
-    os.makedirs(data_path)
+if os.path.exists('./data'):
+    shutil.rmtree('./data')
+    os.makedirs('./data')
 
 # Initialize EnvironmentData. This will run the historical data pull.
 envdt = EnvironmentData(
-    days_back = 365 * 2,
+    #days_back = 365 * 2,
+    days_back = 7,
     coris_enabled = True,
     licor_enabled = True,
-    conserv_enabled = False, # out of scope for this project (just adding LI-COR). 
-    testing = True
+    conserv_enabled = True, 
+    testing = True,
+    #testing = False,
+    # Since we are running from the experiments/ folder, we need to tell the class to use the parent directory as home.
+    home_directory = "."
 )
+
+# To consolidate these into the database, run consolidate_readings.
+envdt.consolidate_readings()
+
+# When done, close the connection to the logs. 
+envdt.close()
+del envdt

@@ -680,8 +680,8 @@ class ConservAPIClient:
                 polars.lit(":Temperature")
             ]).alias("SensorID"),
             polars.concat_str([
-                polars.col("DeviceName"),
-                polars.lit(" - Temperature")
+                polars.col("DeviceId"),
+                polars.lit(":Temperature")
             ]).alias("SensorName"),
             polars.lit("Temperature").alias("SensorType"),
             polars.col("SensorReadingF"),
@@ -702,8 +702,8 @@ class ConservAPIClient:
                 polars.lit(":RH")
             ]).alias("SensorID"),
             polars.concat_str([
-                polars.col("DeviceName"),
-                polars.lit(" - RH")
+                polars.col("DeviceId"),
+                polars.lit(":RH")
             ]).alias("SensorName"),
             polars.lit("RH").alias("SensorType"),
             polars.lit(None, dtype=polars.Float32).alias("SensorReadingF"),

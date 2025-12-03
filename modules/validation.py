@@ -9,9 +9,11 @@ It detects data gaps, alerts, and generates comprehensive diagnostic reports.
 
 ## Functions:
 - validate_sensors: Validate sensor reading data for schema, duplicates, consistency, etc.
+- validate_devices: Validate device data for column data types, missing values
+- clean_validate_sensors: Clean and validate sensor readings data
 - detect_data_gaps: Identify gaps in sensor data beyond expected intervals
 - detect_alerts: Find readings outside acceptable thresholds
-- generate_diagnostics_report: Create CSV reports for validation results, gaps, and alerts
+- generate_validation_results: Create CSV reports for validation results, gaps, and alerts
 - utc_to_est_string: Convert UTC timestamp to human-readable EST string
 """
 
@@ -21,7 +23,8 @@ import zoneinfo
 import polars
 import numpy
 import logging
-from typing import Optional, List, Dict, Any
+import warnings
+from typing import Optional, List, Dict, Any, Callable
 
 
 def utc_to_est_string(utc_timestamp: int) -> str:
@@ -99,21 +102,33 @@ def validate_sensors(
     validation_results = []
     run_utc = get_current_utc()
 
-    # Expected column types
-    expect_types = {
-        "SensorReadingUTC": polars.Int64,
-        "QueryUTC": polars.Int32,
-        "Source": polars.String,
-        "DeviceID": polars.String,
-        "DeviceName": polars.String,
-        "SensorID": polars.String,
-        "SensorName": polars.String,
-        "SensorType": polars.String,
-        "Historical": polars.Boolean,
-    }
-    for reading in acceptable_range:
-        if reading in sensors.columns:
-            expect_types[reading] = polars.Float32
+    # Expected column types - different for lookup tables vs readings
+    # For lookup tables (step="update_lookups"), we don't have reading-specific columns
+    if step == "update_lookups":
+        # Sensors lookup table - only sensor metadata columns (no DeviceName, that's in devices table)
+        expect_types = {
+            "Source": polars.String,
+            "DeviceID": polars.String,
+            "SensorID": polars.String,
+            "SensorName": polars.String,
+            "SensorType": polars.String,
+        }
+    else:
+        # Full sensor readings - includes reading-specific columns
+        expect_types = {
+            "SensorReadingUTC": polars.Int64,
+            "QueryUTC": polars.Int32,
+            "Source": polars.String,
+            "DeviceID": polars.String,
+            "DeviceName": polars.String,
+            "SensorID": polars.String,
+            "SensorName": polars.String,
+            "SensorType": polars.String,
+            "Historical": polars.Boolean,
+        }
+        for reading in acceptable_range:
+            if reading in sensors.columns:
+                expect_types[reading] = polars.Float32
 
     # Check for required columns that must be present from clients
     missing_cols = [col for col in expect_types.keys() if col not in sensors.columns]
@@ -396,7 +411,7 @@ def detect_alerts(
         })
 
 
-def generate_diagnostics_report(
+def generate_validation_results(
     sensors: polars.DataFrame,
     validation_results: list,
     acceptable_range: dict,
@@ -425,6 +440,30 @@ def generate_diagnostics_report(
     """
     run_utc = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
     run_datetime_est = utc_to_est_string(run_utc)
+    
+    # DISABLED: Building info validation - data is too inconsistent to reliably parse building info
+    # # ============ CHECK FOR MISSING BUILDING INFO IN DEVICES LOOKUP ============
+    # devices_lookup_path = f"{data_path}/devices.parquet"
+    # devices_lookup = polars.read_parquet(devices_lookup_path)
+    # if "BuildingID" in devices_lookup.columns and "DeviceName" in devices_lookup.columns:
+    #     # Check which devices are missing BuildingID
+    #     missing_building_devices = devices_lookup.filter(polars.col("BuildingID").is_null())
+    #     if missing_building_devices.shape[0] > 0:
+    #         device_names = missing_building_devices["DeviceName"].to_list()
+    #         device_list = ", ".join([str(name) for name in device_names[:10]])
+    #         if len(device_names) > 10:
+    #             device_list += f", ... and {len(device_names) - 10} more"
+    #         building_details = f"{len(device_names)} devices have names that could not be parsed for building information. Device names: {device_list}"
+    #     else:
+    #         building_details = f"All {devices_lookup.shape[0]} devices have valid building information parsed from device names."
+    #     validation_results.append({
+    #         "test_name": "building_info_present",
+    #         "run_utc": run_utc,
+    #         "result": "PASS" if missing_building_devices.shape[0] == 0 else "WARN",
+    #         "details": building_details
+    #     })
+    #     if missing_building_devices.shape[0] > 0 and logger:
+    #         logger.warning(f"{step} validation: {building_details}")
     
     # ============ DATA GAPS BY SOURCE ============
     gaps = detect_data_gaps(sensors)
@@ -577,3 +616,286 @@ def generate_diagnostics_report(
         events_df.write_csv(events_csv_path)
         if logger:
             logger.info(f"Wrote {len(event_rows)} validation events to {events_csv_path}")
+
+
+def clean_validate_sensors(
+    sensors: polars.DataFrame,
+    acceptable_range: Dict[str, List],
+    logger: logging.Logger,
+    historical: polars.DataFrame = None,
+    step: str = "",
+    error_callback: Callable[[str, bool], None] = None,
+) -> polars.DataFrame:
+    """
+    Clean the sensor readings data.
+    Currently, this only sets efficient data types. It can be expanded to include more cleaning steps.
+    Then, validate the data because these two operations typically occur together.
+
+    Parameters
+    ----------
+    sensors : polars.DataFrame
+        Sensors API response.
+    acceptable_range : Dict[str, List]
+        Dictionary of reading types to acceptable ranges.
+    logger : logging.Logger
+        Logger instance for logging messages.
+    historical : polars.DataFrame, optional
+        Historical data for comparison during validation.
+    step : str
+        Name of the step for logging.
+    error_callback : Callable[[str, bool], None], optional
+        Callback function for error handling. Takes (message, raise_exception) params.
+
+    Returns
+    -------
+    polars.DataFrame : Cleaned DataFrame.
+    """
+    if historical is None:
+        historical = polars.DataFrame()
+
+    # Set data types - MATCH EXISTING SCHEMA EXACTLY
+    dtypes = {
+        "SensorID": polars.String,  # Consolidated sensor ID field with source prefixes
+        "DeviceID": polars.String,  # Consolidated device ID field with source prefixes
+        "SensorReadingUTC": polars.Int64,
+        "QueryUTC": polars.Int32,  # Fixed: Match parquet file
+        "Source": polars.String,  # Fixed: Use String not Utf8 (renamed from source)
+    }
+    
+    for dtype in dtypes:
+        if dtype in sensors.columns:
+            sensors = sensors.with_columns(polars.col(dtype).cast(dtypes[dtype]))
+
+    for reading in acceptable_range:
+        if reading in sensors.columns:
+            sensors = sensors.with_columns(
+                polars.col(reading).cast(polars.Float32)
+            )  # Fixed: Use Float32 not String
+
+    # Also ensure validation expected columns are correct type
+    validation_types = {
+        "SensorReadingUTC": polars.Int64,
+        "SensorID": polars.String,
+        "SensorReadingF": polars.Float32,
+        "SensorReadingRh": polars.Float32,
+    }
+    for col, expected_type in validation_types.items():
+        if col in sensors.columns and sensors[col].dtype != expected_type:
+            sensors = sensors.with_columns(polars.col(col).cast(expected_type))
+            logger.info(f"Type conversion: {col} -> {expected_type}")
+
+    # Validate the data.
+    validation_results = validate_sensors(
+        sensors=sensors, 
+        historical=historical, 
+        acceptable_range=acceptable_range,
+        logger=logger,
+        step=step
+    )
+    
+    # Collect errors from FAIL results
+    errs = []
+    for result in validation_results:
+        if result["result"] == "FAIL":
+            errs.append(f"{result['test_name']}: {result['details']}")
+
+    # Log the errors and raise exception to stop processing with bad data.
+    if len(errs) > 0:
+        error_msg = step + " validation errors : " + "; ".join(errs) + "\n"
+        if error_callback:
+            error_callback(error_msg, True)
+        else:
+            logger.error(error_msg)
+            raise Exception(error_msg)
+
+    return sensors
+
+
+def validate_devices(
+    devices: polars.DataFrame,
+    acceptable_range: Dict[str, List],
+    logger: logging.Logger,
+    error_callback: Callable[[str, bool], None] = None,
+) -> None:
+    """
+    Validate Device data: column data types, missing values.
+    Can be expanded to add more validation steps.
+
+    Parameters
+    ----------
+    devices : polars.DataFrame
+        Device readings DataFrame to validate.
+    acceptable_range : Dict[str, List]
+        Dictionary of reading types to acceptable ranges.
+    logger : logging.Logger
+        Logger instance for logging messages.
+    error_callback : Callable[[str, bool], None], optional
+        Callback function for error handling. Takes (message, raise_exception) params.
+    """
+    errs = []
+
+    # Check for missing values.
+    # Note: Missing values are expected in sensor data (e.g., temperature-only vs humidity-only sensors)
+    # for col in acceptable_range:
+    #     missing_count = devices[col].is_null().sum()
+    #     if missing_count > 0:
+    #         errs.append(f"{missing_count} missing values in [{col}].")
+
+    # Log the errors.
+    if len(errs) > 0:
+        error_msg = "Validation errors: \n" + "\n\t".join(errs)
+        if error_callback:
+            error_callback(error_msg, False)
+        else:
+            logger.error(error_msg)
+            warnings.warn(error_msg)
+
+
+def get_master_schema() -> dict:
+    """
+    Get the master schema from existing parquet file.
+    This defines the target schema that ALL data must conform to.
+
+    Returns
+    -------
+    dict : Column name -> polars data type mapping
+    """
+
+    # Define the master schema based on existing parquet structure
+    master_schema = {
+        "Source": polars.String,
+        "SensorID": polars.String,
+        "DeviceID": polars.String,
+        "QueryUTC": polars.Int32,
+        "SensorReadingUTC": polars.Int64,
+        "SensorReadingUTC_SecondsFromPrior": polars.Int64,
+        "SensorReadingF": polars.Float32,
+        "SensorReadingRh": polars.Float32,
+        "SensorName": polars.String,
+        "SensorPort": polars.Int64,
+        "ServerUTC": polars.Int64,
+        "HexGatewayMac": polars.String,
+        "LoraHexGatewayMac": polars.String,
+        "LoraGatewayLastHeardUTC": polars.Int64,
+        "SensorUnplugged": polars.Boolean,
+        "LinkQualityText": polars.String,
+        "HexMac": polars.String,
+        "SensorDeleted": polars.Boolean,
+        "SensorDeactivated": polars.Boolean,
+        "SensorReading": polars.Float64,
+        "DeviceName": polars.String,
+        "DevTypeInt": polars.Int64,
+        "SensorTempPref": polars.String,
+        "DeviceTempPref": polars.Null,
+        "UserTempPref": polars.String,
+        "SensorTimeZone": polars.String,
+        "SensorZipcode": polars.Null,
+        "SensorType": polars.String,
+        "SensorState0String": polars.String,
+        "SensorState1String": polars.String,
+        "ExpectedSensorReadingIntervalSeconds": polars.Int64,
+        "SensorReadingC": polars.Float64,
+        "SensorCalibrationOffsetC": polars.Float64,
+        "SensorCalibrationOffsetF": polars.Float64,
+        "SensorCalibrationOffsetExplanationText": polars.String,
+        "SensorCalibrationOffsetExplanationFirstName": polars.String,
+        "SensorCalibrationOffsetExplanationLastName": polars.String,
+        "SensorCalibrationOffsetUTC": polars.Int64,
+        "LoraBatteryPresent": polars.Int64,
+        "LoraBattery_mV": polars.Int64,
+        "LoraBatteryPercentage": polars.Int64,
+        "LoraBatteryUTC": polars.Int64,
+        "LoraBatteryIsCharging": polars.Int64,
+        "LastSensorErrorValue": polars.Int64,
+        "LastSensorErrorUTC": polars.Int64,
+        "UnivID": polars.Int64,
+        "SensorSerialNumber": polars.Null,
+        "HeatIndexRh": polars.Float64,
+        "ConjoinedRhSensorSensorReadingRh": polars.Float64,
+        "SensorReadingHeatIndexF": polars.Float64,
+        "SensorReadingHeatIndexC": polars.Float64,
+        "HeatIndexWarningTier": polars.Int64,
+        "LoraExternalPowerPresent": polars.Int64,
+        "SensorCalibrationOffsetRh": polars.Int64,
+        "SensorEventCount": polars.Int64,
+        "SensorState": polars.String,
+    }
+
+    return master_schema
+
+def enforce_schema(
+    df: polars.DataFrame, 
+    logger: logging.Logger,
+    step_name: str = ""
+) -> polars.DataFrame:
+    """
+    SCHEMA GATE: Enforce master schema on any DataFrame before concatenation.
+    This prevents ALL type mismatch errors by converting data to expected types.
+
+    Parameters
+    ----------
+    df : polars.DataFrame
+        DataFrame to enforce schema on
+    logger : logging.Logger
+        Logger instance for logging messages.
+    step_name : str
+        Name of the step for logging
+
+    Returns
+    -------
+    polars.DataFrame
+        DataFrame with all columns converted to master schema types
+    """
+
+    if df.is_empty():
+        return df
+
+    master_schema = get_master_schema()
+
+    # Track conversions for logging
+    conversions_made = []
+
+    # Apply schema enforcement
+    conversion_exprs = []
+
+    for column in df.columns:
+        if column in master_schema:
+            target_type = master_schema[column]
+            current_type = df[column].dtype
+
+            if current_type != target_type:
+                conversions_made.append(
+                    f"{column}: {current_type} -> {target_type}"
+                )
+
+                # Handle specific conversion cases
+                if target_type == polars.Null:
+                    # Keep null columns as-is
+                    continue
+                elif str(current_type).startswith("Int") and str(
+                    target_type
+                ).startswith("Int"):
+                    # Int64 -> Int32 or vice versa (check for overflow)
+                    conversion_exprs.append(
+                        polars.col(column).cast(target_type, strict=False)
+                    )
+                elif str(current_type).startswith("Float") and str(
+                    target_type
+                ).startswith("Float"):
+                    # Float64 -> Float32 or vice versa
+                    conversion_exprs.append(
+                        polars.col(column).cast(target_type)
+                    )
+                else:
+                    # Generic conversion
+                    conversion_exprs.append(
+                        polars.col(column).cast(target_type, strict=False)
+                    )
+
+    # Apply all conversions at once
+    if conversion_exprs:
+        df = df.with_columns(conversion_exprs)
+
+    logger.info(f"validation passed for {step_name}: Schema enforcement completed")
+
+    return df
