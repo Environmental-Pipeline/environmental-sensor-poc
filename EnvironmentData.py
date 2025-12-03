@@ -16,6 +16,7 @@ import numpy
 import logging
 import datetime
 import warnings
+import openpyxl
 from clients.conserv_client import ConservAPIClient
 from clients.coris_client import CorisClient
 from clients.licor_client import LicorClient
@@ -867,6 +868,9 @@ class EnvironmentData:
         # Update lookup tables and cubes.
         self.update_lookups()
         self.update_cubes()
+        
+        # Export data to Excel.
+        self.export_to_excel()
 
     def match_types(
         self, data: polars.DataFrame, match: polars.DataFrame
@@ -1643,3 +1647,71 @@ class EnvironmentData:
         device_readings_daily.write_parquet(
             f"{self.data_path}/device_readings_daily.parquet"
         )
+
+    def export_to_excel(self):
+        """
+        Export consolidated data to Excel using the template at templates/consolidated-data.xlsx.
+        Fills in sheets: sensors, devices, utcs, device_readings_daily, and device_readings_last1000.
+        Saves the result to data/data.xlsx.
+        """
+        import shutil
+        
+        template_path = f"{self.home_directory}/templates/consolidated-data.xlsx"
+        output_path = f"{self.data_path}/consolidated-data.xlsx"
+        
+        # Copy template to output location
+        shutil.copy(template_path, output_path)
+        
+        # Load the workbook
+        wb = openpyxl.load_workbook(output_path)
+        
+        # Load the data
+        sensors = polars.read_parquet(f"{self.data_path}/sensors.parquet")
+        devices = polars.read_parquet(f"{self.data_path}/devices.parquet")
+        utcs = polars.read_parquet(f"{self.data_path}/utcs.parquet")
+        device_readings_daily = polars.read_parquet(f"{self.data_path}/device_readings_daily.parquet")
+        device_readings = polars.read_parquet(f"{self.data_path}/device_readings.parquet")
+        
+        # Get last 1000 device readings (most recent)
+        device_readings_last1000 = device_readings.sort("SensorReadingUTC", descending=True).head(1000)
+        
+        # Map sheet names to data
+        sheet_data = {
+            "sensors": sensors,
+            "devices": devices,
+            "utcs": utcs,
+            "device_readings_daily": device_readings_daily,
+            "device_readings_last1000": device_readings_last1000,
+        }
+        
+        for sheet_name, df in sheet_data.items():
+            if sheet_name in wb.sheetnames:
+                ws = wb[sheet_name]
+                
+                # Clear existing data (keep row 1 as header)
+                for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
+                    for cell in row:
+                        cell.value = None
+                
+                # Write column headers in row 1
+                for col_idx, col_name in enumerate(df.columns, start=1):
+                    ws.cell(row=1, column=col_idx, value=col_name)
+                
+                # Write data starting from row 2
+                for row_idx, row in enumerate(df.iter_rows(named=True), start=2):
+                    for col_idx, col_name in enumerate(df.columns, start=1):
+                        value = row[col_name]
+                        # Convert polars types to Python native types for Excel
+                        if value is not None:
+                            if hasattr(value, 'item'):
+                                value = value.item()
+                            # Strip timezone info from datetime values (Excel doesn't support timezones)
+                            if hasattr(value, 'tzinfo') and value.tzinfo is not None:
+                                value = value.replace(tzinfo=None)
+                        ws.cell(row=row_idx, column=col_idx, value=value)
+        
+        # Save the workbook
+        wb.save(output_path)
+        wb.close()
+        
+        self.logger.info(f"Exported data to {output_path}")
