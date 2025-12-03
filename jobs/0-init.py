@@ -20,7 +20,4 @@ api = EnvironmentData(
     conserv_enabled = read_env_variable('CONSERV_ENABLED').lower() == 'true',
     licor_enabled = read_env_variable('LICOR_ENABLED').lower() == 'true',
 )
-
-# Mark initialization complete
-with open('data/cron_status.txt', 'w') as f:
-    f.write('ready')
+# EnvironmentData writes "initialized" to cron_status.txt when complete
