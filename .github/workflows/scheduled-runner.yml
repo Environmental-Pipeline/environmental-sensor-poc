@@ -8,7 +8,7 @@ jobs:
   pull-data:
     runs-on: ubuntu-latest
     environment: test
-    if: ${{ lower(vars.RUNNER_ACTIVE) == 'true' }}
+    if: ${{ vars.RUNNER_ACTIVE == 'true' || vars.RUNNER_ACTIVE == 'True' || vars.RUNNER_ACTIVE == 'TRUE' }}
     permissions:
       contents: write
     
