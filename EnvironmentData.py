@@ -746,19 +746,22 @@ class EnvironmentData:
 
         # Read new readings from the parquet files saved by calls to get_current_readings.
         # These are deleted after each consolidation, so these files will always be the un-consolidated files.
-        files = os.listdir(f"{self.data_path}/new-readings/")
-        files_read = []
-        for file in files:
+        if os.path.exists(f"{self.data_path}/new-readings/"):
+            files = os.listdir(f"{self.data_path}/new-readings/")
+            files_read = []
+            for file in files:
 
-            # Read any per-file parquet and collect them
-            try:
-                new_readings.append(
-                    polars.read_parquet(f"{self.data_path}/new-readings/{file}")
-                )
-                files_read.append(file)
-            except Exception:
-                # swallow and continue to the next file
-                pass
+                # Read any per-file parquet and collect them
+                try:
+                    new_readings.append(
+                        polars.read_parquet(f"{self.data_path}/new-readings/{file}")
+                    )
+                    files_read.append(file)
+                except Exception:
+                    # swallow and continue to the next file
+                    pass
+        else:
+            files_read = []
 
         # Combine the readings into a single polars DataFrame.
         dt = polars.concat(new_readings) if new_readings else polars.DataFrame()
@@ -773,17 +776,23 @@ class EnvironmentData:
             # Create empty DataFrame with correct schema for first run
             historical = polars.DataFrame()
 
-        dt = self.clean_validate_sensors(
-            sensors=dt, historical=historical, step="consolidate_readings"
-        )
+        # Only clean/validate new readings if there are any
+        if not dt.is_empty():
+            dt = self.clean_validate_sensors(
+                sensors=dt, historical=historical, step="consolidate_readings"
+            )
 
-        # Apply schema gate before concatenating with historical data
-        dt = self.enforce_schema(dt, "CleanedNewReadings")
-        if not historical.is_empty():
-            historical = self.enforce_schema(historical, "HistoricalData")
+            # Apply schema gate before concatenating with historical data
+            dt = self.enforce_schema(dt, "CleanedNewReadings")
+            if not historical.is_empty():
+                historical = self.enforce_schema(historical, "HistoricalData")
 
-        # Append these to the database.
-        dt = polars.concat([historical, dt], how="diagonal")
+            # Append these to the database.
+            dt = polars.concat([historical, dt], how="diagonal")
+        else:
+            # No new readings - just use historical data
+            self.logger.info("No new readings to consolidate. Using historical data only.")
+            dt = historical
 
         # Remove duplicate readings based on SensorID and SensorReadingUTC
         # This handles cases where Conserv (15-min intervals) might pull the same readings multiple times
