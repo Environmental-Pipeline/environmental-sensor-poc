@@ -1,0 +1,70 @@
+name: Scheduled Sensor Data Pull
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'  # Run every 15 minutes
+
+jobs:
+  pull-data:
+    runs-on: ubuntu-latest
+    environment: test
+    if: ${{ lower(vars.RUNNER_ACTIVE) == 'true' }}
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: runner
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Create .env file
+        env:
+          DAYS_BACK: ${{ vars.DAYS_BACK }}
+          TESTING: ${{ vars.TESTING || 'False' }}
+          CORIS_ENABLED: ${{ vars.CORIS_ENABLED || 'False' }}
+          CONSERV_ENABLED: ${{ vars.CONSERV_ENABLED || 'False' }}
+          LICOR_ENABLED: ${{ vars.LICOR_ENABLED || 'False' }}
+          CATS_USER_ID: ${{ secrets.CATS_USER_ID }}
+          CORIS_API_KEY: ${{ secrets.CORIS_API_KEY }}
+          CONSERV_API_KEYS: ${{ secrets.CONSERV_API_KEYS }}
+          LICOR_API_KEY: ${{ secrets.LICOR_API_KEY }}
+        run: |
+          echo "DAYS_BACK=$DAYS_BACK" >> .env
+          echo "TESTING=$TESTING" >> .env
+          echo "CORIS_ENABLED=$CORIS_ENABLED" >> .env
+          echo "CONSERV_ENABLED=$CONSERV_ENABLED" >> .env
+          echo "LICOR_ENABLED=$LICOR_ENABLED" >> .env
+          echo "CATS_USER_ID=$CATS_USER_ID" >> .env
+          echo "CORIS_API_KEY=$CORIS_API_KEY" >> .env
+          echo "CONSERV_API_KEYS=$CONSERV_API_KEYS" >> .env
+          echo "LICOR_API_KEY=$LICOR_API_KEY" >> .env
+
+      - name: Check for cron_status.txt and run appropriate scripts
+        run: |
+          if [ -f "data/cron_status.txt" ]; then
+            echo "cron_status.txt exists - running pull and consolidate"
+            python jobs/1-pull.py
+            python jobs/2-consolidate.py
+          else
+            echo "cron_status.txt does not exist - running init only"
+            python jobs/0-init.py
+          fi
+
+      - name: Commit data to runner branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/
+          git diff --staged --quiet || git commit -m "Update sensor data - $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          git push origin runner

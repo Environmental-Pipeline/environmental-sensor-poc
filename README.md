@@ -42,7 +42,7 @@ pip install -r requirements-dev.txt
 - Instantiate the EnvironmentData class with `api = EnvironmentData()`, this will read information from `.env` and run the historical data pull if the `data/` folder is empty. 
 - Then, the `get_current_readings` method is called to get new readings. 
 - The `consolidate_readings` method will combine historical and new readings into analytical tables that are then explored using `duckdb` or any other technology that can explore `parquet` files. 
-- `consolidate_readings` will also create diagnostic files `validation-results.csv` (overall data validation checks like missing values, etc.) and `data/alerts.csv` (alert events where sensor readings were out of range or time between readings exceeded the expected duration). 
+- `consolidate_readings` will also create diagnostic files `data/validation-results.csv` (overall data validation checks like missing values, etc.) and `data/alerts.csv` (alert events where sensor readings were out of range or time between readings exceeded the expected duration). 
 
 ## How To Run
 
@@ -55,6 +55,13 @@ There are 3 ways to running this tool: Direct, via GitHub Actions, and via Docke
 * Open `2-examples-analysis.ipynb` to learn how to interact with the database to perform certain queries. You can also provide this file to an AI agent to help it understand how to work with the data. 
 
 **GitHub Actions**
+
+_Runner_
+
+A GitHub action has been set up at [Scheduled Sensor Data Pull](https://github.com/Environmental-Pipeline/environmental-sensor-poc/actions/workflows/single-run-test-branch.yml) which runs every 15 minutes to pull the latest readings using the [main environment](https://github.com/Environmental-Pipeline/environmental-sensor-poc/settings/environments/10336798976/edit) and commit them to the `runner` branch. To disable it, set the environment variable `RUNNER_ACTIVE` to "False" in the [main environment](https://github.com/Environmental-Pipeline/environmental-sensor-poc/settings/environments/10336798976/edit).
+
+
+_Sensor Data Pull_
 
 A GitHub action has been set up at [Sensor Data Pull](https://github.com/Environmental-Pipeline/environmental-sensor-poc/actions/workflows/single-run-test-branch.yml). To use it, go to `Run workflow` and select either the `runner` or `test` branch. The `runner` branch will use the [main](https://github.com/Environmental-Pipeline/environmental-sensor-poc/settings/environments/10336798976/edit) environment while test will use [test](https://github.com/Environmental-Pipeline/environmental-sensor-poc/settings/environments/10337000551/edit).
 

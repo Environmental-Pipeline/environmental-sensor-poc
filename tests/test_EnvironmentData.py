@@ -118,7 +118,16 @@ class TestEnvironmentDataWorkflow(unittest.TestCase):
         self.__class__.total_new_rows = total_new_rows
     
     def test_03_consolidate_readings_and_generate_tables(self):
-        """Test consolidating readings and generating all analytical tables."""
+        """Test consolidating readings and generating all analytical tables.
+        
+        NOTE: This test depends on test_01 and test_02 running first to create
+        the required parquet files. Run the full test file, not just this test.
+        """
+        # Check that prerequisite tests have run
+        new_readings_path = os.path.join(self.data_path, 'new-readings')
+        if not os.path.exists(new_readings_path):
+            self.fail("test_01 and test_02 must run before this test. Run the full test file: pytest tests/test_EnvironmentData.py")
+        
         # Consolidate readings
         self.envdt.consolidate_readings()
         
@@ -156,9 +165,17 @@ class TestEnvironmentDataWorkflow(unittest.TestCase):
                 self.fail(f"Could not read table {table_name}: {e}")
     
     def test_04_data_quality_validation(self):
-        """Test data quality across all generated tables."""
-        # Test sensor readings data quality
+        """Test data quality across all generated tables.
+        
+        NOTE: This test depends on test_01, test_02, and test_03 running first.
+        Run the full test file, not just this test.
+        """
+        # Check that prerequisite tests have run
         sensor_readings_path = os.path.join(self.data_path, 'sensor_readings.parquet')
+        if not os.path.exists(sensor_readings_path):
+            self.fail("test_01, test_02, and test_03 must run before this test. Run the full test file: pytest tests/test_EnvironmentData.py")
+        
+        # Test sensor readings data quality
         sensor_readings = polars.read_parquet(sensor_readings_path)
         
         # Check for multiple data sources
