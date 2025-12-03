@@ -8,27 +8,40 @@ jobs:
   pull-data:
     runs-on: ubuntu-latest
     environment: runner
-    if: ${{ vars.RUNNER_ACTIVE == 'true' || vars.RUNNER_ACTIVE == 'True' || vars.RUNNER_ACTIVE == 'TRUE' }}
     permissions:
       contents: write
     
     steps:
+      - name: Check if runner is active
+        id: check-active
+        run: |
+          if [[ "${{ vars.RUNNER_ACTIVE }}" == "true" || "${{ vars.RUNNER_ACTIVE }}" == "True" || "${{ vars.RUNNER_ACTIVE }}" == "TRUE" ]]; then
+            echo "active=true" >> $GITHUB_OUTPUT
+          else
+            echo "active=false" >> $GITHUB_OUTPUT
+            echo "RUNNER_ACTIVE is not set to true, skipping workflow"
+          fi
+
       - name: Checkout repository
+        if: steps.check-active.outputs.active == 'true'
         uses: actions/checkout@v4
         with:
           ref: runner
           fetch-depth: 0
 
       - name: Set up Python
+        if: steps.check-active.outputs.active == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: 'pip'
 
       - name: Install dependencies
+        if: steps.check-active.outputs.active == 'true'
         run: pip install -r requirements.txt
 
       - name: Create .env file
+        if: steps.check-active.outputs.active == 'true'
         env:
           DAYS_BACK: ${{ vars.DAYS_BACK }}
           TESTING: ${{ vars.TESTING || 'False' }}
@@ -51,6 +64,7 @@ jobs:
           echo "LICOR_API_KEY=$LICOR_API_KEY" >> .env
 
       - name: Check for cron_status.txt and run appropriate scripts
+        if: steps.check-active.outputs.active == 'true'
         run: |
           if [ -f "data/cron_status.txt" ]; then
             echo "cron_status.txt exists - running pull and consolidate"
@@ -62,6 +76,7 @@ jobs:
           fi
 
       - name: Commit data to runner branch
+        if: steps.check-active.outputs.active == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
