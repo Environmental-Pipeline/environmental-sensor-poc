@@ -1,0 +1,13 @@
+run_datetime_est,run_utc,test_name,result,details
+2025-12-03 18:47:08 EST,1764805628,required_columns_present,PASS,All 11 required columns are present in sensor data.
+2025-12-03 18:47:08 EST,1764805628,column_data_types,PASS,"All columns have the expected data types (e.g., SensorReadingUTC is Int64, Source is String)."
+2025-12-03 18:47:08 EST,1764805628,non_null_values,PASS,Every sensor reading row has at least one non-null value in the 11 required columns.
+2025-12-03 18:47:08 EST,1764805628,no_duplicate_readings,PASS,No duplicate readings found. Each sensor has unique timestamps.
+2025-12-03 18:47:08 EST,1764805628,sensor_name_consistency,PASS,All sensors have consistent names across all their readings.
+2025-12-03 18:47:08 EST,1764805628,reading_interval_check,PASS,All consecutive readings are within 15 minutes of each other (expected interval).
+2025-12-03 18:47:08 EST,1764805628,data_gaps_LI-COR,PASS,No data gaps found in LI-COR data. All consecutive readings are within the expected 15-minute interval.
+2025-12-03 18:47:08 EST,1764805628,data_gaps_Conserv,PASS,No data gaps found in Conserv data. All consecutive readings are within the expected 15-minute interval.
+2025-12-03 18:47:08 EST,1764805628,data_gaps_Coris,PASS,No data gaps found in Coris data. All consecutive readings are within the expected 15-minute interval.
+2025-12-03 18:47:08 EST,1764805628,alerts_Conserv,PASS,No alerts triggered for Conserv. All sensor readings are within the configured acceptable thresholds.
+2025-12-03 18:47:08 EST,1764805628,alerts_LI-COR,PASS,No alerts triggered for LI-COR. All sensor readings are within the configured acceptable thresholds.
+2025-12-03 18:47:08 EST,1764805628,alerts_Coris,PASS,No alerts triggered for Coris. All sensor readings are within the configured acceptable thresholds.
