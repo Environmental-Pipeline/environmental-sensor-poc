@@ -56,248 +56,183 @@ def update_lookups(
         Callback function for error handling.
     """
 
-    # We need some manual fixes to reformat invalid names.
-    name_overrides = {
-        "980D Unnamed Temp Sensor": "Temp Unnamed Unnamed_980D",
-        "980D Unnamed Humid Sensor": "RH Unnamed Unnamed_980D",
-    }
+    # DISABLED: Building info extraction from device names - data is too inconsistent
+    # to reliably parse building information. Commenting out for now.
+    #
+    # # We need some manual fixes to reformat invalid names.
+    # name_overrides = {
+    #     "980D Unnamed Temp Sensor": "Temp Unnamed Unnamed_980D",
+    #     "980D Unnamed Humid Sensor": "RH Unnamed Unnamed_980D",
+    # }
+    #
+    # building_name_map = {
+    #     "ESC": "Environmental Science Center",
+    #     "YPM": "Yale Peabody Museum",
+    #     "KGL": "Kline Geology Laboratory",
+    #     "CSC": "Collection Studies Center (West Campus)",
+    # }
+    #
+    # # Cardinal directions to look for in device names (ordered by length to match longer ones first)
+    # cardinal_directions = ["NE", "NW", "SE", "SW", "N", "S", "E", "W"]
+    # 
+    # def extract_cardinal_direction(name: str) -> str:
+    #     """Extract cardinal direction from device name patterns like __N__ or _NE_."""
+    #     if name is None:
+    #         return None
+    #     for direction in cardinal_directions:
+    #         # Check for patterns like __N__ or _NE_ (with underscores on both sides)
+    #         if f"__{direction}__" in name or f"_{direction}_" in name:
+    #             return direction
+    #     return None
+    #
+    # def parse_device_name(device_name: str) -> dict:
+    #     """Parse a device name to extract building info.
+    #     
+    #     Returns dict with: DeviceSerialFromName, BuildingID, Building, Room, CardinalDirection
+    #     """
+    #     if device_name is None:
+    #         return {
+    #             "DeviceSerialFromName": None,
+    #             "BuildingID": None,
+    #             "Building": None,
+    #             "Room": None,
+    #             "CardinalDirection": None,
+    #         }
+    #     
+    #     # Try to extract cardinal direction from the device name pattern
+    #     extracted_direction = extract_cardinal_direction(device_name)
+    #     
+    #     # Apply name overrides if needed
+    #     name_to_parse = device_name
+    #     if name_to_parse in name_overrides:
+    #         name_to_parse = name_overrides[name_to_parse]
+    #     
+    #     # Fix names with problematic prefixes by removing everything up to and including the first space
+    #     if "__" in name_to_parse and " " in name_to_parse:
+    #         name_to_parse = name_to_parse[name_to_parse.index(" ") + 1:]
+    #     
+    #     # Fix names with " - no comm" suffix
+    #     if " - no comm" in name_to_parse:
+    #         name_to_parse = name_to_parse.replace(" - no comm", "")
+    #     
+    #     # Parse the name
+    #     if "floator" in name_to_parse.lower():
+    #         info = name_to_parse.strip().split("_")
+    #     else:
+    #         info = name_to_parse.strip().split(" ")
+    #         if len(info) > 0 and "_" in info[-1]:
+    #             info = info[0:-1] + info[-1].split("_")
+    #     
+    #     # Clean up empty strings from consecutive separators
+    #     info = [part for part in info if part.strip() != ""]
+    #     
+    #     # Parse based on number of parts
+    #     if len(info) == 5:
+    #         cardinal_dir = extracted_direction if extracted_direction else info[3]
+    #         building_id = info[1]
+    #         return {
+    #             "DeviceSerialFromName": info[4],
+    #             "BuildingID": building_id,
+    #             "Building": building_name_map.get(building_id, "Unknown"),
+    #             "Room": info[2].replace("_", ""),
+    #             "CardinalDirection": cardinal_dir,
+    #         }
+    #     elif len(info) == 4:
+    #         building_id = info[1]
+    #         return {
+    #             "DeviceSerialFromName": info[3],
+    #             "BuildingID": building_id,
+    #             "Building": building_name_map.get(building_id, "Unknown"),
+    #             "Room": info[2].replace("_", ""),
+    #             "CardinalDirection": extracted_direction,
+    #         }
+    #     elif len(info) == 3:
+    #         # Floaters
+    #         building_id = info[1] if len(info) > 1 else None
+    #         return {
+    #             "DeviceSerialFromName": info[2] if len(info) > 2 else None,
+    #             "BuildingID": "FLOATER",
+    #             "Building": building_name_map.get(building_id, "Unknown") if building_id else "Unknown",
+    #             "Room": "FLOATER",
+    #             "CardinalDirection": extracted_direction,
+    #         }
+    #     else:
+    #         # Malformed - return NAs with extracted cardinal direction
+    #         return {
+    #             "DeviceSerialFromName": None,
+    #             "BuildingID": None,
+    #             "Building": None,
+    #             "Room": None,
+    #             "CardinalDirection": extracted_direction,
+    #         }
 
-    building_name_map = {
-        "ESC": "Environmental Science Center",
-        "YPM": "Yale Peabody Museum",
-        "KGL": "Kline Geology Laboratory",
-        "CSC": "Collection Studies Center (West Campus)",
-    }
-
-    # Sensor Info - only include sensor metadata columns (not reading-specific columns)
-    # This ensures we get truly unique sensors, not one row per reading
-    columns_to_read = [
-        "SensorName",
-        "SensorID",
-        "DeviceID",
-        "DeviceName",
-        "SensorType",
-        "Source",
-    ]
-        
+    # ============ SENSORS TABLE ============
+    # Read unique sensor metadata from sensor_readings
     sensors_data = polars.read_parquet(
         f"{data_path}/sensor_readings.parquet",
-        columns=columns_to_read,
-    )
-    sensors_data = sensors_data.unique().to_dicts()
-    sensors = []
-    for sensor in sensors_data:
-
-        sensorname = sensor["SensorName"]
-        # Skip processing if SensorName is None/null
-        if sensorname is None:
-            continue
-            
-        if sensorname in name_overrides:
-            sensorname = name_overrides[sensorname]
-
-        # Fix sensor names with problematic prefixes by removing everything up to and including the first space
-        if "__" in sensorname and " " in sensorname:
-            sensorname = sensorname[sensorname.index(" ") + 1:]
-
-        # Fix sensor names with " - no comm" suffix
-        if " - no comm" in sensorname:
-            sensorname = sensorname.replace(" - no comm", "")
-
-        if "floator" in sensorname.lower():
-            info = sensorname.strip().split("_")
-        else:
-            info = sensorname.strip().split(" ")
-            info = info[0:-1] + info[-1].split("_")
-        
-        # Clean up empty strings from consecutive separators (e.g., multiple underscores)
-        info = [part for part in info if part.strip() != ""]
-
-        # If the cardinal direction is included, there will be 4 pieces of info.
-        if len(info) == 5:
-            sensors.append(
-                {
-                    "Source": sensor["Source"],
-                    "SensorName": sensorname,
-                    "DeviceSerialFromName": info[4],
-                    "SensorType": sensor["SensorType"],
-                    "SensorID": sensor["SensorID"],
-                    "DeviceID": sensor["DeviceID"],
-                    "DeviceName": sensor["DeviceName"],
-                    "BuildingID": info[1],
-                    "Building": (
-                        building_name_map[info[1]]
-                        if info[1] in building_name_map
-                        else "Unknown"
-                    ),
-                    "Room": info[2].replace("_", ""),
-                    "CardinalDirection": info[3],
-                }
-            )
-            if info[1] not in building_name_map:
-                logger.warning(
-                    f"Building ID {info[1]} not found in building_name_map for sensor {sensorname}"
-                )
-
-        elif len(info) == 4:
-
-            sensors.append(
-                {
-                    "Source": sensor["Source"],
-                    "SensorName": sensorname,
-                    "DeviceSerialFromName": info[3],
-                    "SensorType": sensor["SensorType"],
-                    "SensorID": sensor["SensorID"],
-                    "DeviceID": sensor["DeviceID"],
-                    "DeviceName": sensor["DeviceName"],
-                    "BuildingID": info[1],
-                    "Building": (
-                        building_name_map[info[1]]
-                        if info[1] in building_name_map
-                        else "Unknown"
-                    ),
-                    "Room": info[2].replace("_", ""),
-                    "CardinalDirection": "Not Indicated",
-                }
-            )
-            if info[1] not in building_name_map:
-                logger.warning(
-                    f"Building ID {info[1]} not found in building_name_map for sensor {sensorname}"
-                )
-
-        # Floaters are len 3.
-        elif len(info) == 3:
-            sensors.append(
-                {
-                    "Source": sensor["Source"],
-                    "SensorName": sensorname,
-                    "DeviceSerialFromName": info[2],
-                    "SensorType": sensor["SensorType"],
-                    "SensorID": sensor["SensorID"],
-                    "DeviceID": sensor["DeviceID"],
-                    "DeviceName": sensor["DeviceName"],
-                    "BuildingID": "FLOATER",
-                    "Building": (
-                        building_name_map[info[1]]
-                        if info[1] in building_name_map
-                        else "Unknown"
-                    ),
-                    "Room": "FLOATER",
-                    "CardinalDirection": None,
-                }
-            )
-        else:
-            # Handle malformed sensor names gracefully with NAs
-            logger.warning(
-                f"Malformed SensorName format: {sensorname}. Info: {info}. "
-                f"Adding with NA values for parsed fields. "
-                f"Valid formats: "
-                f"'Temp ESC Room101 North_1234' (5 parts with cardinal direction), "
-                f"'RH YPM Gallery_2567' (4 parts without cardinal direction), "
-                f"'Temp_Floater ESC_3890' (3 parts for floaters)"
-            )
-            sensors.append(
-                {
-                    "Source": sensor["Source"],
-                    "SensorName": sensorname,
-                    "DeviceSerialFromName": None,
-                    "SensorType": sensor["SensorType"],
-                    "SensorID": sensor["SensorID"], 
-                    "DeviceID": sensor["DeviceID"],
-                    "DeviceName": sensor["DeviceName"],
-                    "BuildingID": None,
-                    "Building": None,
-                    "Room": None, 
-                    "CardinalDirection": None,
-                }
-            )
-
-    # Write the table to a file.
-    sensors = polars.DataFrame(sensors, infer_schema_length=None).unique()
-    sensors = sensors.sort(
-        ["BuildingID", "Building", "Room", "DeviceSerialFromName", "SensorName"]
-    )
+        columns=["Source", "SensorID", "SensorName", "SensorType", "DeviceID"],
+    ).unique()
+    
+    # Validate sensors
     sensors = validation.clean_validate_sensors(
-        sensors=sensors, 
+        sensors=sensors_data, 
         acceptable_range=acceptable_range,
         logger=logger,
         step="update_lookups",
         error_callback=error_callback
     )
-    sensors = relocate(
-        sensors,
-        ["Source", "SensorID", "SensorName", "SensorType", "DeviceID", "DeviceSerialFromName", "BuildingID", "Building", "Room", "CardinalDirection"],
-    )
+    
+    # Sort and write sensors table
+    sensors = sensors.sort(["Source", "SensorID"])
     sensors.write_parquet(f"{data_path}/sensors.parquet")
 
-    # It will be helpful to have the Building, Room, and CardinalDirection appended to Devices.
-    # Check for a valid mapping.
-    device_info_from_sensors = sensors.select(
-        [
-            "DeviceID",
-            "BuildingID",
-            "Building",
-            "Room",
-            "CardinalDirection",
-            "DeviceSerialFromName",
-        ]
-    ).unique()
-
-    # Check for inconsistent DeviceID mappings (same DeviceID with different Building/Room/CardinalDirection)
-    # Group by DeviceID and check if there are multiple unique combinations of Building/Room/CardinalDirection
-    device_consistency_check = device_info_from_sensors.group_by("DeviceID").agg([
-        polars.col("BuildingID").n_unique().alias("unique_buildings"),
-        polars.col("Room").n_unique().alias("unique_rooms"), 
-        polars.col("CardinalDirection").n_unique().alias("unique_directions")
-    ])
-    
-    inconsistent_devices = device_consistency_check.filter(
-        (polars.col("unique_buildings") > 1) |
-        (polars.col("unique_rooms") > 1) |
-        (polars.col("unique_directions") > 1)
-    )
-
-    if inconsistent_devices.shape[0] > 0:
-        # Get the actual inconsistent mappings for logging
-        bad_device_ids = inconsistent_devices.select("DeviceID").to_series().to_list()
-        bad_values = device_info_from_sensors.filter(
-            polars.col("DeviceID").is_in(bad_device_ids)
-        ).sort("DeviceID")
-        
-        logger.warning(
-            f"DeviceID has inconsistent Building/Room/CardinalDirection mappings. Using first occurrence: \n{bad_values}"
-        )
-        
-        # Keep only the first occurrence of each DeviceID to maintain consistency
-        device_info_from_sensors = device_info_from_sensors.group_by("DeviceID").first()
-    else:
-        # If all mappings are consistent, we can still have multiple rows per DeviceID (for different sensor types)
-        # Just keep one representative row per DeviceID since Building/Room/CardinalDirection should be the same
-        device_info_from_sensors = device_info_from_sensors.group_by("DeviceID").first()
-
-    # Device Info.
+    # ============ DEVICES TABLE ============
+    # Get unique devices from sensor_readings
     devices = polars.read_parquet(
         f"{data_path}/sensor_readings.parquet",
         columns=["Source", "DeviceID", "DeviceName"],
     ).unique()
-    devices = devices.join(
-        device_info_from_sensors, how="left", on="DeviceID"
-    ).sort(["BuildingID", "Room", "DeviceName"])
     
-    # Get sensor information for each device from the sensors lookup table
-    # Use unique() to avoid duplicates before joining into pipe-separated lists
+    # DISABLED: Building info parsing - data is too inconsistent to reliably extract building info
+    # device_records = []
+    # for device in devices.iter_rows(named=True):
+    #     parsed = parse_device_name(device["DeviceName"])
+    #     
+    #     # Log warning for unparseable device names
+    #     if parsed["BuildingID"] is None:
+    #         logger.warning(
+    #             f"Could not parse building info from device name: {device['DeviceName']}. "
+    #             f"Valid formats: 'BYCBA_0400410__N____' or similar patterns with building/room info."
+    #         )
+    #     
+    #     device_records.append({
+    #         "Source": device["Source"],
+    #         "DeviceID": device["DeviceID"],
+    #         "DeviceName": device["DeviceName"],
+    #         **parsed,
+    #     })
+    # 
+    # devices = polars.DataFrame(device_records, infer_schema_length=None)
+    
+    # Get sensor information for each device from the sensors table
     device_sensors_lookup = sensors.group_by("DeviceID").agg([
-        polars.col("SensorID").unique().sort().str.join(" | ").alias("SensorIDs"),
-        polars.col("SensorName").unique().sort().str.join(" | ").alias("SensorNames"),
-        polars.col("SensorType").unique().sort().str.join(" | ").alias("SensorTypes")
+        polars.col("SensorID").unique().sort().str.join("|").alias("SensorIDs"),
+        polars.col("SensorName").unique().sort().str.join("|").alias("SensorNames"),
+        polars.col("SensorType").unique().sort().str.join("|").alias("SensorTypes")
     ])
     
     # Join sensor information to devices
     devices = devices.join(device_sensors_lookup, how="left", on="DeviceID")
     
+    # Sort and reorder columns
+    # DISABLED: Building-based sorting - using DeviceName instead
+    # devices = devices.sort(["BuildingID", "Room", "DeviceName"])
+    devices = devices.sort(["DeviceName"])
     devices = relocate(
         devices,
-        ["Source", "DeviceID", "DeviceName", "SensorIDs", "SensorNames", "SensorTypes", "DeviceSerialFromName", "BuildingID", "Building", "Room", "CardinalDirection"],
+        # DISABLED: Building columns removed from relocate
+        # ["Source", "DeviceID", "DeviceName", "SensorIDs", "SensorNames", "SensorTypes", "DeviceSerialFromName", "BuildingID", "Building", "Room", "CardinalDirection"],
+        ["Source", "DeviceID", "DeviceName", "SensorIDs", "SensorNames", "SensorTypes"],
     )
     devices.write_parquet(f"{data_path}/devices.parquet")
 
@@ -371,6 +306,10 @@ def export_to_excel(data_path: str, home_directory: str, logger) -> None:
     Export consolidated data to Excel using the template at templates/consolidated-data-template.xlsx.
     Fills in sheets: sensors, devices, device_readings_daily, and device_readings_last1000.
     Saves the result to data/consolidated-data.xlsx.
+    
+    The column order is determined by the template headers in row 1. Data columns are matched
+    to template columns by name, so you can rearrange columns in the template and the code
+    will follow. Columns in the data that are not in the template are ignored.
 
     Parameters
     ----------
@@ -418,13 +357,32 @@ def export_to_excel(data_path: str, home_directory: str, logger) -> None:
         if sheet_name in wb.sheetnames:
             ws = wb[sheet_name]
             
-            # Write column headers in row 1
-            for col_idx, col_name in enumerate(df.columns, start=1):
-                ws.cell(row=1, column=col_idx, value=col_name)
+            # Read existing headers from row 1 of the template
+            template_columns = []
+            col_idx = 1
+            while True:
+                header = ws.cell(row=1, column=col_idx).value
+                if header is None or header == "":
+                    break
+                template_columns.append(header)
+                col_idx += 1
             
-            # Write data starting from row 2
+            # If template has headers, use that order; otherwise use data columns
+            if template_columns:
+                # Filter to only columns that exist in both template and data
+                columns_to_write = [col for col in template_columns if col in df.columns]
+                missing_in_data = [col for col in template_columns if col not in df.columns]
+                if missing_in_data:
+                    logger.warning(f"Sheet '{sheet_name}': Template columns not in data: {missing_in_data}")
+            else:
+                # No template headers - write data columns and their headers
+                columns_to_write = df.columns
+                for col_idx, col_name in enumerate(columns_to_write, start=1):
+                    ws.cell(row=1, column=col_idx, value=col_name)
+            
+            # Write data starting from row 2, following template column order
             for row_idx, row in enumerate(df.iter_rows(named=True), start=2):
-                for col_idx, col_name in enumerate(df.columns, start=1):
+                for col_idx, col_name in enumerate(columns_to_write, start=1):
                     value = row[col_name]
                     # Convert polars types to Python native types for Excel
                     if value is not None:
@@ -537,9 +495,9 @@ def build_devices(
         .unique()
         .group_by("DeviceID")
         .agg([
-            polars.col("SensorID").str.join(" | ").alias("Sensors"),
-            polars.col("SensorName").str.join(" | ").alias("SensorNames"), 
-            polars.col("SensorType").str.join(" | ").alias("SensorTypes")
+            polars.col("SensorID").str.join("|").alias("Sensors"),
+            polars.col("SensorName").str.join("|").alias("SensorNames"), 
+            polars.col("SensorType").str.join("|").alias("SensorTypes")
         ])
     )
     

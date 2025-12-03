@@ -43,7 +43,7 @@ validation_results = env.validate_sensors(
 env.close()
 
 # Generate diagnostics report with validation results
-validation.generate_diagnostics_report(
+validation.generate_validation_results(
     sensors=sensors,
     validation_results=validation_results,
     acceptable_range=acceptable_range,

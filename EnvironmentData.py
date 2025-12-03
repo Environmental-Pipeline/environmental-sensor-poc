@@ -7,7 +7,7 @@ Consolidates readings into an analytical database of parquet files that can be r
 ## Commands:
 - Create HTML documentation in `docs/clients`: `pdoc EnvironmentData.py -o docs/ --no-search` 
 - See experiments/1-examples-cron.ipynb for example usage.
-- Test with `pytest tests/test_EnvironmentData.py`
+- Test with `pytest tests/test_EnvironmentData.py` or `python experiments/run_environment_data.py`
 """
 
 import os
@@ -703,16 +703,6 @@ class EnvironmentData:
             step="consolidate_final",
             return_results=True
         )
-        
-        # Generate diagnostics CSV including gaps and alerts
-        validation.generate_diagnostics_report(
-            sensors=dt,
-            validation_results=validation_results,
-            acceptable_range=self.acceptable_range,
-            data_path=self.data_path,
-            logger=self.logger,
-            step="consolidate_readings"
-        )
 
         # If all this was successful, remove the new-readings files to prepare for the next consolidation.
         for file in files_read:
@@ -726,6 +716,17 @@ class EnvironmentData:
         # Update lookup tables and cubes.
         self.update_lookups()
         self.update_cubes()
+        
+        # Generate diagnostics CSV including gaps and alerts
+        # This must happen AFTER update_lookups() so sensors.parquet exists for building info check
+        validation.generate_validation_results(
+            sensors=dt,
+            validation_results=validation_results,
+            acceptable_range=self.acceptable_range,
+            data_path=self.data_path,
+            logger=self.logger,
+            step="consolidate_readings"
+        )
         
         # Export data to Excel.
         self.export_to_excel()

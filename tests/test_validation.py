@@ -701,7 +701,7 @@ class TestDetectAlertsEdgeCases(unittest.TestCase):
 
 
 class TestGenerateDiagnosticsReport(unittest.TestCase):
-    """Test the generate_diagnostics_report function."""
+    """Test the generate_validation_results function."""
     
     @classmethod
     def setUpClass(cls):
@@ -747,7 +747,7 @@ class TestGenerateDiagnosticsReport(unittest.TestCase):
         
         validation_results = []
         
-        validation.generate_diagnostics_report(
+        validation.generate_validation_results(
             sensors=data,
             validation_results=validation_results,
             acceptable_range=DEFAULT_ACCEPTABLE_RANGE,
@@ -785,7 +785,7 @@ class TestGenerateDiagnosticsReport(unittest.TestCase):
         
         validation_results = []
         
-        validation.generate_diagnostics_report(
+        validation.generate_validation_results(
             sensors=data,
             validation_results=validation_results,
             acceptable_range=DEFAULT_ACCEPTABLE_RANGE,
@@ -822,7 +822,7 @@ class TestGenerateDiagnosticsReport(unittest.TestCase):
         
         validation_results = []
         
-        validation.generate_diagnostics_report(
+        validation.generate_validation_results(
             sensors=data,
             validation_results=validation_results,
             acceptable_range=DEFAULT_ACCEPTABLE_RANGE,
@@ -845,7 +845,7 @@ class TestGenerateDiagnosticsReport(unittest.TestCase):
         
         # Run first report
         validation_results1 = []
-        validation.generate_diagnostics_report(
+        validation.generate_validation_results(
             sensors=data,
             validation_results=validation_results1,
             acceptable_range=DEFAULT_ACCEPTABLE_RANGE,
@@ -860,7 +860,7 @@ class TestGenerateDiagnosticsReport(unittest.TestCase):
         
         # Run second report
         validation_results2 = []
-        validation.generate_diagnostics_report(
+        validation.generate_validation_results(
             sensors=data,
             validation_results=validation_results2,
             acceptable_range=DEFAULT_ACCEPTABLE_RANGE,
@@ -898,7 +898,7 @@ class TestGenerateDiagnosticsReport(unittest.TestCase):
         
         # First run - creates alerts.csv
         validation_results1 = []
-        validation.generate_diagnostics_report(
+        validation.generate_validation_results(
             sensors=data_with_alerts,
             validation_results=validation_results1,
             acceptable_range=DEFAULT_ACCEPTABLE_RANGE,
@@ -913,7 +913,7 @@ class TestGenerateDiagnosticsReport(unittest.TestCase):
         
         # Second run - should append to existing alerts.csv
         validation_results2 = []
-        validation.generate_diagnostics_report(
+        validation.generate_validation_results(
             sensors=data_with_alerts,
             validation_results=validation_results2,
             acceptable_range=DEFAULT_ACCEPTABLE_RANGE,

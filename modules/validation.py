@@ -13,7 +13,7 @@ It detects data gaps, alerts, and generates comprehensive diagnostic reports.
 - clean_validate_sensors: Clean and validate sensor readings data
 - detect_data_gaps: Identify gaps in sensor data beyond expected intervals
 - detect_alerts: Find readings outside acceptable thresholds
-- generate_diagnostics_report: Create CSV reports for validation results, gaps, and alerts
+- generate_validation_results: Create CSV reports for validation results, gaps, and alerts
 - utc_to_est_string: Convert UTC timestamp to human-readable EST string
 """
 
@@ -105,11 +105,10 @@ def validate_sensors(
     # Expected column types - different for lookup tables vs readings
     # For lookup tables (step="update_lookups"), we don't have reading-specific columns
     if step == "update_lookups":
-        # Sensors lookup table - only sensor metadata columns
+        # Sensors lookup table - only sensor metadata columns (no DeviceName, that's in devices table)
         expect_types = {
             "Source": polars.String,
             "DeviceID": polars.String,
-            "DeviceName": polars.String,
             "SensorID": polars.String,
             "SensorName": polars.String,
             "SensorType": polars.String,
@@ -252,54 +251,6 @@ def validate_sensors(
         })
         if missing.shape[0] == 0 and logger:
             logger.info(f"{step} validation passed: all SensorID in historical data (no dropped SensorID).")
-
-    # Check for missing building information
-    if "BuildingID" in sensors.columns and "SensorName" in sensors.columns:
-        missing_building = sensors.filter(
-            polars.col("BuildingID").is_null()
-        )
-        if missing_building.shape[0] > 0:
-            sensor_names = missing_building["SensorName"].unique().to_list()
-            sensor_list = ", ".join([str(name) for name in sensor_names[:10]])
-            if len(sensor_names) > 10:
-                sensor_list += f", ... and {len(sensor_names) - 10} more"
-            building_details = f"{len(sensor_names)} sensors have malformed names and are missing building information. Sensor names: {sensor_list}"
-        else:
-            building_details = "All sensors have valid building information parsed from sensor names."
-        validation_results.append({
-            "test_name": "building_info_present",
-            "run_utc": run_utc,
-            "result": "PASS" if missing_building.shape[0] == 0 else "WARN",
-            "details": building_details
-        })
-        if missing_building.shape[0] > 0 and logger:
-            logger.warning(f"{step} validation: {building_details}")
-        elif logger:
-            logger.info(f"{step} validation passed: all sensors have building information.")
-    elif "Building" in sensors.columns and "DeviceName" in sensors.columns:
-        # Fallback for non-lookup tables
-        missing_building = sensors.filter(
-            (polars.col("Building") == "Unknown") | 
-            (polars.col("Building").is_null())
-        )
-        if missing_building.shape[0] > 0:
-            device_names = missing_building["DeviceName"].unique().to_list()
-            device_list = ", ".join([str(name) for name in device_names[:10]])
-            if len(device_names) > 10:
-                device_list += f", ... and {len(device_names) - 10} more"
-            building_details = f"{len(device_names)} devices are missing building information. Device names: {device_list}"
-        else:
-            building_details = "All devices have valid building information."
-        validation_results.append({
-            "test_name": "building_info_present",
-            "run_utc": run_utc,
-            "result": "PASS" if missing_building.shape[0] == 0 else "WARN",
-            "details": building_details
-        })
-        if missing_building.shape[0] > 0 and logger:
-            logger.warning(f"{step} validation: {building_details}")
-        elif logger:
-            logger.info(f"{step} validation passed: all devices have building information.")
 
     return validation_results
 
@@ -460,7 +411,7 @@ def detect_alerts(
         })
 
 
-def generate_diagnostics_report(
+def generate_validation_results(
     sensors: polars.DataFrame,
     validation_results: list,
     acceptable_range: dict,
@@ -489,6 +440,30 @@ def generate_diagnostics_report(
     """
     run_utc = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
     run_datetime_est = utc_to_est_string(run_utc)
+    
+    # DISABLED: Building info validation - data is too inconsistent to reliably parse building info
+    # # ============ CHECK FOR MISSING BUILDING INFO IN DEVICES LOOKUP ============
+    # devices_lookup_path = f"{data_path}/devices.parquet"
+    # devices_lookup = polars.read_parquet(devices_lookup_path)
+    # if "BuildingID" in devices_lookup.columns and "DeviceName" in devices_lookup.columns:
+    #     # Check which devices are missing BuildingID
+    #     missing_building_devices = devices_lookup.filter(polars.col("BuildingID").is_null())
+    #     if missing_building_devices.shape[0] > 0:
+    #         device_names = missing_building_devices["DeviceName"].to_list()
+    #         device_list = ", ".join([str(name) for name in device_names[:10]])
+    #         if len(device_names) > 10:
+    #             device_list += f", ... and {len(device_names) - 10} more"
+    #         building_details = f"{len(device_names)} devices have names that could not be parsed for building information. Device names: {device_list}"
+    #     else:
+    #         building_details = f"All {devices_lookup.shape[0]} devices have valid building information parsed from device names."
+    #     validation_results.append({
+    #         "test_name": "building_info_present",
+    #         "run_utc": run_utc,
+    #         "result": "PASS" if missing_building_devices.shape[0] == 0 else "WARN",
+    #         "details": building_details
+    #     })
+    #     if missing_building_devices.shape[0] > 0 and logger:
+    #         logger.warning(f"{step} validation: {building_details}")
     
     # ============ DATA GAPS BY SOURCE ============
     gaps = detect_data_gaps(sensors)
@@ -847,7 +822,6 @@ def get_master_schema() -> dict:
     }
 
     return master_schema
-
 
 def enforce_schema(
     df: polars.DataFrame, 
