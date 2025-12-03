@@ -237,6 +237,31 @@ def validate_sensors(
         if missing.shape[0] == 0 and logger:
             logger.info(f"{step} validation passed: all SensorID in historical data (no dropped SensorID).")
 
+    # Check for missing building information
+    if "Building" in sensors.columns and "DeviceName" in sensors.columns:
+        missing_building = sensors.filter(
+            (polars.col("Building") == "Unknown") | 
+            (polars.col("Building").is_null())
+        )
+        if missing_building.shape[0] > 0:
+            device_names = missing_building["DeviceName"].unique().to_list()
+            device_list = ", ".join([str(name) for name in device_names[:10]])
+            if len(device_names) > 10:
+                device_list += f", ... and {len(device_names) - 10} more"
+            building_details = f"{len(device_names)} devices are missing building information. Device names: {device_list}"
+        else:
+            building_details = "All devices have valid building information."
+        validation_results.append({
+            "test_name": "building_info_present",
+            "run_utc": run_utc,
+            "result": "PASS" if missing_building.shape[0] == 0 else "WARN",
+            "details": building_details
+        })
+        if missing_building.shape[0] > 0 and logger:
+            logger.warning(f"{step} validation: {building_details}")
+        elif logger:
+            logger.info(f"{step} validation passed: all devices have building information.")
+
     return validation_results
 
 

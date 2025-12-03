@@ -19,7 +19,7 @@ import warnings
 from clients.conserv_client import ConservAPIClient
 from clients.coris_client import CorisClient
 from clients.licor_client import LicorClient
-from modules import diagnostics
+from modules import validation
 
 
 class EnvironmentData:
@@ -390,7 +390,7 @@ class EnvironmentData:
         -------
         str : Formatted datetime string in EST (e.g., "2025-11-30 14:30:00 EST").
         """
-        return diagnostics.utc_to_est_string(utc_timestamp)
+        return validation.utc_to_est_string(utc_timestamp)
 
     def get_master_schema(self) -> dict:
         """
@@ -837,7 +837,7 @@ class EnvironmentData:
         )
         
         # Generate diagnostics CSV including gaps and alerts
-        diagnostics.generate_diagnostics_report(
+        validation.generate_diagnostics_report(
             sensors=dt,
             validation_results=validation_results,
             acceptable_range=self.acceptable_range,
@@ -1149,7 +1149,7 @@ class EnvironmentData:
         list : List of validation result dicts with keys: test_name, run_utc, result, details
         """
         # Call the standalone validation function in diagnostics module
-        validation_results = diagnostics.validate_sensors(
+        validation_results = validation.validate_sensors(
             sensors=sensors,
             historical=historical,
             utc=utc,

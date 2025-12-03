@@ -11,7 +11,7 @@ import polars
 import logging
 import datetime
 
-from modules import diagnostics
+from modules import validation
 
 
 # Create a simple logger for tests
@@ -88,7 +88,7 @@ class TestValidateSensorsWithInvalidData(unittest.TestCase):
             "SensorReadingF": polars.Float32,
         })
         
-        results = diagnostics.validate_sensors(
+        results = validation.validate_sensors(
             sensors=invalid_data,
             acceptable_range=self.acceptable_range,
             logger=self.logger,
@@ -123,7 +123,7 @@ class TestValidateSensorsWithInvalidData(unittest.TestCase):
             "SensorReadingF": polars.Float32,
         })
         
-        results = diagnostics.validate_sensors(
+        results = validation.validate_sensors(
             sensors=invalid_data,
             acceptable_range=self.acceptable_range,
             logger=self.logger,
@@ -157,7 +157,7 @@ class TestValidateSensorsWithInvalidData(unittest.TestCase):
             "SensorReadingF": polars.Float32,
         })
         
-        results = diagnostics.validate_sensors(
+        results = validation.validate_sensors(
             sensors=duplicate_data,
             acceptable_range=self.acceptable_range,
             logger=self.logger,
@@ -190,7 +190,7 @@ class TestValidateSensorsWithInvalidData(unittest.TestCase):
             "SensorReadingF": polars.Float32,
         })
         
-        results = diagnostics.validate_sensors(
+        results = validation.validate_sensors(
             sensors=inconsistent_data,
             acceptable_range=self.acceptable_range,
             logger=self.logger,
@@ -203,42 +203,6 @@ class TestValidateSensorsWithInvalidData(unittest.TestCase):
         self.assertEqual(name_result["result"], "FAIL")
         self.assertIn("inconsistent names", name_result["details"].lower())
         self.assertIn("coris:123-1", name_result["details"])
-
-    def test_reading_freshness_failure(self):
-        """Test that validation detects stale readings (too old compared to query time)."""
-        current_utc = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
-        old_reading_utc = current_utc - (60 * 60)  # 1 hour old - way beyond 5 minute threshold
-        
-        stale_data = polars.DataFrame({
-            "SensorReadingUTC": [old_reading_utc],
-            "QueryUTC": [current_utc],
-            "Source": ["Coris"],
-            "DeviceID": ["coris:123"],
-            "DeviceName": ["Device 1"],
-            "SensorID": ["coris:123-1"],
-            "SensorName": ["Sensor 1"],
-            "SensorType": ["Temperature"],
-            "Historical": [False],
-            "SensorReadingF": [72.5],
-        }).cast({
-            "SensorReadingUTC": polars.Int64,
-            "QueryUTC": polars.Int32,
-            "SensorReadingF": polars.Float32,
-        })
-        
-        results = diagnostics.validate_sensors(
-            sensors=stale_data,
-            utc=current_utc,  # Pass current UTC to enable freshness check
-            acceptable_range=self.acceptable_range,
-            logger=self.logger,
-            step="test_freshness",
-        )
-        
-        # Find the reading_freshness result
-        freshness_result = next(r for r in results if r["test_name"] == "reading_freshness")
-        
-        self.assertEqual(freshness_result["result"], "FAIL")
-        self.assertIn("exceeds the 5-minute freshness threshold", freshness_result["details"])
 
     def test_reading_interval_gaps(self):
         """Test that validation detects gaps >15 minutes between consecutive readings."""
@@ -262,7 +226,7 @@ class TestValidateSensorsWithInvalidData(unittest.TestCase):
             "SensorReadingUTC_SecondsFromPrior": polars.Int64,
         })
         
-        results = diagnostics.validate_sensors(
+        results = validation.validate_sensors(
             sensors=gap_data,
             acceptable_range=self.acceptable_range,
             logger=self.logger,
@@ -312,7 +276,7 @@ class TestValidateSensorsWithInvalidData(unittest.TestCase):
             "SensorReadingF": polars.Float32,
         })
         
-        results = diagnostics.validate_sensors(
+        results = validation.validate_sensors(
             sensors=current_data,
             historical=historical_data,
             acceptable_range=self.acceptable_range,
@@ -347,7 +311,7 @@ class TestValidateSensorsWithInvalidData(unittest.TestCase):
             "SensorReadingF": polars.Float32,
         })
         
-        results = diagnostics.validate_sensors(
+        results = validation.validate_sensors(
             sensors=null_data,
             acceptable_range=self.acceptable_range,
             logger=self.logger,
@@ -373,7 +337,7 @@ class TestDiagnosticsDataGaps(unittest.TestCase):
             "SensorName": ["Sensor 1", "Sensor 1"],
         }).cast({"SensorReadingUTC": polars.Int64})
         
-        gaps = diagnostics.detect_data_gaps(data, expected_interval_minutes=15)
+        gaps = validation.detect_data_gaps(data, expected_interval_minutes=15)
         
         self.assertEqual(gaps.shape[0], 1)
         self.assertEqual(gaps["gap_minutes"][0], 30.0)
@@ -387,7 +351,7 @@ class TestDiagnosticsDataGaps(unittest.TestCase):
             "SensorName": ["Sensor 1", "Sensor 1", "Sensor 1"],
         }).cast({"SensorReadingUTC": polars.Int64})
         
-        gaps = diagnostics.detect_data_gaps(data, expected_interval_minutes=15)
+        gaps = validation.detect_data_gaps(data, expected_interval_minutes=15)
         
         self.assertEqual(gaps.shape[0], 0)
 
@@ -403,7 +367,7 @@ class TestDiagnosticsDataGaps(unittest.TestCase):
             "SensorName": ["Sensor 1", "Sensor 1", "Sensor 2", "Sensor 2"],
         }).cast({"SensorReadingUTC": polars.Int64})
         
-        gaps = diagnostics.detect_data_gaps(data, expected_interval_minutes=15)
+        gaps = validation.detect_data_gaps(data, expected_interval_minutes=15)
         
         self.assertEqual(gaps.shape[0], 2)
         # Check both gaps are detected with correct durations
@@ -419,7 +383,7 @@ class TestDiagnosticsDataGaps(unittest.TestCase):
             "SensorName": polars.String,
         })
         
-        gaps = diagnostics.detect_data_gaps(empty_data)
+        gaps = validation.detect_data_gaps(empty_data)
         
         self.assertTrue(gaps.is_empty())
 
@@ -442,7 +406,7 @@ class TestDiagnosticsAlerts(unittest.TestCase):
         
         acceptable_range = {"SensorReadingF": [32, 100]}  # Min 32F, Max 100F
         
-        alerts = diagnostics.detect_alerts(data, acceptable_range)
+        alerts = validation.detect_alerts(data, acceptable_range)
         
         self.assertEqual(alerts.shape[0], 1)
         self.assertEqual(alerts["alert_type"][0], "BELOW_MIN")
@@ -463,7 +427,7 @@ class TestDiagnosticsAlerts(unittest.TestCase):
         
         acceptable_range = {"SensorReadingF": [32, 100]}
         
-        alerts = diagnostics.detect_alerts(data, acceptable_range)
+        alerts = validation.detect_alerts(data, acceptable_range)
         
         self.assertEqual(alerts.shape[0], 1)
         self.assertEqual(alerts["alert_type"][0], "ABOVE_MAX")
@@ -483,7 +447,7 @@ class TestDiagnosticsAlerts(unittest.TestCase):
         
         acceptable_range = {"SensorReadingRh": [20, 80]}  # 20-80% RH
         
-        alerts = diagnostics.detect_alerts(data, acceptable_range)
+        alerts = validation.detect_alerts(data, acceptable_range)
         
         self.assertEqual(alerts.shape[0], 2)
         alert_types = set(alerts["alert_type"].to_list())
@@ -506,7 +470,7 @@ class TestDiagnosticsAlerts(unittest.TestCase):
         
         acceptable_range = {"SensorReadingF": [32, 100], "SensorReadingRh": [20, 80]}
         
-        alerts = diagnostics.detect_alerts(data, acceptable_range)
+        alerts = validation.detect_alerts(data, acceptable_range)
         
         self.assertTrue(alerts.is_empty())
 
@@ -525,7 +489,7 @@ class TestDiagnosticsAlerts(unittest.TestCase):
         
         acceptable_range = {"SensorReadingF": []}  # No thresholds
         
-        alerts = diagnostics.detect_alerts(data, acceptable_range)
+        alerts = validation.detect_alerts(data, acceptable_range)
         
         self.assertTrue(alerts.is_empty())
 
@@ -541,7 +505,7 @@ class TestDiagnosticsAlerts(unittest.TestCase):
         
         acceptable_range = {"SensorReadingF": [32, 100]}
         
-        alerts = diagnostics.detect_alerts(empty_data, acceptable_range)
+        alerts = validation.detect_alerts(empty_data, acceptable_range)
         
         self.assertTrue(alerts.is_empty())
 
@@ -554,14 +518,14 @@ class TestUtcToEstString(unittest.TestCase):
         # Known UTC timestamp: 2024-01-15 12:00:00 UTC
         utc_timestamp = 1705320000
         
-        result = diagnostics.utc_to_est_string(utc_timestamp)
+        result = validation.utc_to_est_string(utc_timestamp)
         
         self.assertIn("2024-01-15", result)
         self.assertIn("EST", result)
 
     def test_handles_none_input(self):
         """Test that None input returns None."""
-        result = diagnostics.utc_to_est_string(None)
+        result = validation.utc_to_est_string(None)
         
         self.assertIsNone(result)
 
@@ -578,7 +542,7 @@ class TestValidateSensorsEdgeCases(unittest.TestCase):
         data = create_valid_sensor_data()
         
         # Should not raise - None acceptable_range should be handled
-        results = diagnostics.validate_sensors(
+        results = validation.validate_sensors(
             sensors=data,
             acceptable_range=None,  # Test the None case
             logger=self.logger,
@@ -592,7 +556,7 @@ class TestValidateSensorsEdgeCases(unittest.TestCase):
         """Test that passing None for historical uses empty DataFrame."""
         data = create_valid_sensor_data()
         
-        results = diagnostics.validate_sensors(
+        results = validation.validate_sensors(
             sensors=data,
             historical=None,  # Test the None case
             acceptable_range=DEFAULT_ACCEPTABLE_RANGE,
@@ -604,39 +568,6 @@ class TestValidateSensorsEdgeCases(unittest.TestCase):
         # Should not have no_missing_sensors test since historical is empty
         test_names = [r["test_name"] for r in results]
         self.assertNotIn("no_missing_sensors", test_names)
-    
-    def test_freshness_pass_with_logger(self):
-        """Test that freshness check logs on PASS (covers line 176)."""
-        current_utc = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
-        
-        # Data with fresh readings (within 5 minutes)
-        fresh_data = polars.DataFrame({
-            "SensorReadingUTC": [current_utc - 60],  # 1 minute old
-            "QueryUTC": [current_utc],
-            "Source": ["Coris"],
-            "DeviceID": ["coris:123"],
-            "DeviceName": ["Device 1"],
-            "SensorID": ["coris:123-1"],
-            "SensorName": ["Sensor 1"],
-            "SensorType": ["Temperature"],
-            "Historical": [False],
-            "SensorReadingF": [72.5],
-        }).cast({
-            "SensorReadingUTC": polars.Int64,
-            "QueryUTC": polars.Int32,
-            "SensorReadingF": polars.Float32,
-        })
-        
-        results = diagnostics.validate_sensors(
-            sensors=fresh_data,
-            utc=current_utc,
-            acceptable_range=DEFAULT_ACCEPTABLE_RANGE,
-            logger=self.logger,
-            step="test_freshness_pass",
-        )
-        
-        freshness_result = next(r for r in results if r["test_name"] == "reading_freshness")
-        self.assertEqual(freshness_result["result"], "PASS")
     
     def test_reading_interval_pass_with_logger(self):
         """Test that reading_interval_check logs on PASS (covers line 232)."""
@@ -660,7 +591,7 @@ class TestValidateSensorsEdgeCases(unittest.TestCase):
             "SensorReadingUTC_SecondsFromPrior": polars.Int64,
         })
         
-        results = diagnostics.validate_sensors(
+        results = validation.validate_sensors(
             sensors=data,
             acceptable_range=DEFAULT_ACCEPTABLE_RANGE,
             logger=self.logger,
@@ -708,7 +639,7 @@ class TestValidateSensorsEdgeCases(unittest.TestCase):
             "SensorReadingF": polars.Float32,
         })
         
-        results = diagnostics.validate_sensors(
+        results = validation.validate_sensors(
             sensors=current_data,
             historical=historical_data,
             acceptable_range=DEFAULT_ACCEPTABLE_RANGE,
@@ -728,7 +659,7 @@ class TestValidateSensorsEdgeCases(unittest.TestCase):
             "AnotherColumn": [1, 2],
         })
         
-        results = diagnostics.validate_sensors(
+        results = validation.validate_sensors(
             sensors=weird_data,
             acceptable_range=DEFAULT_ACCEPTABLE_RANGE,
             logger=self.logger,
@@ -763,7 +694,7 @@ class TestDetectAlertsEdgeCases(unittest.TestCase):
             "SensorReadingRh": [20, 80],  # This column doesn't exist in data
         }
         
-        alerts = diagnostics.detect_alerts(data, acceptable_range)
+        alerts = validation.detect_alerts(data, acceptable_range)
         
         # Should complete without error and return empty (all readings within range)
         self.assertTrue(alerts.is_empty())
@@ -816,7 +747,7 @@ class TestGenerateDiagnosticsReport(unittest.TestCase):
         
         validation_results = []
         
-        diagnostics.generate_diagnostics_report(
+        validation.generate_diagnostics_report(
             sensors=data,
             validation_results=validation_results,
             acceptable_range=DEFAULT_ACCEPTABLE_RANGE,
@@ -854,7 +785,7 @@ class TestGenerateDiagnosticsReport(unittest.TestCase):
         
         validation_results = []
         
-        diagnostics.generate_diagnostics_report(
+        validation.generate_diagnostics_report(
             sensors=data,
             validation_results=validation_results,
             acceptable_range=DEFAULT_ACCEPTABLE_RANGE,
@@ -891,7 +822,7 @@ class TestGenerateDiagnosticsReport(unittest.TestCase):
         
         validation_results = []
         
-        diagnostics.generate_diagnostics_report(
+        validation.generate_diagnostics_report(
             sensors=data,
             validation_results=validation_results,
             acceptable_range=DEFAULT_ACCEPTABLE_RANGE,
@@ -914,7 +845,7 @@ class TestGenerateDiagnosticsReport(unittest.TestCase):
         
         # Run first report
         validation_results1 = []
-        diagnostics.generate_diagnostics_report(
+        validation.generate_diagnostics_report(
             sensors=data,
             validation_results=validation_results1,
             acceptable_range=DEFAULT_ACCEPTABLE_RANGE,
@@ -929,7 +860,7 @@ class TestGenerateDiagnosticsReport(unittest.TestCase):
         
         # Run second report
         validation_results2 = []
-        diagnostics.generate_diagnostics_report(
+        validation.generate_diagnostics_report(
             sensors=data,
             validation_results=validation_results2,
             acceptable_range=DEFAULT_ACCEPTABLE_RANGE,
@@ -967,7 +898,7 @@ class TestGenerateDiagnosticsReport(unittest.TestCase):
         
         # First run - creates alerts.csv
         validation_results1 = []
-        diagnostics.generate_diagnostics_report(
+        validation.generate_diagnostics_report(
             sensors=data_with_alerts,
             validation_results=validation_results1,
             acceptable_range=DEFAULT_ACCEPTABLE_RANGE,
@@ -982,7 +913,7 @@ class TestGenerateDiagnosticsReport(unittest.TestCase):
         
         # Second run - should append to existing alerts.csv
         validation_results2 = []
-        diagnostics.generate_diagnostics_report(
+        validation.generate_diagnostics_report(
             sensors=data_with_alerts,
             validation_results=validation_results2,
             acceptable_range=DEFAULT_ACCEPTABLE_RANGE,

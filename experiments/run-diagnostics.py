@@ -9,7 +9,7 @@ import sys
 # Add parent directory to path so we can import modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from modules import diagnostics
+from modules import validation
 from EnvironmentData import EnvironmentData
 
 # Use absolute path relative to script location
@@ -43,7 +43,7 @@ validation_results = env.validate_sensors(
 env.close()
 
 # Generate diagnostics report with validation results
-diagnostics.generate_diagnostics_report(
+validation.generate_diagnostics_report(
     sensors=sensors,
     validation_results=validation_results,
     acceptable_range=acceptable_range,
