@@ -1,6 +1,2 @@
-# minute  hour  dom  mon  dow  user  command
-0 * * * * root cd /src && /usr/local/bin/python3 /src/ingest_all_sources.py
-#
-# Backup examples (disabled):
-# */1  * * * * root cd /src && /usr/local/bin/python3 /src/jobs/1-pull.py
-# */10 * * * * root cd /src && /usr/local/bin/python3 /src/jobs/2-consolidate.py
+*/15 * * * * cd /src/ && /usr/local/bin/python3 /src/jobs/1-pull.py # pull reading every 15 minutes, this is the frequency used by Conserv.
+45 * * * * cd /src/ && /usr/local/bin/python3 /src/jobs/2-consolidate.py # consolidate into analytical tables at the 45 minute mark each hour, targeting ready by the start of each hour.

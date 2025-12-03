@@ -1,0 +1,7 @@
+# Include all production dependencies
+-r requirements.txt
+
+# optional for analytics:
+notebook
+duckdb 
+seaborn

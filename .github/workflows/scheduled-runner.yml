@@ -1,13 +1,14 @@
-name: Sensor Data Pull
+name: Scheduled Sensor Data Pull
 
 on:
-  workflow_dispatch:
-    # Manual trigger only, restricted to test branch
+  schedule:
+    - cron: '*/15 * * * *'  # Run every 15 minutes
 
 jobs:
   pull-data:
     runs-on: ubuntu-latest
     environment: test
+    if: ${{ lower(vars.RUNNER_ACTIVE) == 'true' }}
     permissions:
       contents: write
     
@@ -15,7 +16,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: test
+          ref: runner
           fetch-depth: 0
 
       - name: Set up Python
@@ -49,30 +50,21 @@ jobs:
           echo "CONSERV_API_KEYS=$CONSERV_API_KEYS" >> .env
           echo "LICOR_API_KEY=$LICOR_API_KEY" >> .env
 
-      - name: Debug .env file
+      - name: Check for cron_status.txt and run appropriate scripts
         run: |
-          echo "=== .env contents (secrets masked) ==="
-          cat .env | sed 's/=.*/=***/'
+          if [ -f "data/cron_status.txt" ]; then
+            echo "cron_status.txt exists - running pull and consolidate"
+            python jobs/1-pull.py
+            python jobs/2-consolidate.py
+          else
+            echo "cron_status.txt does not exist - running init only"
+            python jobs/0-init.py
+          fi
 
-      - name: Delete data folder for clean run
-        run: rm -rf data/
-
-      - name: Run init script
-        run: python jobs/0-init.py
-
-      - name: Wait 15 minutes for new sensor readings to be gathered.
-        run: sleep 900
-
-      - name: Run pull script
-        run: python jobs/1-pull.py
-
-      - name: Run consolidate script
-        run: python jobs/2-consolidate.py
-
-      - name: Commit data to test branch
+      - name: Commit data to runner branch
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/
           git diff --staged --quiet || git commit -m "Update sensor data - $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
-          git push origin test
+          git push origin runner

@@ -1,0 +1,15 @@
+# Include all production dependencies
+-r requirements.txt
+
+# Dev/testing dependencies
+pdoc
+pytest
+pytest-cov
+
+# optional for analytics:
+notebook
+duckdb 
+seaborn
+
+# optional if you plan to use the Spyder IDE.
+#spyder-kernels==3.0.* 

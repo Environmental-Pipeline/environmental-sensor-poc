@@ -1,11 +1,15 @@
 .venv
 secrets
-data
 __pycache__
 .ipynb_checkpoints
-.env
+.env*
 todo
 .vscode
 not-tracked
 out/
 samples/
+htmlcov/
+.coverage
+tests/data/
+data/
+~$*.xlsx
