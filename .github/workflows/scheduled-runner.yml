@@ -1,4 +1,4 @@
-name: Scheduled Sensor Data Pull
+name: Scheduled Sensor Data Pull v2
 
 on:
   schedule:
