@@ -56,6 +56,13 @@ There are 3 ways to running this tool: Direct, via GitHub Actions, and via Docke
 
 **GitHub Actions**
 
+_Runner_
+
+A GitHub action has been set up at [Scheduled Sensor Data Pull](https://github.com/Environmental-Pipeline/environmental-sensor-poc/actions/workflows/single-run-test-branch.yml) which runs every 15 minutes to pull the latest readings using the [main environment](https://github.com/Environmental-Pipeline/environmental-sensor-poc/settings/environments/10336798976/edit) and commit them to the `runner` branch. To disable it, set the environment variable `RUNNER_ACTIVE` to "False" in the [main environment](https://github.com/Environmental-Pipeline/environmental-sensor-poc/settings/environments/10336798976/edit).
+
+
+_Sensor Data Pull_
+
 A GitHub action has been set up at [Sensor Data Pull](https://github.com/Environmental-Pipeline/environmental-sensor-poc/actions/workflows/single-run-test-branch.yml). To use it, go to `Run workflow` and select either the `runner` or `test` branch. The `runner` branch will use the [main](https://github.com/Environmental-Pipeline/environmental-sensor-poc/settings/environments/10336798976/edit) environment while test will use [test](https://github.com/Environmental-Pipeline/environmental-sensor-poc/settings/environments/10337000551/edit).
 
 This action will delete the data folder from the selected branch, run the data pipeline using the selected environment variables (using init, then waiting 15 minutes for new readings and running get_current_readings and consolidate_readings), and update the repository with the new data in the `data/` folder. 
