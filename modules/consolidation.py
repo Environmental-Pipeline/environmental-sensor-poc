@@ -336,9 +336,12 @@ def export_to_excel(data_path: str, home_directory: str, logger) -> None:
     device_readings_daily = polars.read_parquet(f"{data_path}/device_readings_daily.parquet")
     device_readings = polars.read_parquet(f"{data_path}/device_readings.parquet")
     
-    # Get last 1000 device readings (most recent) and join with utcs for datetime_est
+    # Get first 500 and last 500 device readings and join with utcs for datetime_est
+    sorted_readings = device_readings.sort("SensorReadingUTC")
+    first_500 = sorted_readings.head(500)
+    last_500 = sorted_readings.tail(500)
     device_readings_last1000 = (
-        device_readings.sort("SensorReadingUTC", descending=True).head(1000)
+        polars.concat([first_500, last_500], how="vertical")
         .join(utcs.select(["UTC", "datetime_est"]), left_on="SensorReadingUTC", right_on="UTC", how="left")
         .rename({"datetime_est": "reading_datetime_est"})
         .join(utcs.select(["UTC", "datetime_est"]), left_on="QueryUTC", right_on="UTC", how="left")
