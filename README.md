@@ -42,7 +42,7 @@ pip install -r requirements-dev.txt
 - Instantiate the EnvironmentData class with `api = EnvironmentData()`, this will read information from `.env` and run the historical data pull if the data folder is empty (data folder name will vary based on how we are running the code). 
 - Then, the `get_current_readings` method is called to get new readings. 
 - The `consolidate_readings` method will combine historical and new readings into analytical tables that are then explored using `duckdb` or any other technology that can explore `parquet` files. 
-- `consolidate_readings` will also create diagnostic files `validation-results.csv` (overall data validation checks like missing values, etc.), `validation-detail.csv` (data gap events where time between readings exceeded the expected duration) and `alerts.csv` (readings outside the expected range, will not be created if there are no alerts).
+- `consolidate_readings` will also create diagnostic files `validation-results.csv` (overall data validation checks like missing values, etc.), `validation-detail.csv` (data gap events where time between readings exceeded the expected duration), `alerts.txt` (readings outside the expected range, will not be created if there are no alerts), and `consolidated-data-sample.xlsx` (an excel file with a sample of the data).
 
 ## How To Run
 
@@ -56,14 +56,14 @@ There are 3 ways to running this tool: Direct, via GitHub Actions, and via Docke
 
 **GitHub Actions**
 
-_Runner_
+ [Scheduled Pull on Runner Branch](https://github.com/Environmental-Pipeline/environmental-sensor-poc/actions/workflows/scheduled-runner.yml)
 
-A GitHub action has been set up at [Scheduled Sensor Data Pull](https://github.com/Environmental-Pipeline/environmental-sensor-poc/actions/workflows/scheduled-runner.yml) which runs every 15 minutes to pull the latest readings using the [runner environment](https://github.com/Environmental-Pipeline/environmental-sensor-poc/settings/environments/10400235755/edit) and commit them to the `runner` branch, with data in the `data-runner` folder. To disable it, set the environment variable `RUNNER_ACTIVE` to "False" in the [runner environment](https://github.com/Environmental-Pipeline/environmental-sensor-poc/settings/environments/10400235755/edit).
+Runs every 15 minutes to pull the latest readings using the [runner environment](https://github.com/Environmental-Pipeline/environmental-sensor-poc/settings/environments/10400235755/edit) and commit them to the `runner` branch, with data in the `data-runner` folder. To disable it, set the environment variable `RUNNER_ACTIVE` to "False" in the [runner environment](https://github.com/Environmental-Pipeline/environmental-sensor-poc/settings/environments/10400235755/edit).
 
 
-_Sensor Data Pull_
+[Clear Data & Run Init, Wait, Pull, Consolidate](https://github.com/Environmental-Pipeline/environmental-sensor-poc/actions/workflows/single-run-test-branch.yml)
 
-A GitHub action has been set up at [Sensor Data Pull](https://github.com/Environmental-Pipeline/environmental-sensor-poc/actions/workflows/single-run-test-branch.yml). To use it, go to `Run workflow` and select the `test` branch, with data in the `data-test` folder. Change the settings using the [test environment](https://github.com/Environmental-Pipeline/environmental-sensor-poc/settings/environments/10337000551/edit).
+Manually-triggered test run. Go to `Run workflow` and select the `test` branch, with data in the `data-test` folder. Change the settings using the [test environment](https://github.com/Environmental-Pipeline/environmental-sensor-poc/settings/environments/10337000551/edit).
 
 This action will delete the data folder from the selected branch, run the data pipeline using the selected environment variables (using init, then waiting 15 minutes for new readings and running get_current_readings and consolidate_readings), and update the repository with the new data in the `data/` folder. 
 
