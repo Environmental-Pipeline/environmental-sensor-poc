@@ -466,47 +466,56 @@ def generate_validation_results(
     #         logger.warning(f"{step} validation: {building_details}")
     
     # ============ CHECK FOR DEVICES MISSING TEMP OR RH READINGS ============
-    devices_path = f"{data_path}/devices.parquet"
+    device_readings_path = f"{data_path}/device_readings.parquet"
     missing_reading_details = []
-    if os.path.exists(devices_path):
-        devices = polars.read_parquet(devices_path)
-        
-        # Check for devices with readings - look at the acceptable_range columns
-        reading_columns = [col for col in acceptable_range.keys() if col in devices.columns]
-        
-        if reading_columns:
-            for col in reading_columns:
-                # Find devices that have null values for this reading type
-                missing_devices = devices.filter(polars.col(col).is_null())
-                if missing_devices.shape[0] > 0:
-                    for row in missing_devices.iter_rows(named=True):
-                        missing_reading_details.append({
-                            "DeviceID": row.get("DeviceID"),
-                            "DeviceName": row.get("DeviceName"),
-                            "Source": row.get("Source"),
-                            "missing_reading": col,
-                        })
-            
-            # Count by reading type
-            missing_temp_count = len([d for d in missing_reading_details if d["missing_reading"] == "SensorReadingF"])
-            missing_rh_count = len([d for d in missing_reading_details if d["missing_reading"] == "SensorReadingRh"])
-            
-            if missing_temp_count > 0 or missing_rh_count > 0:
-                details_parts = []
-                if missing_temp_count > 0:
-                    details_parts.append(f"{missing_temp_count} devices missing temperature")
-                if missing_rh_count > 0:
-                    details_parts.append(f"{missing_rh_count} devices missing humidity")
-                details_str = ", ".join(details_parts) + ". See validation-detail.csv for device list."
-            else:
-                details_str = f"All {devices.shape[0]} devices have both temperature and humidity readings."
-            
-            validation_results.append({
-                "test_name": "devices_missing_readings",
-                "run_utc": run_utc,
-                "result": "WARN" if missing_reading_details else "PASS",
-                "details": details_str
-            })
+    device_readings = polars.read_parquet(device_readings_path)
+    
+    # Find unique devices where temp is null but RH is not (missing temp)
+    missing_temp = device_readings.filter(
+        polars.col("SensorReadingF").is_null() & polars.col("SensorReadingRh").is_not_null()
+    ).select(["DeviceID", "DeviceName", "Source"]).unique()
+    
+    for row in missing_temp.iter_rows(named=True):
+        missing_reading_details.append({
+            "DeviceID": row.get("DeviceID"),
+            "DeviceName": row.get("DeviceName"),
+            "Source": row.get("Source"),
+            "missing_reading": "SensorReadingF",
+        })
+    
+    # Find unique devices where RH is null but temp is not (missing RH)
+    missing_rh = device_readings.filter(
+        polars.col("SensorReadingRh").is_null() & polars.col("SensorReadingF").is_not_null()
+    ).select(["DeviceID", "DeviceName", "Source"]).unique()
+    
+    for row in missing_rh.iter_rows(named=True):
+        missing_reading_details.append({
+            "DeviceID": row.get("DeviceID"),
+            "DeviceName": row.get("DeviceName"),
+            "Source": row.get("Source"),
+            "missing_reading": "SensorReadingRh",
+        })
+    
+    missing_temp_count = missing_temp.shape[0]
+    missing_rh_count = missing_rh.shape[0]
+    
+    if missing_temp_count > 0 or missing_rh_count > 0:
+        details_parts = []
+        if missing_temp_count > 0:
+            details_parts.append(f"{missing_temp_count} devices missing temperature")
+        if missing_rh_count > 0:
+            details_parts.append(f"{missing_rh_count} devices missing humidity")
+        details_str = ", ".join(details_parts) + ". See validation-detail.csv for device list."
+    else:
+        total_devices = device_readings.select("DeviceID").n_unique()
+        details_str = f"All {total_devices} devices have both temperature and humidity readings."
+    
+    validation_results.append({
+        "test_name": "devices_missing_readings",
+        "run_utc": run_utc,
+        "result": "WARN" if missing_reading_details else "PASS",
+        "details": details_str
+    })
     
     # ============ DATA GAPS BY SOURCE ============
     gaps = detect_data_gaps(sensors)
@@ -637,7 +646,22 @@ def generate_validation_results(
         })
     
     if event_rows:
-        events_df = polars.DataFrame(event_rows)
+        events_df = polars.DataFrame(event_rows, schema={
+            "event": polars.Utf8,
+            "Source": polars.Utf8,
+            "DeviceID": polars.Utf8,
+            "DeviceName": polars.Utf8,
+            "SensorID": polars.Utf8,
+            "SensorName": polars.Utf8,
+            "missing_reading": polars.Utf8,
+            "event_utc": polars.Datetime("us", "UTC"),
+            "event_datetime_est": polars.Utf8,
+            "event_end_utc": polars.Datetime("us", "UTC"),
+            "event_end_datetime_est": polars.Utf8,
+            "gap_minutes": polars.Float64,
+            "detected_utc": polars.Int64,
+            "detected_datetime_est": polars.Utf8,
+        })
         
         # Reorder columns for readability
         events_df = events_df.select([
