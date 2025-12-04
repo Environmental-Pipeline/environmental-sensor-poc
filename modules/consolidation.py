@@ -505,9 +505,9 @@ def build_devices(
         .unique()
         .group_by("DeviceID")
         .agg([
-            polars.col("SensorID").str.join("|").alias("Sensors"),
-            polars.col("SensorName").str.join("|").alias("SensorNames"), 
-            polars.col("SensorType").str.join("|").alias("SensorTypes")
+            polars.col("SensorID").sort().str.join("|").alias("Sensors"),
+            polars.col("SensorName").sort().str.join("|").alias("SensorNames"), 
+            polars.col("SensorType").sort().str.join("|").alias("SensorTypes")
         ])
     )
     
