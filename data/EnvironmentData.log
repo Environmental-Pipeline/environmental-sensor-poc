@@ -1,0 +1,766 @@
+2025-12-04 02:46:00,013 - EnvironmentData - INFO - Initialized Conserv client with 5 customers
+2025-12-04 02:46:00,014 - EnvironmentData - INFO - Enabled data sources: ['Conserv', 'Coris', 'LI-COR']
+2025-12-04 02:46:00,014 - EnvironmentData - INFO - Fetching Conserv historical data for all customers
+2025-12-04 02:46:00,014 - EnvironmentData - INFO - Fetching Conserv data for period: 1763952360 to 1764816360
+2025-12-04 02:46:00,114 - EnvironmentData - INFO - Fetching data for customer 333
+2025-12-04 02:46:00,114 - EnvironmentData - INFO - Exporting chunk for customer 333: 2025-11-24 02:46:00+00:00 to 2025-12-01 02:46:00+00:00
+2025-12-04 02:46:00,114 - EnvironmentData - INFO - Starting export for customer 333: 2025-11-24 02:46:00+00:00 to 2025-12-01 02:46:00+00:00
+2025-12-04 02:46:00,114 - EnvironmentData - INFO - Conserv API POST https://api.conserv.io/v1/sensors/export headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:46:00,737 - EnvironmentData - INFO - Conserv export launched: 543955df-228c-4a2c-8feb-f4433fad1c81
+2025-12-04 02:46:00,737 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/543955df-228c-4a2c-8feb-f4433fad1c81/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:46:11,085 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/543955df-228c-4a2c-8feb-f4433fad1c81/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:46:21,459 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/543955df-228c-4a2c-8feb-f4433fad1c81/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:46:31,805 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/543955df-228c-4a2c-8feb-f4433fad1c81/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:46:42,128 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/543955df-228c-4a2c-8feb-f4433fad1c81/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:46:52,450 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/543955df-228c-4a2c-8feb-f4433fad1c81/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:47:02,796 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/543955df-228c-4a2c-8feb-f4433fad1c81/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:47:13,151 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/543955df-228c-4a2c-8feb-f4433fad1c81/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:47:23,486 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/543955df-228c-4a2c-8feb-f4433fad1c81/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:47:33,833 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/543955df-228c-4a2c-8feb-f4433fad1c81/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:47:44,160 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/543955df-228c-4a2c-8feb-f4433fad1c81/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:47:44,475 - EnvironmentData - INFO - Export 543955df-228c-4a2c-8feb-f4433fad1c81 completed successfully in 103.7 seconds
+2025-12-04 02:47:49,475 - EnvironmentData - INFO - Conserv API POST https://api.conserv.io/v1/sensors/export/543955df-228c-4a2c-8feb-f4433fad1c81/download headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:47:49,810 - EnvironmentData - INFO - Downloading export data from S3
+2025-12-04 02:47:50,407 - EnvironmentData - INFO - Downloaded 20095 rows, 8 columns
+2025-12-04 02:47:50,409 - EnvironmentData - INFO - Successfully exported 20095 rows for customer 333
+2025-12-04 02:47:50,409 - EnvironmentData - INFO - Exporting chunk for customer 333: 2025-12-01 02:46:00+00:00 to 2025-12-04 02:46:00+00:00
+2025-12-04 02:47:50,409 - EnvironmentData - INFO - Starting export for customer 333: 2025-12-01 02:46:00+00:00 to 2025-12-04 02:46:00+00:00
+2025-12-04 02:47:50,409 - EnvironmentData - INFO - Conserv API POST https://api.conserv.io/v1/sensors/export headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:47:50,822 - EnvironmentData - INFO - Conserv export launched: ef972873-9349-4347-979e-5cbe19159325
+2025-12-04 02:47:50,822 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/ef972873-9349-4347-979e-5cbe19159325/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:48:01,185 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/ef972873-9349-4347-979e-5cbe19159325/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:48:11,498 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/ef972873-9349-4347-979e-5cbe19159325/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:48:21,833 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/ef972873-9349-4347-979e-5cbe19159325/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:48:32,169 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/ef972873-9349-4347-979e-5cbe19159325/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:48:42,489 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/ef972873-9349-4347-979e-5cbe19159325/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:48:52,813 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/ef972873-9349-4347-979e-5cbe19159325/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:49:03,133 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/ef972873-9349-4347-979e-5cbe19159325/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:49:13,463 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/ef972873-9349-4347-979e-5cbe19159325/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:49:23,798 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/ef972873-9349-4347-979e-5cbe19159325/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:49:24,116 - EnvironmentData - INFO - Export ef972873-9349-4347-979e-5cbe19159325 completed successfully in 93.3 seconds
+2025-12-04 02:49:29,116 - EnvironmentData - INFO - Conserv API POST https://api.conserv.io/v1/sensors/export/ef972873-9349-4347-979e-5cbe19159325/download headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:49:29,427 - EnvironmentData - INFO - Downloading export data from S3
+2025-12-04 02:49:29,904 - EnvironmentData - INFO - Downloaded 8600 rows, 8 columns
+2025-12-04 02:49:29,904 - EnvironmentData - INFO - Successfully exported 8600 rows for customer 333
+2025-12-04 02:49:29,905 - EnvironmentData - INFO - Successfully fetched 28695 records for customer 333
+2025-12-04 02:49:29,905 - EnvironmentData - INFO - Fetching data for customer 1545
+2025-12-04 02:49:29,905 - EnvironmentData - INFO - Exporting chunk for customer 1545: 2025-11-24 02:46:00+00:00 to 2025-12-01 02:46:00+00:00
+2025-12-04 02:49:29,905 - EnvironmentData - INFO - Starting export for customer 1545: 2025-11-24 02:46:00+00:00 to 2025-12-01 02:46:00+00:00
+2025-12-04 02:49:29,905 - EnvironmentData - INFO - Conserv API POST https://api.conserv.io/v1/sensors/export headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:49:30,200 - EnvironmentData - ERROR - API request failed after SSL fallback: 403 Forbidden
+2025-12-04 02:49:30,200 - EnvironmentData - WARNING - Failed to fetch data for customer 1545: 403 Client Error: Forbidden for url: https://api.conserv.io/v1/sensors/export
+2025-12-04 02:49:30,200 - EnvironmentData - INFO - Fetching data for customer 307
+2025-12-04 02:49:30,201 - EnvironmentData - INFO - Exporting chunk for customer 307: 2025-11-24 02:46:00+00:00 to 2025-12-01 02:46:00+00:00
+2025-12-04 02:49:30,201 - EnvironmentData - INFO - Starting export for customer 307: 2025-11-24 02:46:00+00:00 to 2025-12-01 02:46:00+00:00
+2025-12-04 02:49:30,201 - EnvironmentData - INFO - Conserv API POST https://api.conserv.io/v1/sensors/export headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:49:30,600 - EnvironmentData - INFO - Conserv export launched: c6cb7015-4af4-4e4d-bc6d-9ff3e53342e2
+2025-12-04 02:49:30,600 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/c6cb7015-4af4-4e4d-bc6d-9ff3e53342e2/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:49:40,906 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/c6cb7015-4af4-4e4d-bc6d-9ff3e53342e2/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:49:51,228 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/c6cb7015-4af4-4e4d-bc6d-9ff3e53342e2/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:50:01,559 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/c6cb7015-4af4-4e4d-bc6d-9ff3e53342e2/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:50:11,907 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/c6cb7015-4af4-4e4d-bc6d-9ff3e53342e2/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:50:22,254 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/c6cb7015-4af4-4e4d-bc6d-9ff3e53342e2/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:50:32,596 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/c6cb7015-4af4-4e4d-bc6d-9ff3e53342e2/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:50:42,923 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/c6cb7015-4af4-4e4d-bc6d-9ff3e53342e2/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:50:53,239 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/c6cb7015-4af4-4e4d-bc6d-9ff3e53342e2/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:51:03,572 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/c6cb7015-4af4-4e4d-bc6d-9ff3e53342e2/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:51:13,951 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/c6cb7015-4af4-4e4d-bc6d-9ff3e53342e2/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:51:14,358 - EnvironmentData - INFO - Export c6cb7015-4af4-4e4d-bc6d-9ff3e53342e2 completed successfully in 103.8 seconds
+2025-12-04 02:51:19,359 - EnvironmentData - INFO - Conserv API POST https://api.conserv.io/v1/sensors/export/c6cb7015-4af4-4e4d-bc6d-9ff3e53342e2/download headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:51:19,688 - EnvironmentData - INFO - Downloading export data from S3
+2025-12-04 02:51:20,350 - EnvironmentData - INFO - Downloaded 58988 rows, 8 columns
+2025-12-04 02:51:20,351 - EnvironmentData - INFO - Successfully exported 58988 rows for customer 307
+2025-12-04 02:51:20,351 - EnvironmentData - INFO - Exporting chunk for customer 307: 2025-12-01 02:46:00+00:00 to 2025-12-04 02:46:00+00:00
+2025-12-04 02:51:20,351 - EnvironmentData - INFO - Starting export for customer 307: 2025-12-01 02:46:00+00:00 to 2025-12-04 02:46:00+00:00
+2025-12-04 02:51:20,351 - EnvironmentData - INFO - Conserv API POST https://api.conserv.io/v1/sensors/export headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:51:20,735 - EnvironmentData - INFO - Conserv export launched: 055c17b4-43ae-4e0e-bba1-bb27bcb44f74
+2025-12-04 02:51:20,735 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/055c17b4-43ae-4e0e-bba1-bb27bcb44f74/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:51:31,030 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/055c17b4-43ae-4e0e-bba1-bb27bcb44f74/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:51:41,372 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/055c17b4-43ae-4e0e-bba1-bb27bcb44f74/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:51:51,692 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/055c17b4-43ae-4e0e-bba1-bb27bcb44f74/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:52:02,027 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/055c17b4-43ae-4e0e-bba1-bb27bcb44f74/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:52:12,340 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/055c17b4-43ae-4e0e-bba1-bb27bcb44f74/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:52:22,642 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/055c17b4-43ae-4e0e-bba1-bb27bcb44f74/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:52:32,985 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/055c17b4-43ae-4e0e-bba1-bb27bcb44f74/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:52:43,354 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/055c17b4-43ae-4e0e-bba1-bb27bcb44f74/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:52:53,692 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/055c17b4-43ae-4e0e-bba1-bb27bcb44f74/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:53:04,052 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/055c17b4-43ae-4e0e-bba1-bb27bcb44f74/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:53:04,393 - EnvironmentData - INFO - Export 055c17b4-43ae-4e0e-bba1-bb27bcb44f74 completed successfully in 103.7 seconds
+2025-12-04 02:53:09,393 - EnvironmentData - INFO - Conserv API POST https://api.conserv.io/v1/sensors/export/055c17b4-43ae-4e0e-bba1-bb27bcb44f74/download headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:53:09,745 - EnvironmentData - INFO - Downloading export data from S3
+2025-12-04 02:53:10,392 - EnvironmentData - INFO - Downloaded 25359 rows, 8 columns
+2025-12-04 02:53:10,393 - EnvironmentData - INFO - Successfully exported 25359 rows for customer 307
+2025-12-04 02:53:10,393 - EnvironmentData - INFO - Successfully fetched 84347 records for customer 307
+2025-12-04 02:53:10,393 - EnvironmentData - INFO - Fetching data for customer 2671
+2025-12-04 02:53:10,393 - EnvironmentData - INFO - Exporting chunk for customer 2671: 2025-11-24 02:46:00+00:00 to 2025-12-01 02:46:00+00:00
+2025-12-04 02:53:10,393 - EnvironmentData - INFO - Starting export for customer 2671: 2025-11-24 02:46:00+00:00 to 2025-12-01 02:46:00+00:00
+2025-12-04 02:53:10,393 - EnvironmentData - INFO - Conserv API POST https://api.conserv.io/v1/sensors/export headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:53:10,916 - EnvironmentData - INFO - Conserv export launched: 96b20f66-183d-4853-b1fa-afb8306811be
+2025-12-04 02:53:10,917 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/96b20f66-183d-4853-b1fa-afb8306811be/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:53:21,222 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/96b20f66-183d-4853-b1fa-afb8306811be/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:53:31,544 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/96b20f66-183d-4853-b1fa-afb8306811be/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:53:42,050 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/96b20f66-183d-4853-b1fa-afb8306811be/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:53:52,389 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/96b20f66-183d-4853-b1fa-afb8306811be/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:54:02,729 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/96b20f66-183d-4853-b1fa-afb8306811be/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:54:13,059 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/96b20f66-183d-4853-b1fa-afb8306811be/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:54:23,382 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/96b20f66-183d-4853-b1fa-afb8306811be/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:54:33,688 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/96b20f66-183d-4853-b1fa-afb8306811be/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:54:44,032 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/96b20f66-183d-4853-b1fa-afb8306811be/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:54:44,373 - EnvironmentData - INFO - Export 96b20f66-183d-4853-b1fa-afb8306811be completed successfully in 93.5 seconds
+2025-12-04 02:54:49,373 - EnvironmentData - INFO - Conserv API POST https://api.conserv.io/v1/sensors/export/96b20f66-183d-4853-b1fa-afb8306811be/download headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:54:49,737 - EnvironmentData - ERROR - API request failed after SSL fallback: 404 Not Found
+2025-12-04 02:54:49,737 - EnvironmentData - WARNING - Failed to fetch data for customer 2671: 404 Client Error: Not Found for url: https://api.conserv.io/v1/sensors/export/96b20f66-183d-4853-b1fa-afb8306811be/download
+2025-12-04 02:54:49,737 - EnvironmentData - INFO - Fetching data for customer 1696
+2025-12-04 02:54:49,738 - EnvironmentData - INFO - Exporting chunk for customer 1696: 2025-11-24 02:46:00+00:00 to 2025-12-01 02:46:00+00:00
+2025-12-04 02:54:49,738 - EnvironmentData - INFO - Starting export for customer 1696: 2025-11-24 02:46:00+00:00 to 2025-12-01 02:46:00+00:00
+2025-12-04 02:54:49,738 - EnvironmentData - INFO - Conserv API POST https://api.conserv.io/v1/sensors/export headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:54:50,144 - EnvironmentData - INFO - Conserv export launched: cfde7e94-7abb-44d8-85b5-dad60a19714b
+2025-12-04 02:54:50,144 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/cfde7e94-7abb-44d8-85b5-dad60a19714b/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:55:00,473 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/cfde7e94-7abb-44d8-85b5-dad60a19714b/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:55:10,798 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/cfde7e94-7abb-44d8-85b5-dad60a19714b/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:55:21,102 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/cfde7e94-7abb-44d8-85b5-dad60a19714b/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:55:31,422 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/cfde7e94-7abb-44d8-85b5-dad60a19714b/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:55:41,748 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/cfde7e94-7abb-44d8-85b5-dad60a19714b/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:55:52,067 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/cfde7e94-7abb-44d8-85b5-dad60a19714b/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:56:02,385 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/cfde7e94-7abb-44d8-85b5-dad60a19714b/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:56:12,682 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/cfde7e94-7abb-44d8-85b5-dad60a19714b/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:56:23,013 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/cfde7e94-7abb-44d8-85b5-dad60a19714b/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:56:23,322 - EnvironmentData - INFO - Export cfde7e94-7abb-44d8-85b5-dad60a19714b completed successfully in 93.2 seconds
+2025-12-04 02:56:28,323 - EnvironmentData - INFO - Conserv API POST https://api.conserv.io/v1/sensors/export/cfde7e94-7abb-44d8-85b5-dad60a19714b/download headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-04 02:56:28,645 - EnvironmentData - ERROR - API request failed after SSL fallback: 404 Not Found
+2025-12-04 02:56:28,645 - EnvironmentData - WARNING - Failed to fetch data for customer 1696: 404 Client Error: Not Found for url: https://api.conserv.io/v1/sensors/export/cfde7e94-7abb-44d8-85b5-dad60a19714b/download
+2025-12-04 02:56:28,647 - EnvironmentData - INFO - Transforming Conserv data to standardized schema
+2025-12-04 02:56:28,726 - EnvironmentData - INFO - Conserv transformation complete: 226084 records (doubled from device to sensor format)
+2025-12-04 02:56:28,726 - EnvironmentData - INFO - Successfully combined data from 2 customers: 226084 total records
+2025-12-04 02:56:28,752 - EnvironmentData - INFO - initialize_database_conserv validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 02:56:28,760 - EnvironmentData - INFO - initialize_database_conserv validation passed: one SensorName per SensorID.
+2025-12-04 02:56:28,760 - EnvironmentData - INFO - Successfully processed 226084 Conserv historical records
+2025-12-04 02:56:28,760 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/cats/user/?ApiKey=XXXX&CatsUserID=XXXX
+2025-12-04 02:56:31,060 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=21373&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:56:32,978 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=21375&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:56:34,786 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=21377&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:56:36,660 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=21379&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:56:38,629 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=21381&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:56:40,470 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=21387&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:56:42,275 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=22956&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:56:44,103 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=22958&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:56:45,910 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=22960&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:56:47,729 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=22964&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:56:49,579 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23329&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:56:51,401 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23331&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:56:53,566 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23368&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:56:55,380 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23370&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:56:57,168 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23372&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:56:59,022 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23374&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:57:00,874 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23376&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:57:02,631 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23378&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:57:04,456 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23380&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:57:06,276 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23382&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:57:08,121 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23384&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:57:09,931 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23386&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:57:11,683 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23388&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:57:13,461 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23390&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:57:15,236 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23392&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:57:17,080 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23394&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:57:18,865 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23396&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:57:20,749 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23398&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:57:22,590 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23400&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:57:24,350 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23402&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:57:26,166 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=25954&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:57:27,911 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=25958&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:57:29,928 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=25960&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:57:31,692 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=25962&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:57:33,484 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=25966&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:57:35,274 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=25968&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:57:37,039 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=25972&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:57:38,836 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=25976&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:57:40,808 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=25984&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:57:42,628 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=25992&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:57:44,368 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=26322&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:57:46,104 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=26364&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:57:47,879 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=26831&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:57:49,612 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=26835&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:57:51,382 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=26837&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:57:53,248 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=26839&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:57:55,315 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=26844&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:57:57,144 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=27398&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:57:59,199 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=28875&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:58:00,991 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=28877&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:58:02,981 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=28879&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:58:04,940 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=28881&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:58:06,855 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=28883&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:58:08,835 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=28885&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:58:10,599 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=28887&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:58:12,448 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=29696&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:58:14,301 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=29698&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:58:16,096 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=29700&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:58:17,930 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=29702&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:58:19,701 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=29704&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:58:21,532 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=29706&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:58:23,377 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=29708&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:58:25,650 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=29710&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:58:27,682 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=29712&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:58:29,620 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=29714&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:58:31,500 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=30133&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:58:34,031 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=30135&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:58:35,853 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=30137&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:58:37,773 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=30469&ReadingType=SensorReadingF&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:58:39,664 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=21374&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:58:41,452 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=21376&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:58:43,337 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=21378&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:58:45,438 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=21380&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:58:47,340 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=21382&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:58:49,193 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=21388&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:58:51,022 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=22957&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:58:52,838 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=22959&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:58:54,693 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=22961&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:58:57,299 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=22965&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:58:59,559 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23330&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:59:01,332 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23332&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:59:03,100 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23369&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:59:04,886 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23371&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:59:06,650 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23373&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:59:08,481 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23375&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:59:10,264 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23377&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:59:12,030 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23379&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:59:13,851 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23381&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:59:15,718 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23383&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:59:17,560 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23385&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:59:19,378 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23387&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:59:21,153 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23389&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:59:22,914 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23391&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:59:24,708 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23393&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:59:26,485 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23395&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:59:28,232 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23397&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:59:30,094 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23399&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:59:31,852 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23401&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:59:33,607 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=23403&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:59:35,389 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=25955&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:59:37,478 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=25959&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:59:39,259 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=25961&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:59:41,161 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=25963&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:59:42,892 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=25967&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:59:44,667 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=25969&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:59:46,395 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=25973&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:59:48,164 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=25977&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:59:49,960 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=25985&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:59:51,724 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=25993&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:59:53,508 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=26832&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:59:55,281 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=26836&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:59:57,068 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=26838&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 02:59:58,836 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=26840&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 03:00:00,734 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=26845&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 03:00:02,688 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=28876&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 03:00:04,706 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=28878&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 03:00:06,811 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=28880&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 03:00:08,701 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=28882&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 03:00:10,719 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=28884&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 03:00:14,177 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=28886&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 03:00:17,436 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=28888&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 03:00:19,264 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=28955&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 03:00:21,052 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=28957&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 03:00:22,880 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=28963&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 03:00:25,486 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=29697&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 03:00:27,294 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=29699&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 03:00:29,333 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=29701&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 03:00:31,363 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=29703&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 03:00:33,140 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=29705&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 03:00:34,971 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=29707&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 03:00:36,754 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=29709&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 03:00:38,975 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=29711&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 03:00:40,730 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=29713&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 03:00:42,504 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=29715&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 03:00:44,293 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=30134&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 03:00:46,145 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=30136&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 03:00:47,960 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/sensor/historical/?ApiKey=XXXX&SensorID=30138&ReadingType=SensorReadingRh&StartUTC=1763952360&EndUTC=1764816360&MinReadingSpacing=900&RequestedOutputFormat=raw
+2025-12-04 03:00:49,763 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,764 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,766 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,766 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,768 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,768 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,770 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,770 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,772 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,773 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,774 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,775 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,776 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,777 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,778 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,779 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,780 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,781 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,782 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,783 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,785 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,785 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,787 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,787 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,789 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,789 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,791 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,791 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,793 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,793 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,795 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,796 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,797 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,798 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,799 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,800 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,801 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,802 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,803 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,804 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,805 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,806 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,808 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,808 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,810 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,810 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,812 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,812 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,814 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,814 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,816 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,816 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,818 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,818 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,820 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,820 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,822 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,823 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,824 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,825 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,826 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,827 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,828 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,829 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,830 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,831 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,832 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,833 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,834 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,835 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,836 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,837 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,838 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,839 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,841 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,841 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,843 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,843 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,845 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,845 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,847 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,847 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,849 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,849 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,851 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,851 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,853 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,853 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,855 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,855 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,857 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,857 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,859 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,860 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,861 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,862 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,863 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,864 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,865 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,866 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,867 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,868 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,869 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,870 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,871 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,872 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,873 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,874 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,875 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,876 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,878 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,878 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,880 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,880 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,882 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,882 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,884 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,884 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,886 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,886 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,888 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,888 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,890 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,891 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,892 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,893 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,894 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,895 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,896 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,897 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,898 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,899 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,901 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,901 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,903 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,903 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,905 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,905 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,907 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,907 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,909 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,909 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,911 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,911 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,913 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,914 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,915 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,916 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,917 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,918 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,919 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,920 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,921 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,922 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,923 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,924 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,926 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,926 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,928 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,928 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,930 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,930 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,932 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,932 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,934 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,934 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,936 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,937 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,938 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,939 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,940 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,941 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,942 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,943 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,944 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,945 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,946 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,947 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,949 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,949 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,951 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,951 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,953 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,953 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,955 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,955 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,957 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,958 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,959 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,960 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,961 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,962 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,963 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,964 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,965 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,966 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,967 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,968 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,969 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,970 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,972 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,972 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,974 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,974 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,976 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,976 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,978 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,978 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,980 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,980 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,982 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,982 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,984 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,985 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,986 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,987 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,988 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,989 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,990 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,991 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,992 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,993 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,994 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,995 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,996 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,997 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:49,999 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:49,999 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:50,001 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:50,001 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:50,003 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:50,003 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:50,005 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:50,005 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:50,007 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:50,007 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:50,009 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:50,010 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:50,011 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:50,012 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:50,013 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:50,014 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:50,015 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:50,016 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:50,017 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:50,018 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:50,019 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:50,020 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:50,021 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:50,022 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:50,023 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:50,024 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:50,026 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:50,026 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:50,028 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:50,028 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:50,030 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:50,030 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:50,032 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:50,032 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:50,034 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:50,034 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:50,036 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:50,036 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:50,038 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:50,039 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:50,040 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:50,041 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:50,042 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:50,043 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:50,044 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:50,045 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:50,046 - EnvironmentData - INFO - initialize_database_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:00:50,047 - EnvironmentData - INFO - initialize_database_coris validation passed: one SensorName per SensorID.
+2025-12-04 03:00:50,047 - EnvironmentData - INFO - Using date range: 10 days of historical data
+2025-12-04 03:00:50,047 - EnvironmentData - INFO - get_devices_as_dataframe
+2025-12-04 03:00:50,047 - EnvironmentData - INFO - get_devices
+2025-12-04 03:00:50,047 - EnvironmentData - INFO - Making API request to: devices
+2025-12-04 03:00:50,047 - EnvironmentData - DEBUG - Parameters: {'includeSensors': 'true'}
+2025-12-04 03:00:50,397 - EnvironmentData - INFO - Found 16 devices
+2025-12-04 03:00:50,398 - EnvironmentData - INFO - Retrieved 33 device/sensor combinations
+2025-12-04 03:00:50,398 - EnvironmentData - INFO - Retrieving historical data for 33 device/sensor combinations
+2025-12-04 03:00:50,398 - EnvironmentData - INFO - get_sensor_data for device 22202142, sensor 22179175-2
+2025-12-04 03:00:50,398 - EnvironmentData - INFO - Making API request to: data
+2025-12-04 03:00:50,398 - EnvironmentData - DEBUG - Parameters: {'deviceSerialNumber': '22202142', 'sensorSerialNumber': '22179175-2', 'startTime': 1763952360000, 'endTime': 1764816360000}
+2025-12-04 03:00:50,706 - EnvironmentData - INFO - Retrieved 1 items from 'sensors'
+2025-12-04 03:00:50,708 - EnvironmentData - INFO - Transformed 958 readings from LI-COR data
+2025-12-04 03:00:50,708 - EnvironmentData - INFO - Retrieved 958 readings for RX Station 1/RH
+2025-12-04 03:00:50,708 - EnvironmentData - INFO - get_sensor_data for device 10889153, sensor 10889153-1
+2025-12-04 03:00:50,708 - EnvironmentData - INFO - Making API request to: data
+2025-12-04 03:00:50,708 - EnvironmentData - DEBUG - Parameters: {'deviceSerialNumber': '10889153', 'sensorSerialNumber': '10889153-1', 'startTime': 1763952360000, 'endTime': 1764816360000}
+2025-12-04 03:00:51,021 - EnvironmentData - INFO - Retrieved 1 items from 'sensors'
+2025-12-04 03:00:51,023 - EnvironmentData - INFO - Transformed 480 readings from LI-COR data
+2025-12-04 03:00:51,023 - EnvironmentData - INFO - Retrieved 480 readings for C145 Structural/Temperature
+2025-12-04 03:00:51,023 - EnvironmentData - INFO - get_sensor_data for device 22040302, sensor 22040302-1
+2025-12-04 03:00:51,023 - EnvironmentData - INFO - Making API request to: data
+2025-12-04 03:00:51,023 - EnvironmentData - DEBUG - Parameters: {'deviceSerialNumber': '22040302', 'sensorSerialNumber': '22040302-1', 'startTime': 1763952360000, 'endTime': 1764816360000}
+2025-12-04 03:00:51,316 - EnvironmentData - INFO - Retrieved 1 items from 'sensors'
+2025-12-04 03:00:51,317 - EnvironmentData - INFO - Transformed 480 readings from LI-COR data
+2025-12-04 03:00:51,317 - EnvironmentData - INFO - Retrieved 480 readings for ICSC__010C145S______/Temperature
+2025-12-04 03:00:51,317 - EnvironmentData - INFO - get_sensor_data for device 22194278, sensor 22194278-3
+2025-12-04 03:00:51,318 - EnvironmentData - INFO - Making API request to: data
+2025-12-04 03:00:51,318 - EnvironmentData - DEBUG - Parameters: {'deviceSerialNumber': '22194278', 'sensorSerialNumber': '22194278-3', 'startTime': 1763952360000, 'endTime': 1764816360000}
+2025-12-04 03:00:51,615 - EnvironmentData - INFO - API message: No sensor found
+2025-12-04 03:00:51,615 - EnvironmentData - INFO - Retrieved 0 items from 'data'
+2025-12-04 03:00:51,615 - EnvironmentData - INFO - get_sensor_data for device 20284065, sensor 20284065-1
+2025-12-04 03:00:51,615 - EnvironmentData - INFO - Making API request to: data
+2025-12-04 03:00:51,615 - EnvironmentData - DEBUG - Parameters: {'deviceSerialNumber': '20284065', 'sensorSerialNumber': '20284065-1', 'startTime': 1763952360000, 'endTime': 1764816360000}
+2025-12-04 03:00:51,819 - EnvironmentData - INFO - API message: No sensor found
+2025-12-04 03:00:51,819 - EnvironmentData - INFO - Retrieved 0 items from 'data'
+2025-12-04 03:00:51,819 - EnvironmentData - INFO - get_sensor_data for device 10740550, sensor 10740550-2
+2025-12-04 03:00:51,819 - EnvironmentData - INFO - Making API request to: data
+2025-12-04 03:00:51,819 - EnvironmentData - DEBUG - Parameters: {'deviceSerialNumber': '10740550', 'sensorSerialNumber': '10740550-2', 'startTime': 1763952360000, 'endTime': 1764816360000}
+2025-12-04 03:00:52,132 - EnvironmentData - INFO - Retrieved 1 items from 'sensors'
+2025-12-04 03:00:52,134 - EnvironmentData - INFO - Transformed 465 readings from LI-COR data
+2025-12-04 03:00:52,134 - EnvironmentData - INFO - Retrieved 465 readings for ICSC__010C149_______/RH
+2025-12-04 03:00:52,134 - EnvironmentData - INFO - get_sensor_data for device 22194277, sensor 22194277-2
+2025-12-04 03:00:52,134 - EnvironmentData - INFO - Making API request to: data
+2025-12-04 03:00:52,134 - EnvironmentData - DEBUG - Parameters: {'deviceSerialNumber': '22194277', 'sensorSerialNumber': '22194277-2', 'startTime': 1763952360000, 'endTime': 1764816360000}
+2025-12-04 03:00:53,919 - EnvironmentData - INFO - Retrieved 1 items from 'sensors'
+2025-12-04 03:00:53,921 - EnvironmentData - INFO - Transformed 1253 readings from LI-COR data
+2025-12-04 03:00:53,921 - EnvironmentData - INFO - Retrieved 1253 readings for ICSC__010C140W_____F/Temperature
+2025-12-04 03:00:53,921 - EnvironmentData - INFO - get_sensor_data for device 20284065, sensor 20284065-2
+2025-12-04 03:00:53,921 - EnvironmentData - INFO - Making API request to: data
+2025-12-04 03:00:53,921 - EnvironmentData - DEBUG - Parameters: {'deviceSerialNumber': '20284065', 'sensorSerialNumber': '20284065-2', 'startTime': 1763952360000, 'endTime': 1764816360000}
+2025-12-04 03:00:54,115 - EnvironmentData - INFO - API message: No sensor found
+2025-12-04 03:00:54,116 - EnvironmentData - INFO - Retrieved 0 items from 'data'
+2025-12-04 03:00:54,116 - EnvironmentData - INFO - get_sensor_data for device 22202142, sensor 22179175-1
+2025-12-04 03:00:54,116 - EnvironmentData - INFO - Making API request to: data
+2025-12-04 03:00:54,116 - EnvironmentData - DEBUG - Parameters: {'deviceSerialNumber': '22202142', 'sensorSerialNumber': '22179175-1', 'startTime': 1763952360000, 'endTime': 1764816360000}
+2025-12-04 03:00:54,367 - EnvironmentData - INFO - Retrieved 1 items from 'sensors'
+2025-12-04 03:00:54,368 - EnvironmentData - INFO - Transformed 958 readings from LI-COR data
+2025-12-04 03:00:54,368 - EnvironmentData - INFO - Retrieved 958 readings for RX Station 1/Temperature
+2025-12-04 03:00:54,369 - EnvironmentData - INFO - get_sensor_data for device 22202142, sensor 22179174-2
+2025-12-04 03:00:54,369 - EnvironmentData - INFO - Making API request to: data
+2025-12-04 03:00:54,369 - EnvironmentData - DEBUG - Parameters: {'deviceSerialNumber': '22202142', 'sensorSerialNumber': '22179174-2', 'startTime': 1763952360000, 'endTime': 1764816360000}
+2025-12-04 03:00:54,699 - EnvironmentData - INFO - Retrieved 1 items from 'sensors'
+2025-12-04 03:00:54,701 - EnvironmentData - INFO - Transformed 958 readings from LI-COR data
+2025-12-04 03:00:54,701 - EnvironmentData - INFO - Retrieved 958 readings for RX Station 1/RH
+2025-12-04 03:00:54,701 - EnvironmentData - INFO - get_sensor_data for device 22202141, sensor 22179174-1
+2025-12-04 03:00:54,701 - EnvironmentData - INFO - Making API request to: data
+2025-12-04 03:00:54,701 - EnvironmentData - DEBUG - Parameters: {'deviceSerialNumber': '22202141', 'sensorSerialNumber': '22179174-1', 'startTime': 1763952360000, 'endTime': 1764816360000}
+2025-12-04 03:00:55,126 - EnvironmentData - INFO - API message: No sensor found
+2025-12-04 03:00:55,127 - EnvironmentData - INFO - Retrieved 0 items from 'data'
+2025-12-04 03:00:55,127 - EnvironmentData - INFO - get_sensor_data for device 20447203, sensor 20447203-2
+2025-12-04 03:00:55,127 - EnvironmentData - INFO - Making API request to: data
+2025-12-04 03:00:55,127 - EnvironmentData - DEBUG - Parameters: {'deviceSerialNumber': '20447203', 'sensorSerialNumber': '20447203-2', 'startTime': 1763952360000, 'endTime': 1764816360000}
+2025-12-04 03:00:55,317 - EnvironmentData - INFO - API message: No sensor found
+2025-12-04 03:00:55,317 - EnvironmentData - INFO - Retrieved 0 items from 'data'
+2025-12-04 03:00:55,317 - EnvironmentData - INFO - get_sensor_data for device 22040304, sensor 22040304-2
+2025-12-04 03:00:55,317 - EnvironmentData - INFO - Making API request to: data
+2025-12-04 03:00:55,317 - EnvironmentData - DEBUG - Parameters: {'deviceSerialNumber': '22040304', 'sensorSerialNumber': '22040304-2', 'startTime': 1763952360000, 'endTime': 1764816360000}
+2025-12-04 03:00:55,619 - EnvironmentData - INFO - API message: No sensor found
+2025-12-04 03:00:55,620 - EnvironmentData - INFO - Retrieved 0 items from 'data'
+2025-12-04 03:00:55,620 - EnvironmentData - INFO - get_sensor_data for device 22202141, sensor 22179174-2
+2025-12-04 03:00:55,620 - EnvironmentData - INFO - Making API request to: data
+2025-12-04 03:00:55,620 - EnvironmentData - DEBUG - Parameters: {'deviceSerialNumber': '22202141', 'sensorSerialNumber': '22179174-2', 'startTime': 1763952360000, 'endTime': 1764816360000}
+2025-12-04 03:00:55,813 - EnvironmentData - INFO - API message: No sensor found
+2025-12-04 03:00:55,813 - EnvironmentData - INFO - Retrieved 0 items from 'data'
+2025-12-04 03:00:55,813 - EnvironmentData - INFO - get_sensor_data for device 22202142, sensor 22179174-1
+2025-12-04 03:00:55,813 - EnvironmentData - INFO - Making API request to: data
+2025-12-04 03:00:55,813 - EnvironmentData - DEBUG - Parameters: {'deviceSerialNumber': '22202142', 'sensorSerialNumber': '22179174-1', 'startTime': 1763952360000, 'endTime': 1764816360000}
+2025-12-04 03:00:56,171 - EnvironmentData - INFO - Retrieved 1 items from 'sensors'
+2025-12-04 03:00:56,173 - EnvironmentData - INFO - Transformed 958 readings from LI-COR data
+2025-12-04 03:00:56,173 - EnvironmentData - INFO - Retrieved 958 readings for RX Station 1/Temperature
+2025-12-04 03:00:56,173 - EnvironmentData - INFO - get_sensor_data for device 22202141, sensor 22179175-2
+2025-12-04 03:00:56,173 - EnvironmentData - INFO - Making API request to: data
+2025-12-04 03:00:56,173 - EnvironmentData - DEBUG - Parameters: {'deviceSerialNumber': '22202141', 'sensorSerialNumber': '22179175-2', 'startTime': 1763952360000, 'endTime': 1764816360000}
+2025-12-04 03:00:56,677 - EnvironmentData - INFO - API message: No sensor found
+2025-12-04 03:00:56,677 - EnvironmentData - INFO - Retrieved 0 items from 'data'
+2025-12-04 03:00:56,677 - EnvironmentData - INFO - get_sensor_data for device 10889154, sensor 10889154-2
+2025-12-04 03:00:56,677 - EnvironmentData - INFO - Making API request to: data
+2025-12-04 03:00:56,677 - EnvironmentData - DEBUG - Parameters: {'deviceSerialNumber': '10889154', 'sensorSerialNumber': '10889154-2', 'startTime': 1763952360000, 'endTime': 1764816360000}
+2025-12-04 03:00:56,873 - EnvironmentData - INFO - API message: No sensor found
+2025-12-04 03:00:56,873 - EnvironmentData - INFO - Retrieved 0 items from 'data'
+2025-12-04 03:00:56,873 - EnvironmentData - INFO - get_sensor_data for device 20284064, sensor 20284064-1
+2025-12-04 03:00:56,873 - EnvironmentData - INFO - Making API request to: data
+2025-12-04 03:00:56,873 - EnvironmentData - DEBUG - Parameters: {'deviceSerialNumber': '20284064', 'sensorSerialNumber': '20284064-1', 'startTime': 1763952360000, 'endTime': 1764816360000}
+2025-12-04 03:00:57,222 - EnvironmentData - INFO - API message: No sensor found
+2025-12-04 03:00:57,222 - EnvironmentData - INFO - Retrieved 0 items from 'data'
+2025-12-04 03:00:57,223 - EnvironmentData - INFO - get_sensor_data for device 22194278, sensor 22194278-2
+2025-12-04 03:00:57,223 - EnvironmentData - INFO - Making API request to: data
+2025-12-04 03:00:57,223 - EnvironmentData - DEBUG - Parameters: {'deviceSerialNumber': '22194278', 'sensorSerialNumber': '22194278-2', 'startTime': 1763952360000, 'endTime': 1764816360000}
+2025-12-04 03:00:57,574 - EnvironmentData - INFO - API message: No sensor found
+2025-12-04 03:00:57,574 - EnvironmentData - INFO - Retrieved 0 items from 'data'
+2025-12-04 03:00:57,574 - EnvironmentData - INFO - get_sensor_data for device 22040303, sensor 22040303-1
+2025-12-04 03:00:57,574 - EnvironmentData - INFO - Making API request to: data
+2025-12-04 03:00:57,574 - EnvironmentData - DEBUG - Parameters: {'deviceSerialNumber': '22040303', 'sensorSerialNumber': '22040303-1', 'startTime': 1763952360000, 'endTime': 1764816360000}
+2025-12-04 03:00:58,070 - EnvironmentData - INFO - Retrieved 1 items from 'sensors'
+2025-12-04 03:00:58,071 - EnvironmentData - INFO - Transformed 480 readings from LI-COR data
+2025-12-04 03:00:58,071 - EnvironmentData - INFO - Retrieved 480 readings for ICSC__010C140E______/Temperature
+2025-12-04 03:00:58,072 - EnvironmentData - INFO - get_sensor_data for device 22040305, sensor 22040305-1
+2025-12-04 03:00:58,072 - EnvironmentData - INFO - Making API request to: data
+2025-12-04 03:00:58,072 - EnvironmentData - DEBUG - Parameters: {'deviceSerialNumber': '22040305', 'sensorSerialNumber': '22040305-1', 'startTime': 1763952360000, 'endTime': 1764816360000}
+2025-12-04 03:00:58,263 - EnvironmentData - INFO - API message: No sensor found
+2025-12-04 03:00:58,264 - EnvironmentData - INFO - Retrieved 0 items from 'data'
+2025-12-04 03:00:58,264 - EnvironmentData - INFO - get_sensor_data for device 22040302, sensor 22040302-2
+2025-12-04 03:00:58,264 - EnvironmentData - INFO - Making API request to: data
+2025-12-04 03:00:58,264 - EnvironmentData - DEBUG - Parameters: {'deviceSerialNumber': '22040302', 'sensorSerialNumber': '22040302-2', 'startTime': 1763952360000, 'endTime': 1764816360000}
+2025-12-04 03:00:58,543 - EnvironmentData - INFO - Retrieved 1 items from 'sensors'
+2025-12-04 03:00:58,545 - EnvironmentData - INFO - Transformed 480 readings from LI-COR data
+2025-12-04 03:00:58,545 - EnvironmentData - INFO - Retrieved 480 readings for ICSC__010C145S______/RH
+2025-12-04 03:00:58,545 - EnvironmentData - INFO - get_sensor_data for device 10740550, sensor 10740550-1
+2025-12-04 03:00:58,545 - EnvironmentData - INFO - Making API request to: data
+2025-12-04 03:00:58,545 - EnvironmentData - DEBUG - Parameters: {'deviceSerialNumber': '10740550', 'sensorSerialNumber': '10740550-1', 'startTime': 1763952360000, 'endTime': 1764816360000}
+2025-12-04 03:00:58,906 - EnvironmentData - INFO - Retrieved 1 items from 'sensors'
+2025-12-04 03:00:58,908 - EnvironmentData - INFO - Transformed 465 readings from LI-COR data
+2025-12-04 03:00:58,908 - EnvironmentData - INFO - Retrieved 465 readings for ICSC__010C149_______/Temperature
+2025-12-04 03:00:58,908 - EnvironmentData - INFO - get_sensor_data for device 22194277, sensor 22194277-3
+2025-12-04 03:00:58,908 - EnvironmentData - INFO - Making API request to: data
+2025-12-04 03:00:58,908 - EnvironmentData - DEBUG - Parameters: {'deviceSerialNumber': '22194277', 'sensorSerialNumber': '22194277-3', 'startTime': 1763952360000, 'endTime': 1764816360000}
+2025-12-04 03:00:59,137 - EnvironmentData - INFO - Retrieved 1 items from 'sensors'
+2025-12-04 03:00:59,139 - EnvironmentData - INFO - Transformed 1253 readings from LI-COR data
+2025-12-04 03:00:59,139 - EnvironmentData - INFO - Retrieved 1253 readings for ICSC__010C140W_____F/RH
+2025-12-04 03:00:59,139 - EnvironmentData - INFO - get_sensor_data for device 20447203, sensor 20447203-1
+2025-12-04 03:00:59,139 - EnvironmentData - INFO - Making API request to: data
+2025-12-04 03:00:59,139 - EnvironmentData - DEBUG - Parameters: {'deviceSerialNumber': '20447203', 'sensorSerialNumber': '20447203-1', 'startTime': 1763952360000, 'endTime': 1764816360000}
+2025-12-04 03:00:59,338 - EnvironmentData - INFO - API message: No sensor found
+2025-12-04 03:00:59,338 - EnvironmentData - INFO - Retrieved 0 items from 'data'
+2025-12-04 03:00:59,338 - EnvironmentData - INFO - get_sensor_data for device 22040304, sensor 22040304-1
+2025-12-04 03:00:59,338 - EnvironmentData - INFO - Making API request to: data
+2025-12-04 03:00:59,338 - EnvironmentData - DEBUG - Parameters: {'deviceSerialNumber': '22040304', 'sensorSerialNumber': '22040304-1', 'startTime': 1763952360000, 'endTime': 1764816360000}
+2025-12-04 03:00:59,527 - EnvironmentData - INFO - API message: No sensor found
+2025-12-04 03:00:59,527 - EnvironmentData - INFO - Retrieved 0 items from 'data'
+2025-12-04 03:00:59,527 - EnvironmentData - INFO - get_sensor_data for device 22040303, sensor 22040303-2
+2025-12-04 03:00:59,527 - EnvironmentData - INFO - Making API request to: data
+2025-12-04 03:00:59,527 - EnvironmentData - DEBUG - Parameters: {'deviceSerialNumber': '22040303', 'sensorSerialNumber': '22040303-2', 'startTime': 1763952360000, 'endTime': 1764816360000}
+2025-12-04 03:00:59,874 - EnvironmentData - INFO - Retrieved 1 items from 'sensors'
+2025-12-04 03:00:59,876 - EnvironmentData - INFO - Transformed 480 readings from LI-COR data
+2025-12-04 03:00:59,876 - EnvironmentData - INFO - Retrieved 480 readings for ICSC__010C140E______/RH
+2025-12-04 03:00:59,876 - EnvironmentData - INFO - get_sensor_data for device 10889153, sensor 10889153-2
+2025-12-04 03:00:59,876 - EnvironmentData - INFO - Making API request to: data
+2025-12-04 03:00:59,876 - EnvironmentData - DEBUG - Parameters: {'deviceSerialNumber': '10889153', 'sensorSerialNumber': '10889153-2', 'startTime': 1763952360000, 'endTime': 1764816360000}
+2025-12-04 03:01:00,159 - EnvironmentData - INFO - Retrieved 1 items from 'sensors'
+2025-12-04 03:01:00,160 - EnvironmentData - INFO - Transformed 480 readings from LI-COR data
+2025-12-04 03:01:00,160 - EnvironmentData - INFO - Retrieved 480 readings for C145 Structural/RH
+2025-12-04 03:01:00,160 - EnvironmentData - INFO - get_sensor_data for device 20284064, sensor 20284064-2
+2025-12-04 03:01:00,160 - EnvironmentData - INFO - Making API request to: data
+2025-12-04 03:01:00,160 - EnvironmentData - DEBUG - Parameters: {'deviceSerialNumber': '20284064', 'sensorSerialNumber': '20284064-2', 'startTime': 1763952360000, 'endTime': 1764816360000}
+2025-12-04 03:01:00,356 - EnvironmentData - INFO - API message: No sensor found
+2025-12-04 03:01:00,357 - EnvironmentData - INFO - Retrieved 0 items from 'data'
+2025-12-04 03:01:00,357 - EnvironmentData - INFO - get_sensor_data for device 10889154, sensor 10889154-1
+2025-12-04 03:01:00,357 - EnvironmentData - INFO - Making API request to: data
+2025-12-04 03:01:00,357 - EnvironmentData - DEBUG - Parameters: {'deviceSerialNumber': '10889154', 'sensorSerialNumber': '10889154-1', 'startTime': 1763952360000, 'endTime': 1764816360000}
+2025-12-04 03:01:00,639 - EnvironmentData - INFO - API message: No sensor found
+2025-12-04 03:01:00,640 - EnvironmentData - INFO - Retrieved 0 items from 'data'
+2025-12-04 03:01:00,640 - EnvironmentData - INFO - get_sensor_data for device 22194278, sensor 22194278-1
+2025-12-04 03:01:00,640 - EnvironmentData - INFO - Making API request to: data
+2025-12-04 03:01:00,640 - EnvironmentData - DEBUG - Parameters: {'deviceSerialNumber': '22194278', 'sensorSerialNumber': '22194278-1', 'startTime': 1763952360000, 'endTime': 1764816360000}
+2025-12-04 03:01:01,222 - EnvironmentData - INFO - API message: No sensor found
+2025-12-04 03:01:01,222 - EnvironmentData - INFO - Retrieved 0 items from 'data'
+2025-12-04 03:01:01,222 - EnvironmentData - INFO - get_sensor_data for device 22202141, sensor 22179175-1
+2025-12-04 03:01:01,222 - EnvironmentData - INFO - Making API request to: data
+2025-12-04 03:01:01,222 - EnvironmentData - DEBUG - Parameters: {'deviceSerialNumber': '22202141', 'sensorSerialNumber': '22179175-1', 'startTime': 1763952360000, 'endTime': 1764816360000}
+2025-12-04 03:01:01,719 - EnvironmentData - INFO - API message: No sensor found
+2025-12-04 03:01:01,719 - EnvironmentData - INFO - Retrieved 0 items from 'data'
+2025-12-04 03:01:01,719 - EnvironmentData - INFO - get_sensor_data for device 22040305, sensor 22040305-2
+2025-12-04 03:01:01,719 - EnvironmentData - INFO - Making API request to: data
+2025-12-04 03:01:01,719 - EnvironmentData - DEBUG - Parameters: {'deviceSerialNumber': '22040305', 'sensorSerialNumber': '22040305-2', 'startTime': 1763952360000, 'endTime': 1764816360000}
+2025-12-04 03:01:01,916 - EnvironmentData - INFO - API message: No sensor found
+2025-12-04 03:01:01,916 - EnvironmentData - INFO - Retrieved 0 items from 'data'
+2025-12-04 03:01:01,916 - EnvironmentData - INFO - Successfully retrieved historical data from 14 device/sensor combinations
+2025-12-04 03:01:01,917 - EnvironmentData - INFO - initialize_database_licor validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:01:01,918 - EnvironmentData - INFO - initialize_database_licor validation passed: one SensorName per SensorID.
+2025-12-04 03:01:01,919 - EnvironmentData - INFO - initialize_database_licor validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:01:01,919 - EnvironmentData - INFO - initialize_database_licor validation passed: one SensorName per SensorID.
+2025-12-04 03:01:01,920 - EnvironmentData - INFO - initialize_database_licor validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:01:01,921 - EnvironmentData - INFO - initialize_database_licor validation passed: one SensorName per SensorID.
+2025-12-04 03:01:01,921 - EnvironmentData - INFO - initialize_database_licor validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:01:01,922 - EnvironmentData - INFO - initialize_database_licor validation passed: one SensorName per SensorID.
+2025-12-04 03:01:01,923 - EnvironmentData - INFO - initialize_database_licor validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:01:01,923 - EnvironmentData - INFO - initialize_database_licor validation passed: one SensorName per SensorID.
+2025-12-04 03:01:01,924 - EnvironmentData - INFO - initialize_database_licor validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:01:01,925 - EnvironmentData - INFO - initialize_database_licor validation passed: one SensorName per SensorID.
+2025-12-04 03:01:01,926 - EnvironmentData - INFO - initialize_database_licor validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:01:01,926 - EnvironmentData - INFO - initialize_database_licor validation passed: one SensorName per SensorID.
+2025-12-04 03:01:01,927 - EnvironmentData - INFO - initialize_database_licor validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:01:01,928 - EnvironmentData - INFO - initialize_database_licor validation passed: one SensorName per SensorID.
+2025-12-04 03:01:01,929 - EnvironmentData - INFO - initialize_database_licor validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:01:01,929 - EnvironmentData - INFO - initialize_database_licor validation passed: one SensorName per SensorID.
+2025-12-04 03:01:01,930 - EnvironmentData - INFO - initialize_database_licor validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:01:01,930 - EnvironmentData - INFO - initialize_database_licor validation passed: one SensorName per SensorID.
+2025-12-04 03:01:01,931 - EnvironmentData - INFO - initialize_database_licor validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:01:01,932 - EnvironmentData - INFO - initialize_database_licor validation passed: one SensorName per SensorID.
+2025-12-04 03:01:01,933 - EnvironmentData - INFO - initialize_database_licor validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:01:01,933 - EnvironmentData - INFO - initialize_database_licor validation passed: one SensorName per SensorID.
+2025-12-04 03:01:01,934 - EnvironmentData - INFO - initialize_database_licor validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:01:01,935 - EnvironmentData - INFO - initialize_database_licor validation passed: one SensorName per SensorID.
+2025-12-04 03:01:01,935 - EnvironmentData - INFO - initialize_database_licor validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-04 03:01:01,936 - EnvironmentData - INFO - initialize_database_licor validation passed: one SensorName per SensorID.
+2025-12-04 03:01:02,004 - EnvironmentData - INFO - Historical data initialization complete: 367752 total records from 152 sources
