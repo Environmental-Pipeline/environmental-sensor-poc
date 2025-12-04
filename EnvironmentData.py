@@ -969,9 +969,9 @@ class EnvironmentData:
 
     def export_to_excel(self):
         """
-        Export consolidated data to Excel using the template at templates/consolidated-data-template.xlsx.
+        Export consolidated data to Excel using the template at templates/consolidated-data-sample-template.xlsx.
         Fills in sheets: sensors, devices, device_readings_daily, and device_readings_last1000.
-        Saves the result to data/consolidated-data.xlsx.
+        Saves the result to data/consolidated-data-sample.xlsx.
         """
         consolidation.export_to_excel(
             data_path=self.data_path,

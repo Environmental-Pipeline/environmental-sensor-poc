@@ -465,6 +465,58 @@ def generate_validation_results(
     #     if missing_building_devices.shape[0] > 0 and logger:
     #         logger.warning(f"{step} validation: {building_details}")
     
+    # ============ CHECK FOR DEVICES MISSING TEMP OR RH READINGS ============
+    device_readings_path = f"{data_path}/device_readings.parquet"
+    missing_reading_details = []
+    device_readings = polars.read_parquet(device_readings_path)
+    
+    # Find unique devices where temp is null but RH is not (missing temp)
+    missing_temp = device_readings.filter(
+        polars.col("SensorReadingF").is_null() & polars.col("SensorReadingRh").is_not_null()
+    ).select(["DeviceID", "DeviceName", "Source"]).unique()
+    
+    for row in missing_temp.iter_rows(named=True):
+        missing_reading_details.append({
+            "DeviceID": row.get("DeviceID"),
+            "DeviceName": row.get("DeviceName"),
+            "Source": row.get("Source"),
+            "missing_reading": "SensorReadingF",
+        })
+    
+    # Find unique devices where RH is null but temp is not (missing RH)
+    missing_rh = device_readings.filter(
+        polars.col("SensorReadingRh").is_null() & polars.col("SensorReadingF").is_not_null()
+    ).select(["DeviceID", "DeviceName", "Source"]).unique()
+    
+    for row in missing_rh.iter_rows(named=True):
+        missing_reading_details.append({
+            "DeviceID": row.get("DeviceID"),
+            "DeviceName": row.get("DeviceName"),
+            "Source": row.get("Source"),
+            "missing_reading": "SensorReadingRh",
+        })
+    
+    missing_temp_count = missing_temp.shape[0]
+    missing_rh_count = missing_rh.shape[0]
+    
+    if missing_temp_count > 0 or missing_rh_count > 0:
+        details_parts = []
+        if missing_temp_count > 0:
+            details_parts.append(f"{missing_temp_count} devices missing temperature")
+        if missing_rh_count > 0:
+            details_parts.append(f"{missing_rh_count} devices missing humidity")
+        details_str = ", ".join(details_parts) + ". See validation-detail.csv for device list."
+    else:
+        total_devices = device_readings.select("DeviceID").n_unique()
+        details_str = f"All {total_devices} devices have both temperature and humidity readings."
+    
+    validation_results.append({
+        "test_name": "devices_missing_readings",
+        "run_utc": run_utc,
+        "result": "WARN" if missing_reading_details else "PASS",
+        "details": details_str
+    })
+    
     # ============ DATA GAPS BY SOURCE ============
     gaps = detect_data_gaps(sensors)
     
@@ -550,7 +602,7 @@ def generate_validation_results(
     if logger:
         logger.info(f"Wrote {len(validation_results)} validation results to {validation_csv_path}")
     
-    # ============ WRITE VALIDATION DETAIL CSV (gaps only) ============
+    # ============ WRITE VALIDATION DETAIL CSV (gaps and missing readings) ============
     events_csv_path = f"{data_path}/validation-detail.csv"
     event_rows = []
     
@@ -560,8 +612,11 @@ def generate_validation_results(
             event_rows.append({
                 "event": "DATA_GAP",
                 "Source": row.get("Source"),
+                "DeviceID": None,
+                "DeviceName": None,
                 "SensorID": row.get("SensorID"),
                 "SensorName": row.get("SensorName"),
+                "missing_reading": None,
                 "event_utc": row.get("gap_start_utc"),
                 "event_datetime_est": utc_to_est_string(row.get("gap_start_utc")),
                 "event_end_utc": row.get("gap_end_utc"),
@@ -571,12 +626,47 @@ def generate_validation_results(
                 "detected_datetime_est": run_datetime_est,
             })
     
+    # Add missing reading events
+    for detail in missing_reading_details:
+        event_rows.append({
+            "event": "MISSING_READING",
+            "Source": detail.get("Source"),
+            "DeviceID": detail.get("DeviceID"),
+            "DeviceName": detail.get("DeviceName"),
+            "SensorID": None,
+            "SensorName": None,
+            "missing_reading": detail.get("missing_reading"),
+            "event_utc": None,
+            "event_datetime_est": None,
+            "event_end_utc": None,
+            "event_end_datetime_est": None,
+            "gap_minutes": None,
+            "detected_utc": run_utc,
+            "detected_datetime_est": run_datetime_est,
+        })
+    
     if event_rows:
-        events_df = polars.DataFrame(event_rows)
+        events_df = polars.DataFrame(event_rows, schema={
+            "event": polars.Utf8,
+            "Source": polars.Utf8,
+            "DeviceID": polars.Utf8,
+            "DeviceName": polars.Utf8,
+            "SensorID": polars.Utf8,
+            "SensorName": polars.Utf8,
+            "missing_reading": polars.Utf8,
+            "event_utc": polars.Datetime("us", "UTC"),
+            "event_datetime_est": polars.Utf8,
+            "event_end_utc": polars.Datetime("us", "UTC"),
+            "event_end_datetime_est": polars.Utf8,
+            "gap_minutes": polars.Float64,
+            "detected_utc": polars.Int64,
+            "detected_datetime_est": polars.Utf8,
+        })
         
         # Reorder columns for readability
         events_df = events_df.select([
-            "event", "Source", "SensorID", "SensorName",
+            "event", "Source", "DeviceID", "DeviceName", "SensorID", "SensorName",
+            "missing_reading",
             "event_utc", "event_datetime_est", 
             "event_end_utc", "event_end_datetime_est",
             "gap_minutes",

@@ -303,9 +303,9 @@ def update_lookups(
 
 def export_to_excel(data_path: str, home_directory: str, logger) -> None:
     """
-    Export consolidated data to Excel using the template at templates/consolidated-data-template.xlsx.
+    Export consolidated data to Excel using the template at templates/consolidated-data-sample-template.xlsx.
     Fills in sheets: sensors, devices, device_readings_daily, and device_readings_last1000.
-    Saves the result to data/consolidated-data.xlsx.
+    Saves the result to data/consolidated-data-sample.xlsx.
     
     The column order is determined by the template headers in row 1. Data columns are matched
     to template columns by name, so you can rearrange columns in the template and the code
@@ -320,8 +320,8 @@ def export_to_excel(data_path: str, home_directory: str, logger) -> None:
     logger : logging.Logger
         Logger instance for logging messages.
     """
-    template_path = f"{home_directory}/templates/consolidated-data-template.xlsx"
-    output_path = f"{data_path}/consolidated-data.xlsx"
+    template_path = f"{home_directory}/templates/consolidated-data-sample-template.xlsx"
+    output_path = f"{data_path}/consolidated-data-sample.xlsx"
     
     # Copy template to output location
     shutil.copy(template_path, output_path)
@@ -367,6 +367,13 @@ def export_to_excel(data_path: str, home_directory: str, logger) -> None:
                 template_columns.append(header)
                 col_idx += 1
             
+            # Capture number formats from the template's header row (row 1) for each column
+            # The template has number formats defined on the header row
+            column_number_formats = {}
+            for col_idx in range(1, len(template_columns) + 1):
+                template_cell = ws.cell(row=1, column=col_idx)
+                column_number_formats[col_idx] = template_cell.number_format
+            
             # If template has headers, use that order; otherwise use data columns
             if template_columns:
                 # Filter to only columns that exist in both template and data
@@ -391,7 +398,10 @@ def export_to_excel(data_path: str, home_directory: str, logger) -> None:
                         # Strip timezone info from datetime values (Excel doesn't support timezones)
                         if hasattr(value, 'tzinfo') and value.tzinfo is not None:
                             value = value.replace(tzinfo=None)
-                    ws.cell(row=row_idx, column=col_idx, value=value)
+                    cell = ws.cell(row=row_idx, column=col_idx, value=value)
+                    # Apply the template's number format to preserve formatting
+                    if col_idx in column_number_formats and column_number_formats[col_idx] != 'General':
+                        cell.number_format = column_number_formats[col_idx]
     
     # Save the workbook
     wb.save(output_path)
@@ -495,9 +505,9 @@ def build_devices(
         .unique()
         .group_by("DeviceID")
         .agg([
-            polars.col("SensorID").str.join("|").alias("Sensors"),
-            polars.col("SensorName").str.join("|").alias("SensorNames"), 
-            polars.col("SensorType").str.join("|").alias("SensorTypes")
+            polars.col("SensorID").sort().str.join("|").alias("Sensors"),
+            polars.col("SensorName").sort().str.join("|").alias("SensorNames"), 
+            polars.col("SensorType").sort().str.join("|").alias("SensorTypes")
         ])
     )
     

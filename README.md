@@ -152,3 +152,13 @@ coverage html --include="modules/*"
 
 Polars/parquet was selected as our data framework because it is faster and more memory efficient, and will therefore help the project scale better. Parquet files can be interacted with effeciently using SQL syntax in DuckDB.
 
+**helpful commands**
+
+Quickly update runner and test branches:
+
+```bash
+git checkout runner
+git merge main --no-edit
+git checkout test
+git merge main --no-edit
+```
