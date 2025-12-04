@@ -512,7 +512,7 @@ def generate_validation_results(
                 "test_name": f"alerts_{row['Source']}",
                 "run_utc": run_utc,
                 "result": "WARN" if row["total_alerts"] > 0 else "PASS",
-                "details": f"Found {row['total_alerts']} readings outside acceptable thresholds in {row['Source']} data. {row['sensors_with_alerts']} sensors triggered alerts. Check alerts.csv for details."
+                "details": f"Found {row['total_alerts']} readings outside acceptable thresholds in {row['Source']} data. {row['sensors_with_alerts']} sensors triggered alerts."
             })
     else:
         sources = sensors["Source"].unique().to_list() if "Source" in sensors.columns else ["Unknown"]
@@ -550,8 +550,8 @@ def generate_validation_results(
     if logger:
         logger.info(f"Wrote {len(validation_results)} validation results to {validation_csv_path}")
     
-    # ============ WRITE COMBINED VALIDATION EVENTS CSV (gaps + alerts) ============
-    events_csv_path = f"{data_path}/alerts.csv"
+    # ============ WRITE VALIDATION DETAIL CSV (gaps only) ============
+    events_csv_path = f"{data_path}/validation-detail.csv"
     event_rows = []
     
     # Add gap events
@@ -567,31 +567,6 @@ def generate_validation_results(
                 "event_end_utc": row.get("gap_end_utc"),
                 "event_end_datetime_est": utc_to_est_string(row.get("gap_end_utc")),
                 "gap_minutes": row.get("gap_minutes"),
-                "reading_type": None,
-                "reading_value": None,
-                "threshold_min": None,
-                "threshold_max": None,
-                "detected_utc": run_utc,
-                "detected_datetime_est": run_datetime_est,
-            })
-    
-    # Add alert events
-    if not alerts.is_empty():
-        for row in alerts.iter_rows(named=True):
-            event_rows.append({
-                "event": row.get("alert_type"),
-                "Source": row.get("Source"),
-                "SensorID": row.get("SensorID"),
-                "SensorName": row.get("SensorName"),
-                "event_utc": row.get("SensorReadingUTC"),
-                "event_datetime_est": utc_to_est_string(row.get("SensorReadingUTC")),
-                "event_end_utc": None,
-                "event_end_datetime_est": None,
-                "gap_minutes": None,
-                "reading_type": row.get("reading_type"),
-                "reading_value": row.get("reading_value"),
-                "threshold_min": row.get("threshold_min"),
-                "threshold_max": row.get("threshold_max"),
                 "detected_utc": run_utc,
                 "detected_datetime_est": run_datetime_est,
             })
@@ -604,8 +579,7 @@ def generate_validation_results(
             "event", "Source", "SensorID", "SensorName",
             "event_utc", "event_datetime_est", 
             "event_end_utc", "event_end_datetime_est",
-            "gap_minutes", "reading_type", "reading_value", 
-            "threshold_min", "threshold_max",
+            "gap_minutes",
             "detected_utc", "detected_datetime_est"
         ])
         
