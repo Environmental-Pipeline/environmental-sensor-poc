@@ -8,6 +8,7 @@
 - To escape `"`, use `""`, not `\"`.
 - Only use functions if code is reused multiple times, or complex enough that it needs to be abstracted. Otherwise, keep it simple and keep code inline.
 - Some files list a testing file at the top. If you change a file, run the tests for that file to make sure nothing is broken.
+- For data query examples, see `experiments\2-examples-analysis.ipynb`
 
 
 # If You Run PowerShell
