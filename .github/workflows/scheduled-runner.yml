@@ -3,6 +3,7 @@ name: Scheduled Sensor Data Pull
 on:
   schedule:
     - cron: '*/15 * * * *'  # Run every 15 minutes
+  workflow_dispatch:  # Allow manual trigger
 
 concurrency:
   group: sensor-data-pull
@@ -32,6 +33,14 @@ jobs:
         with:
           ref: runner
           fetch-depth: 0
+
+      - name: Ensure latest runner branch
+        if: steps.check-active.outputs.active == 'true'
+        run: |
+          git fetch origin runner
+          git reset --hard origin/runner
+          echo "Now at commit:"
+          git log -1 --oneline
 
       - name: Set up Python
         if: steps.check-active.outputs.active == 'true'
