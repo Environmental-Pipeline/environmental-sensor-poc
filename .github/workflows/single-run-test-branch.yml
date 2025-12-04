@@ -1,4 +1,4 @@
-name: Sensor Data Pull
+name: Clear Data & Run Init, Wait, Pull, Consolidate
 
 on:
   workflow_dispatch:
@@ -57,7 +57,9 @@ jobs:
           cat .env | sed 's/=.*/=***/'
 
       - name: Delete data folder for clean run
-        run: rm -rf data/
+        env:
+          DATA_PATH: ${{ vars.DATA_PATH || 'data' }}
+        run: rm -rf $DATA_PATH/
 
       - name: Run init script
         run: python jobs/0-init.py
@@ -71,10 +73,12 @@ jobs:
       - name: Run consolidate script
         run: python jobs/2-consolidate.py
 
-      - name: Commit data to runner branch
+      - name: Commit data to test branch
+        env:
+          DATA_PATH: ${{ vars.DATA_PATH || 'data' }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/
+          git add $DATA_PATH/
           git diff --staged --quiet || git commit -m "Update sensor data - $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
           git push origin runner
