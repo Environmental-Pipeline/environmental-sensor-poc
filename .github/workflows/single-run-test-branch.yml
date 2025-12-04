@@ -1,4 +1,4 @@
-name: Sensor Data Pull
+name: Clear Data & Run Init, Wait, Pull, Consolidate
 
 on:
   workflow_dispatch:
