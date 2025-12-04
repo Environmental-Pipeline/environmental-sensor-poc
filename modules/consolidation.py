@@ -367,6 +367,13 @@ def export_to_excel(data_path: str, home_directory: str, logger) -> None:
                 template_columns.append(header)
                 col_idx += 1
             
+            # Capture number formats from the template's header row (row 1) for each column
+            # The template has number formats defined on the header row
+            column_number_formats = {}
+            for col_idx in range(1, len(template_columns) + 1):
+                template_cell = ws.cell(row=1, column=col_idx)
+                column_number_formats[col_idx] = template_cell.number_format
+            
             # If template has headers, use that order; otherwise use data columns
             if template_columns:
                 # Filter to only columns that exist in both template and data
@@ -391,7 +398,10 @@ def export_to_excel(data_path: str, home_directory: str, logger) -> None:
                         # Strip timezone info from datetime values (Excel doesn't support timezones)
                         if hasattr(value, 'tzinfo') and value.tzinfo is not None:
                             value = value.replace(tzinfo=None)
-                    ws.cell(row=row_idx, column=col_idx, value=value)
+                    cell = ws.cell(row=row_idx, column=col_idx, value=value)
+                    # Apply the template's number format to preserve formatting
+                    if col_idx in column_number_formats and column_number_formats[col_idx] != 'General':
+                        cell.number_format = column_number_formats[col_idx]
     
     # Save the workbook
     wb.save(output_path)
