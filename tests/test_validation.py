@@ -721,7 +721,7 @@ class TestGenerateDiagnosticsReport(unittest.TestCase):
     
     def setUp(self):
         """Clear CSV files before each test."""
-        for f in ["validation-results.csv", "alerts.csv"]:
+        for f in ["validation-results.csv", "validation-detail.csv"]:
             path = os.path.join(self.test_data_path, f)
             if os.path.exists(path):
                 os.remove(path)
@@ -794,15 +794,15 @@ class TestGenerateDiagnosticsReport(unittest.TestCase):
             step="test_gaps",
         )
         
-        # Check alerts CSV was created with gap events
-        alerts_path = os.path.join(self.test_data_path, "alerts.csv")
-        self.assertTrue(os.path.exists(alerts_path))
+        # Check validation-detail CSV was created with gap events
+        detail_path = os.path.join(self.test_data_path, "validation-detail.csv")
+        self.assertTrue(os.path.exists(detail_path))
         
-        alerts_df = polars.read_csv(alerts_path)
-        self.assertTrue(alerts_df.filter(polars.col("event") == "DATA_GAP").shape[0] > 0)
+        detail_df = polars.read_csv(detail_path)
+        self.assertTrue(detail_df.filter(polars.col("event") == "DATA_GAP").shape[0] > 0)
     
     def test_generates_report_with_alerts(self):
-        """Test report generation with threshold alerts."""
+        """Test report generation with threshold alerts - alerts are tracked in validation_results but not written to validation-detail.csv."""
         data = polars.DataFrame({
             "SensorReadingUTC": [1700000000, 1700000900],
             "QueryUTC": [1700000000, 1700000900],
@@ -831,13 +831,10 @@ class TestGenerateDiagnosticsReport(unittest.TestCase):
             step="test_alerts",
         )
         
-        alerts_path = os.path.join(self.test_data_path, "alerts.csv")
-        self.assertTrue(os.path.exists(alerts_path))
-        
-        alerts_df = polars.read_csv(alerts_path)
-        alert_types = alerts_df["event"].unique().to_list()
-        self.assertIn("BELOW_MIN", alert_types)
-        self.assertIn("ABOVE_MAX", alert_types)
+        # Since there are no gaps, validation-detail.csv should not exist
+        # But alerts should still be tracked in validation_results
+        alert_results = [r for r in validation_results if "alerts" in r["test_name"]]
+        self.assertTrue(len(alert_results) > 0)
     
     def test_appends_to_existing_csv(self):
         """Test that report appends to existing CSV files."""
@@ -876,12 +873,12 @@ class TestGenerateDiagnosticsReport(unittest.TestCase):
         # Should have more rows after second run
         self.assertGreater(second_count, first_count)
 
-    def test_appends_events_to_existing_alerts_csv(self):
-        """Test that alerts.csv appends events when run multiple times (covers line 588)."""
-        # Data with alerts (out of range readings)
-        data_with_alerts = polars.DataFrame({
-            "SensorReadingUTC": [1700000000, 1700000900],
-            "QueryUTC": [1700000000, 1700000900],
+    def test_appends_events_to_existing_detail_csv(self):
+        """Test that validation-detail.csv appends events when run multiple times (covers line 588)."""
+        # Data with gaps (60-min gap will generate DATA_GAP events)
+        data_with_gaps = polars.DataFrame({
+            "SensorReadingUTC": [1700000000, 1700003600],  # 60-min gap
+            "QueryUTC": [1700000000, 1700003600],
             "Source": ["Coris", "Coris"],
             "DeviceID": ["coris:123", "coris:123"],
             "DeviceName": ["Device 1", "Device 1"],
@@ -889,17 +886,17 @@ class TestGenerateDiagnosticsReport(unittest.TestCase):
             "SensorName": ["Sensor 1", "Sensor 1"],
             "SensorType": ["Temperature", "Temperature"],
             "Historical": [False, False],
-            "SensorReadingF": [25.0, 110.0],  # Below min, above max - will generate events
+            "SensorReadingF": [72.5, 73.0],  # Within range, but has gap
         }).cast({
             "SensorReadingUTC": polars.Int64,
             "QueryUTC": polars.Int32,
             "SensorReadingF": polars.Float32,
         })
         
-        # First run - creates alerts.csv
+        # First run - creates validation-detail.csv
         validation_results1 = []
         validation.generate_validation_results(
-            sensors=data_with_alerts,
+            sensors=data_with_gaps,
             validation_results=validation_results1,
             acceptable_range=DEFAULT_ACCEPTABLE_RANGE,
             data_path=self.test_data_path,
@@ -907,14 +904,14 @@ class TestGenerateDiagnosticsReport(unittest.TestCase):
             step="run1",
         )
         
-        alerts_path = os.path.join(self.test_data_path, "alerts.csv")
-        self.assertTrue(os.path.exists(alerts_path))
-        first_count = polars.read_csv(alerts_path).shape[0]
+        detail_path = os.path.join(self.test_data_path, "validation-detail.csv")
+        self.assertTrue(os.path.exists(detail_path))
+        first_count = polars.read_csv(detail_path).shape[0]
         
-        # Second run - should append to existing alerts.csv
+        # Second run - should append to existing validation-detail.csv
         validation_results2 = []
         validation.generate_validation_results(
-            sensors=data_with_alerts,
+            sensors=data_with_gaps,
             validation_results=validation_results2,
             acceptable_range=DEFAULT_ACCEPTABLE_RANGE,
             data_path=self.test_data_path,
@@ -922,7 +919,7 @@ class TestGenerateDiagnosticsReport(unittest.TestCase):
             step="run2",
         )
         
-        second_count = polars.read_csv(alerts_path).shape[0]
+        second_count = polars.read_csv(detail_path).shape[0]
         
         # Should have doubled the events
         self.assertEqual(second_count, first_count * 2)

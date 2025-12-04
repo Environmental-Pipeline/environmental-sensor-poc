@@ -441,6 +441,7 @@ class EnvironmentData:
                             self.logger.info(
                                 f"Successfully processed {conserv_sensors.shape[0]} current Conserv records"
                             )
+                            print(f"✓ Conserv: {conserv_sensors.shape[0]} records")
                         else:
                             self.logger.warning(
                                 "Conserv data was cleaned out completely during validation!"
@@ -484,6 +485,7 @@ class EnvironmentData:
             self.validate_sensors(
                 sensors=coris_sensors, utc=current_utc, step="get_current_readings_coris"
             )
+            print(f"✓ Coris: {coris_sensors.shape[0]} records")
         else:
             # Create empty DataFrame with required schema when Coris is disabled
             coris_sensors = polars.DataFrame()
@@ -519,6 +521,7 @@ class EnvironmentData:
                         self.logger.info(
                             f"Successfully processed {licor_sensors.shape[0]} current LI-COR records"
                         )
+                        print(f"✓ LI-COR: {licor_sensors.shape[0]} records")
                     else:
                         self.logger.warning(
                             "LI-COR data was cleaned out completely during validation!"

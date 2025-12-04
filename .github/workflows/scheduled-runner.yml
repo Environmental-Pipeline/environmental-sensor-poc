@@ -81,12 +81,14 @@ jobs:
       - name: Check cron status and determine action
         if: steps.check-active.outputs.active == 'true'
         id: check-status
+        env:
+          DATA_PATH: ${{ vars.DATA_PATH || 'data' }}
         run: |
-          if [ -f "data/init.lock" ]; then
+          if [ -f "$DATA_PATH/init.lock" ]; then
             echo "Lock file exists - initialization in progress, skipping this run"
             echo "action=skip" >> $GITHUB_OUTPUT
-          elif [ -f "data/cron_status.txt" ]; then
-            STATUS=$(cat data/cron_status.txt)
+          elif [ -f "$DATA_PATH/cron_status.txt" ]; then
+            STATUS=$(cat $DATA_PATH/cron_status.txt)
             echo "status=$STATUS" >> $GITHUB_OUTPUT
             if [ "$STATUS" == "not-initialized" ]; then
               echo "cron_status.txt shows not-initialized - will run init"
@@ -102,12 +104,14 @@ jobs:
 
       - name: Set lock file and commit
         if: steps.check-active.outputs.active == 'true' && steps.check-status.outputs.action == 'init'
+        env:
+          DATA_PATH: ${{ vars.DATA_PATH || 'data' }}
         run: |
-          mkdir -p data
-          date -u +'%Y-%m-%d %H:%M:%S UTC' > data/init.lock
+          mkdir -p $DATA_PATH
+          date -u +'%Y-%m-%d %H:%M:%S UTC' > $DATA_PATH/init.lock
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/init.lock
+          git add $DATA_PATH/init.lock
           git commit -m "Start initialization - $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
           git push origin runner
 
@@ -117,7 +121,9 @@ jobs:
 
       - name: Remove lock file
         if: steps.check-active.outputs.active == 'true' && steps.check-status.outputs.action == 'init'
-        run: rm -f data/init.lock
+        env:
+          DATA_PATH: ${{ vars.DATA_PATH || 'data' }}
+        run: rm -f $DATA_PATH/init.lock
 
       - name: Run pull and consolidate
         if: steps.check-active.outputs.active == 'true' && steps.check-status.outputs.action == 'pull'
@@ -127,9 +133,11 @@ jobs:
 
       - name: Commit data to runner branch
         if: steps.check-active.outputs.active == 'true' && steps.check-status.outputs.action != 'skip'
+        env:
+          DATA_PATH: ${{ vars.DATA_PATH || 'data' }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/
+          git add $DATA_PATH/
           git diff --staged --quiet || git commit -m "Update sensor data - $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
           git push origin runner
