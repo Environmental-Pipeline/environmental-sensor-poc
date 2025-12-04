@@ -654,9 +654,9 @@ def generate_validation_results(
             "SensorID": polars.Utf8,
             "SensorName": polars.Utf8,
             "missing_reading": polars.Utf8,
-            "event_utc": polars.Datetime("us", "UTC"),
+            "event_utc": polars.Int64,
             "event_datetime_est": polars.Utf8,
-            "event_end_utc": polars.Datetime("us", "UTC"),
+            "event_end_utc": polars.Int64,
             "event_end_datetime_est": polars.Utf8,
             "gap_minutes": polars.Float64,
             "detected_utc": polars.Int64,
@@ -674,7 +674,25 @@ def generate_validation_results(
         ])
         
         if os.path.exists(events_csv_path):
-            existing_events = polars.read_csv(events_csv_path)
+            existing_events = polars.read_csv(
+                events_csv_path,
+                schema={
+                    "event": polars.Utf8,
+                    "Source": polars.Utf8,
+                    "DeviceID": polars.Utf8,
+                    "DeviceName": polars.Utf8,
+                    "SensorID": polars.Utf8,
+                    "SensorName": polars.Utf8,
+                    "missing_reading": polars.Utf8,
+                    "event_utc": polars.Int64,
+                    "event_datetime_est": polars.Utf8,
+                    "event_end_utc": polars.Int64,
+                    "event_end_datetime_est": polars.Utf8,
+                    "gap_minutes": polars.Float64,
+                    "detected_utc": polars.Int64,
+                    "detected_datetime_est": polars.Utf8,
+                }
+            )
             events_df = polars.concat([existing_events, events_df], how="diagonal")
         
         events_df.write_csv(events_csv_path)
