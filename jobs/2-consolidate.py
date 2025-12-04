@@ -5,15 +5,17 @@ import os
 sys.path.append('/src/')  # Docker
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # GitHub Actions
 
-def read_env_variable(var_name):
+def read_env_variable(var_name, default=None):
     with open('.env') as f:
         for line in f:
             if line.startswith(var_name):
                 return line.split('=', 1)[1].strip()
+    return default
 
 # use EnvironmentData to consolidate new and historical readings into one database.
 from EnvironmentData import EnvironmentData
 EnvironmentData(
+    data_path = read_env_variable('DATA_PATH', 'data'),
     days_back = int(read_env_variable('DAYS_BACK')),
     testing = read_env_variable('TESTING').lower() == 'true',
     coris_enabled = read_env_variable('CORIS_ENABLED').lower() == 'true',

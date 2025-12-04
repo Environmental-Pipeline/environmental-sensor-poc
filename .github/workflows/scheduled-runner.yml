@@ -3,33 +3,60 @@ name: Scheduled Sensor Data Pull
 on:
   schedule:
     - cron: '*/15 * * * *'  # Run every 15 minutes
+  workflow_dispatch:  # Allow manual trigger
+
+concurrency:
+  group: sensor-data-pull
+  cancel-in-progress: false
 
 jobs:
   pull-data:
     runs-on: ubuntu-latest
-    environment: test
-    if: ${{ lower(vars.RUNNER_ACTIVE) == 'true' }}
+    environment: runner
     permissions:
       contents: write
     
     steps:
+      - name: Check if runner is active
+        id: check-active
+        run: |
+          if [[ "${{ vars.RUNNER_ACTIVE }}" == "true" || "${{ vars.RUNNER_ACTIVE }}" == "True" || "${{ vars.RUNNER_ACTIVE }}" == "TRUE" ]]; then
+            echo "active=true" >> $GITHUB_OUTPUT
+          else
+            echo "active=false" >> $GITHUB_OUTPUT
+            echo "RUNNER_ACTIVE is not set to true, skipping workflow"
+          fi
+
       - name: Checkout repository
+        if: steps.check-active.outputs.active == 'true'
         uses: actions/checkout@v4
         with:
           ref: runner
           fetch-depth: 0
 
+      - name: Ensure latest runner branch
+        if: steps.check-active.outputs.active == 'true'
+        run: |
+          git fetch origin runner
+          git reset --hard origin/runner
+          echo "Now at commit:"
+          git log -1 --oneline
+
       - name: Set up Python
+        if: steps.check-active.outputs.active == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: 'pip'
 
       - name: Install dependencies
+        if: steps.check-active.outputs.active == 'true'
         run: pip install -r requirements.txt
 
       - name: Create .env file
+        if: steps.check-active.outputs.active == 'true'
         env:
+          DATA_PATH: ${{ vars.DATA_PATH || 'data' }}
           DAYS_BACK: ${{ vars.DAYS_BACK }}
           TESTING: ${{ vars.TESTING || 'False' }}
           CORIS_ENABLED: ${{ vars.CORIS_ENABLED || 'False' }}
@@ -40,6 +67,7 @@ jobs:
           CONSERV_API_KEYS: ${{ secrets.CONSERV_API_KEYS }}
           LICOR_API_KEY: ${{ secrets.LICOR_API_KEY }}
         run: |
+          echo "DATA_PATH=$DATA_PATH" >> .env
           echo "DAYS_BACK=$DAYS_BACK" >> .env
           echo "TESTING=$TESTING" >> .env
           echo "CORIS_ENABLED=$CORIS_ENABLED" >> .env
@@ -50,18 +78,55 @@ jobs:
           echo "CONSERV_API_KEYS=$CONSERV_API_KEYS" >> .env
           echo "LICOR_API_KEY=$LICOR_API_KEY" >> .env
 
-      - name: Check for cron_status.txt and run appropriate scripts
+      - name: Check cron status and determine action
+        if: steps.check-active.outputs.active == 'true'
+        id: check-status
         run: |
-          if [ -f "data/cron_status.txt" ]; then
-            echo "cron_status.txt exists - running pull and consolidate"
-            python jobs/1-pull.py
-            python jobs/2-consolidate.py
+          if [ -f "data/init.lock" ]; then
+            echo "Lock file exists - initialization in progress, skipping this run"
+            echo "action=skip" >> $GITHUB_OUTPUT
+          elif [ -f "data/cron_status.txt" ]; then
+            STATUS=$(cat data/cron_status.txt)
+            echo "status=$STATUS" >> $GITHUB_OUTPUT
+            if [ "$STATUS" == "not-initialized" ]; then
+              echo "cron_status.txt shows not-initialized - will run init"
+              echo "action=init" >> $GITHUB_OUTPUT
+            else
+              echo "cron_status.txt exists with status: $STATUS - will run pull and consolidate"
+              echo "action=pull" >> $GITHUB_OUTPUT
+            fi
           else
-            echo "cron_status.txt does not exist - running init only"
-            python jobs/0-init.py
+            echo "cron_status.txt does not exist - will run init"
+            echo "action=init" >> $GITHUB_OUTPUT
           fi
 
+      - name: Set lock file and commit
+        if: steps.check-active.outputs.active == 'true' && steps.check-status.outputs.action == 'init'
+        run: |
+          mkdir -p data
+          date -u +'%Y-%m-%d %H:%M:%S UTC' > data/init.lock
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/init.lock
+          git commit -m "Start initialization - $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          git push origin runner
+
+      - name: Run initialization
+        if: steps.check-active.outputs.active == 'true' && steps.check-status.outputs.action == 'init'
+        run: python jobs/0-init.py
+
+      - name: Remove lock file
+        if: steps.check-active.outputs.active == 'true' && steps.check-status.outputs.action == 'init'
+        run: rm -f data/init.lock
+
+      - name: Run pull and consolidate
+        if: steps.check-active.outputs.active == 'true' && steps.check-status.outputs.action == 'pull'
+        run: |
+          python jobs/1-pull.py
+          python jobs/2-consolidate.py
+
       - name: Commit data to runner branch
+        if: steps.check-active.outputs.active == 'true' && steps.check-status.outputs.action != 'skip'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
