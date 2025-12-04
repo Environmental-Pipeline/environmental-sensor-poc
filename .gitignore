@@ -12,3 +12,5 @@ htmlcov/
 .coverage
 tests/data/
 ~$*.xlsx
+data/
+data-runner/
