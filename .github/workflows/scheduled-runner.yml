@@ -4,6 +4,10 @@ on:
   schedule:
     - cron: '*/15 * * * *'  # Run every 15 minutes
 
+concurrency:
+  group: sensor-data-pull
+  cancel-in-progress: false
+
 jobs:
   pull-data:
     runs-on: ubuntu-latest
