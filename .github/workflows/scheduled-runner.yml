@@ -56,6 +56,7 @@ jobs:
       - name: Create .env file
         if: steps.check-active.outputs.active == 'true'
         env:
+          DATA_PATH: ${{ vars.DATA_PATH || 'data' }}
           DAYS_BACK: ${{ vars.DAYS_BACK }}
           TESTING: ${{ vars.TESTING || 'False' }}
           CORIS_ENABLED: ${{ vars.CORIS_ENABLED || 'False' }}
@@ -66,6 +67,7 @@ jobs:
           CONSERV_API_KEYS: ${{ secrets.CONSERV_API_KEYS }}
           LICOR_API_KEY: ${{ secrets.LICOR_API_KEY }}
         run: |
+          echo "DATA_PATH=$DATA_PATH" >> .env
           echo "DAYS_BACK=$DAYS_BACK" >> .env
           echo "TESTING=$TESTING" >> .env
           echo "CORIS_ENABLED=$CORIS_ENABLED" >> .env
