@@ -303,9 +303,9 @@ def update_lookups(
 
 def export_to_excel(data_path: str, home_directory: str, logger) -> None:
     """
-    Export consolidated data to Excel using the template at templates/consolidated-data-template.xlsx.
+    Export consolidated data to Excel using the template at templates/consolidated-data-sample-template.xlsx.
     Fills in sheets: sensors, devices, device_readings_daily, and device_readings_last1000.
-    Saves the result to data/consolidated-data.xlsx.
+    Saves the result to data/consolidated-data-sample.xlsx.
     
     The column order is determined by the template headers in row 1. Data columns are matched
     to template columns by name, so you can rearrange columns in the template and the code
@@ -320,8 +320,8 @@ def export_to_excel(data_path: str, home_directory: str, logger) -> None:
     logger : logging.Logger
         Logger instance for logging messages.
     """
-    template_path = f"{home_directory}/templates/consolidated-data-template.xlsx"
-    output_path = f"{data_path}/consolidated-data.xlsx"
+    template_path = f"{home_directory}/templates/consolidated-data-sample-template.xlsx"
+    output_path = f"{data_path}/consolidated-data-sample.xlsx"
     
     # Copy template to output location
     shutil.copy(template_path, output_path)
