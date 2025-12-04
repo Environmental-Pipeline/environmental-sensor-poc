@@ -159,6 +159,8 @@ Quickly update runner and test branches:
 ```bash
 git checkout runner
 git merge main --no-edit
+git push
 git checkout test
 git merge main --no-edit
+git push
 ```
