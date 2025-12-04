@@ -143,3 +143,15 @@ run_datetime_est,run_utc,test_name,result,details
 2025-12-04 02:57:06 EST,1764835026,alerts_LI-COR,PASS,No alerts triggered for LI-COR. All sensor readings are within the configured acceptable thresholds.
 2025-12-04 02:57:06 EST,1764835026,alerts_Conserv,PASS,No alerts triggered for Conserv. All sensor readings are within the configured acceptable thresholds.
 2025-12-04 02:57:06 EST,1764835026,alerts_Coris,PASS,No alerts triggered for Coris. All sensor readings are within the configured acceptable thresholds.
+2025-12-04 03:31:14 EST,1764837074,required_columns_present,PASS,All 11 required columns are present in sensor data.
+2025-12-04 03:31:14 EST,1764837074,column_data_types,PASS,"All columns have the expected data types (e.g., SensorReadingUTC is Int64, Source is String)."
+2025-12-04 03:31:14 EST,1764837074,non_null_values,PASS,Every sensor reading row has at least one non-null value in the 11 required columns.
+2025-12-04 03:31:14 EST,1764837074,no_duplicate_readings,PASS,No duplicate readings found. Each sensor has unique timestamps.
+2025-12-04 03:31:14 EST,1764837074,sensor_name_consistency,PASS,All sensors have consistent names across all their readings.
+2025-12-04 03:31:14 EST,1764837074,reading_interval_check,WARN,3294 readings have more than 15 minutes between consecutive readings. This may indicate sensor downtime or data gaps.
+2025-12-04 03:31:15 EST,1764837075,data_gaps_LI-COR,WARN,"Found 4116 gaps in LI-COR data where readings are more than 15 minutes apart. Average gap: 31.1 min, longest gap: 1930.0 min. Affected 30 sensors."
+2025-12-04 03:31:15 EST,1764837075,data_gaps_Coris,WARN,"Found 1361 gaps in Coris data where readings are more than 15 minutes apart. Average gap: 4268.4 min, longest gap: 1064812.0 min. Affected 137 sensors."
+2025-12-04 03:31:15 EST,1764837075,data_gaps_Conserv,WARN,"Found 6638 gaps in Conserv data where readings are more than 15 minutes apart. Average gap: 43.7 min, longest gap: 1695.0 min. Affected 248 sensors."
+2025-12-04 03:31:15 EST,1764837075,alerts_LI-COR,PASS,No alerts triggered for LI-COR. All sensor readings are within the configured acceptable thresholds.
+2025-12-04 03:31:15 EST,1764837075,alerts_Conserv,PASS,No alerts triggered for Conserv. All sensor readings are within the configured acceptable thresholds.
+2025-12-04 03:31:15 EST,1764837075,alerts_Coris,PASS,No alerts triggered for Coris. All sensor readings are within the configured acceptable thresholds.
