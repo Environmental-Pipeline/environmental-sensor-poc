@@ -1,4 +1,4 @@
-name: Scheduled Sensor Data Pull
+name: Scheduled Pull on Runner Branch
 
 on:
   schedule:
