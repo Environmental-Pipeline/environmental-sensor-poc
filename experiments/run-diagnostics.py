@@ -52,4 +52,4 @@ validation.generate_validation_results(
     step="manual_run"
 )
 
-print("Done! Check data/validation-results.csv and data/validation-detail.csv")
+print("Done! Check data/validation-results.csv and data/validation-detail.parquet")

@@ -720,8 +720,8 @@ class TestGenerateDiagnosticsReport(unittest.TestCase):
             shutil.rmtree(cls.test_data_path)
     
     def setUp(self):
-        """Clear CSV files before each test."""
-        for f in ["validation-results.csv", "validation-detail.csv"]:
+        """Clear CSV/parquet files before each test."""
+        for f in ["validation-results.csv", "validation-detail.parquet"]:
             path = os.path.join(self.test_data_path, f)
             if os.path.exists(path):
                 os.remove(path)
@@ -794,15 +794,15 @@ class TestGenerateDiagnosticsReport(unittest.TestCase):
             step="test_gaps",
         )
         
-        # Check validation-detail CSV was created with gap events
-        detail_path = os.path.join(self.test_data_path, "validation-detail.csv")
+        # Check validation-detail parquet was created with gap events
+        detail_path = os.path.join(self.test_data_path, "validation-detail.parquet")
         self.assertTrue(os.path.exists(detail_path))
         
-        detail_df = polars.read_csv(detail_path)
+        detail_df = polars.read_parquet(detail_path)
         self.assertTrue(detail_df.filter(polars.col("event") == "DATA_GAP").shape[0] > 0)
     
     def test_generates_report_with_alerts(self):
-        """Test report generation with threshold alerts - alerts are tracked in validation_results but not written to validation-detail.csv."""
+        """Test report generation with threshold alerts - alerts are tracked in validation_results but not written to validation-detail.parquet."""
         data = polars.DataFrame({
             "SensorReadingUTC": [1700000000, 1700000900],
             "QueryUTC": [1700000000, 1700000900],
@@ -831,7 +831,7 @@ class TestGenerateDiagnosticsReport(unittest.TestCase):
             step="test_alerts",
         )
         
-        # Since there are no gaps, validation-detail.csv should not exist
+        # Since there are no gaps, validation-detail.parquet should not exist
         # But alerts should still be tracked in validation_results
         alert_results = [r for r in validation_results if "alerts" in r["test_name"]]
         self.assertTrue(len(alert_results) > 0)
@@ -873,8 +873,8 @@ class TestGenerateDiagnosticsReport(unittest.TestCase):
         # Should have more rows after second run
         self.assertGreater(second_count, first_count)
 
-    def test_appends_events_to_existing_detail_csv(self):
-        """Test that validation-detail.csv appends events when run multiple times (covers line 588)."""
+    def test_appends_events_to_existing_detail_parquet(self):
+        """Test that validation-detail.parquet appends events when run multiple times."""
         # Data with gaps (60-min gap will generate DATA_GAP events)
         data_with_gaps = polars.DataFrame({
             "SensorReadingUTC": [1700000000, 1700003600],  # 60-min gap
@@ -893,7 +893,7 @@ class TestGenerateDiagnosticsReport(unittest.TestCase):
             "SensorReadingF": polars.Float32,
         })
         
-        # First run - creates validation-detail.csv
+        # First run - creates validation-detail.parquet
         validation_results1 = []
         validation.generate_validation_results(
             sensors=data_with_gaps,
@@ -904,11 +904,11 @@ class TestGenerateDiagnosticsReport(unittest.TestCase):
             step="run1",
         )
         
-        detail_path = os.path.join(self.test_data_path, "validation-detail.csv")
+        detail_path = os.path.join(self.test_data_path, "validation-detail.parquet")
         self.assertTrue(os.path.exists(detail_path))
-        first_count = polars.read_csv(detail_path).shape[0]
+        first_count = polars.read_parquet(detail_path).shape[0]
         
-        # Second run - should append to existing validation-detail.csv
+        # Second run - should append to existing validation-detail.parquet
         validation_results2 = []
         validation.generate_validation_results(
             sensors=data_with_gaps,
@@ -919,7 +919,7 @@ class TestGenerateDiagnosticsReport(unittest.TestCase):
             step="run2",
         )
         
-        second_count = polars.read_csv(detail_path).shape[0]
+        second_count = polars.read_parquet(detail_path).shape[0]
         
         # Should have doubled the events
         self.assertEqual(second_count, first_count * 2)

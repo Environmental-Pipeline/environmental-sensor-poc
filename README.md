@@ -42,7 +42,7 @@ pip install -r requirements-dev.txt
 - Instantiate the EnvironmentData class with `api = EnvironmentData()`, this will read information from `.env` and run the historical data pull if the data folder is empty (data folder name will vary based on how we are running the code). 
 - Then, the `get_current_readings` method is called to get new readings. 
 - The `consolidate_readings` method will combine historical and new readings into analytical tables that are then explored using `duckdb` or any other technology that can explore `parquet` files. 
-- `consolidate_readings` will also create diagnostic files `validation-results.csv` (overall data validation checks like missing values, etc.), `validation-detail.csv` (data gap events where time between readings exceeded the expected duration), `alerts.txt` (readings outside the expected range, will not be created if there are no alerts), and `consolidated-data-sample.xlsx` (an excel file with a sample of the data).
+- `consolidate_readings` will also create diagnostic files `validation-results.csv` (overall data validation checks like missing values, etc.), `validation-detail.parquet` (data gap events where time between readings exceeded the expected duration), `alerts.txt` (readings outside the expected range, will not be created if there are no alerts), and `consolidated-data-sample.xlsx` (an excel file with a sample of the data).
 
 ## How To Run
 

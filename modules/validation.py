@@ -505,7 +505,7 @@ def generate_validation_results(
             details_parts.append(f"{missing_temp_count} devices missing temperature")
         if missing_rh_count > 0:
             details_parts.append(f"{missing_rh_count} devices missing humidity")
-        details_str = ", ".join(details_parts) + ". See validation-detail.csv for device list."
+        details_str = ", ".join(details_parts) + ". See validation-detail.parquet for device list."
     else:
         total_devices = device_readings.select("DeviceID").n_unique()
         details_str = f"All {total_devices} devices have both temperature and humidity readings."
@@ -602,8 +602,8 @@ def generate_validation_results(
     if logger:
         logger.info(f"Wrote {len(validation_results)} validation results to {validation_csv_path}")
     
-    # ============ WRITE VALIDATION DETAIL CSV (gaps and missing readings) ============
-    events_csv_path = f"{data_path}/validation-detail.csv"
+    # ============ WRITE VALIDATION DETAIL PARQUET (gaps and missing readings) ============
+    events_parquet_path = f"{data_path}/validation-detail.parquet"
     event_rows = []
     
     # Add gap events
@@ -673,31 +673,13 @@ def generate_validation_results(
             "detected_utc", "detected_datetime_est"
         ])
         
-        if os.path.exists(events_csv_path):
-            existing_events = polars.read_csv(
-                events_csv_path,
-                schema={
-                    "event": polars.Utf8,
-                    "Source": polars.Utf8,
-                    "DeviceID": polars.Utf8,
-                    "DeviceName": polars.Utf8,
-                    "SensorID": polars.Utf8,
-                    "SensorName": polars.Utf8,
-                    "missing_reading": polars.Utf8,
-                    "event_utc": polars.Int64,
-                    "event_datetime_est": polars.Utf8,
-                    "event_end_utc": polars.Int64,
-                    "event_end_datetime_est": polars.Utf8,
-                    "gap_minutes": polars.Float64,
-                    "detected_utc": polars.Int64,
-                    "detected_datetime_est": polars.Utf8,
-                }
-            )
+        if os.path.exists(events_parquet_path):
+            existing_events = polars.read_parquet(events_parquet_path)
             events_df = polars.concat([existing_events, events_df], how="diagonal")
         
-        events_df.write_csv(events_csv_path)
+        events_df.write_parquet(events_parquet_path)
         if logger:
-            logger.info(f"Wrote {len(event_rows)} validation events to {events_csv_path}")
+            logger.info(f"Wrote {len(event_rows)} validation events to {events_parquet_path}")
 
 
 def clean_validate_sensors(
