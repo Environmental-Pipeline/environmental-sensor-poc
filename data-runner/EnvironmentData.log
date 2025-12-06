@@ -10903,3 +10903,134 @@
 2025-12-06 05:56:51,183 - EnvironmentData - INFO - Wrote 13 validation results to ./data-runner/validation-results.csv
 2025-12-06 05:56:51,803 - EnvironmentData - INFO - Wrote 26836 validation events to ./data-runner/validation-detail.parquet
 2025-12-06 05:56:52,499 - EnvironmentData - INFO - Exported data to ./data-runner/consolidated-data-sample.xlsx
+2025-12-06 06:23:18,763 - EnvironmentData - INFO - Initialized Conserv client with 5 customers
+2025-12-06 06:23:18,763 - EnvironmentData - INFO - Enabled data sources: ['Conserv', 'Coris', 'LI-COR']
+2025-12-06 06:23:18,763 - EnvironmentData - INFO - Fetching current Conserv data for all customers
+2025-12-06 06:23:18,763 - EnvironmentData - INFO - Fetching current readings for last 30 minutes
+2025-12-06 06:23:18,828 - EnvironmentData - INFO - Fetching current data for customer 333
+2025-12-06 06:23:18,828 - EnvironmentData - INFO - Starting export for customer 333: 2025-12-06 05:53:18.828687+00:00 to 2025-12-06 06:23:18.828687+00:00
+2025-12-06 06:23:18,828 - EnvironmentData - INFO - Conserv API POST https://api.conserv.io/v1/sensors/export headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:23:19,486 - EnvironmentData - INFO - Conserv export launched: 45029117-57d5-41a9-8698-fb336632fa7b
+2025-12-06 06:23:19,486 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/45029117-57d5-41a9-8698-fb336632fa7b/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:23:29,842 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/45029117-57d5-41a9-8698-fb336632fa7b/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:23:40,240 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/45029117-57d5-41a9-8698-fb336632fa7b/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:23:50,613 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/45029117-57d5-41a9-8698-fb336632fa7b/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:24:00,997 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/45029117-57d5-41a9-8698-fb336632fa7b/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:24:11,380 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/45029117-57d5-41a9-8698-fb336632fa7b/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:24:21,760 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/45029117-57d5-41a9-8698-fb336632fa7b/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:24:32,167 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/45029117-57d5-41a9-8698-fb336632fa7b/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:24:42,524 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/45029117-57d5-41a9-8698-fb336632fa7b/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:24:52,890 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/45029117-57d5-41a9-8698-fb336632fa7b/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:24:53,230 - EnvironmentData - INFO - Export 45029117-57d5-41a9-8698-fb336632fa7b completed successfully in 93.7 seconds
+2025-12-06 06:24:58,230 - EnvironmentData - INFO - Conserv API POST https://api.conserv.io/v1/sensors/export/45029117-57d5-41a9-8698-fb336632fa7b/download headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:24:58,590 - EnvironmentData - INFO - Downloading export data from S3
+2025-12-06 06:24:58,840 - EnvironmentData - INFO - Downloaded 60 rows, 8 columns
+2025-12-06 06:24:58,842 - EnvironmentData - INFO - Successfully exported 60 rows for customer 333
+2025-12-06 06:24:58,842 - EnvironmentData - INFO - Retrieved 60 current records for customer 333
+2025-12-06 06:24:58,842 - EnvironmentData - INFO - Fetching current data for customer 1545
+2025-12-06 06:24:58,842 - EnvironmentData - INFO - Starting export for customer 1545: 2025-12-06 05:54:58.842497+00:00 to 2025-12-06 06:24:58.842497+00:00
+2025-12-06 06:24:58,842 - EnvironmentData - INFO - Conserv API POST https://api.conserv.io/v1/sensors/export headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:24:59,166 - EnvironmentData - ERROR - API request failed after SSL fallback: 403 Forbidden
+2025-12-06 06:24:59,166 - EnvironmentData - WARNING - Failed to fetch current data for customer 1545: 403 Client Error: Forbidden for url: https://api.conserv.io/v1/sensors/export
+2025-12-06 06:24:59,167 - EnvironmentData - INFO - Fetching current data for customer 307
+2025-12-06 06:24:59,167 - EnvironmentData - INFO - Starting export for customer 307: 2025-12-06 05:54:59.167155+00:00 to 2025-12-06 06:24:59.167155+00:00
+2025-12-06 06:24:59,167 - EnvironmentData - INFO - Conserv API POST https://api.conserv.io/v1/sensors/export headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:24:59,605 - EnvironmentData - INFO - Conserv export launched: 0598a128-2b51-40a8-ad87-65264e963f0f
+2025-12-06 06:24:59,605 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/0598a128-2b51-40a8-ad87-65264e963f0f/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:25:09,957 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/0598a128-2b51-40a8-ad87-65264e963f0f/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:25:20,312 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/0598a128-2b51-40a8-ad87-65264e963f0f/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:25:30,656 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/0598a128-2b51-40a8-ad87-65264e963f0f/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:25:41,058 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/0598a128-2b51-40a8-ad87-65264e963f0f/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:25:51,396 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/0598a128-2b51-40a8-ad87-65264e963f0f/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:26:01,742 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/0598a128-2b51-40a8-ad87-65264e963f0f/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:26:12,111 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/0598a128-2b51-40a8-ad87-65264e963f0f/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:26:22,449 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/0598a128-2b51-40a8-ad87-65264e963f0f/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:26:32,808 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/0598a128-2b51-40a8-ad87-65264e963f0f/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:26:43,208 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/0598a128-2b51-40a8-ad87-65264e963f0f/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:26:43,544 - EnvironmentData - INFO - Export 0598a128-2b51-40a8-ad87-65264e963f0f completed successfully in 103.9 seconds
+2025-12-06 06:26:48,545 - EnvironmentData - INFO - Conserv API POST https://api.conserv.io/v1/sensors/export/0598a128-2b51-40a8-ad87-65264e963f0f/download headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:26:48,906 - EnvironmentData - INFO - Downloading export data from S3
+2025-12-06 06:26:49,147 - EnvironmentData - INFO - Downloaded 172 rows, 8 columns
+2025-12-06 06:26:49,147 - EnvironmentData - INFO - Successfully exported 172 rows for customer 307
+2025-12-06 06:26:49,147 - EnvironmentData - INFO - Retrieved 172 current records for customer 307
+2025-12-06 06:26:49,147 - EnvironmentData - INFO - Fetching current data for customer 2671
+2025-12-06 06:26:49,147 - EnvironmentData - INFO - Starting export for customer 2671: 2025-12-06 05:56:49.147829+00:00 to 2025-12-06 06:26:49.147829+00:00
+2025-12-06 06:26:49,147 - EnvironmentData - INFO - Conserv API POST https://api.conserv.io/v1/sensors/export headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:26:49,553 - EnvironmentData - INFO - Conserv export launched: 17b27767-ebd9-47c5-8ac9-e79f0198716b
+2025-12-06 06:26:49,553 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/17b27767-ebd9-47c5-8ac9-e79f0198716b/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:26:59,916 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/17b27767-ebd9-47c5-8ac9-e79f0198716b/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:27:10,258 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/17b27767-ebd9-47c5-8ac9-e79f0198716b/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:27:20,608 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/17b27767-ebd9-47c5-8ac9-e79f0198716b/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:27:30,949 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/17b27767-ebd9-47c5-8ac9-e79f0198716b/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:27:41,307 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/17b27767-ebd9-47c5-8ac9-e79f0198716b/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:27:51,694 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/17b27767-ebd9-47c5-8ac9-e79f0198716b/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:28:02,050 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/17b27767-ebd9-47c5-8ac9-e79f0198716b/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:28:12,399 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/17b27767-ebd9-47c5-8ac9-e79f0198716b/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:28:22,747 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/17b27767-ebd9-47c5-8ac9-e79f0198716b/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:28:23,272 - EnvironmentData - INFO - Export 17b27767-ebd9-47c5-8ac9-e79f0198716b completed successfully in 93.7 seconds
+2025-12-06 06:28:28,272 - EnvironmentData - INFO - Conserv API POST https://api.conserv.io/v1/sensors/export/17b27767-ebd9-47c5-8ac9-e79f0198716b/download headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:28:28,619 - EnvironmentData - ERROR - API request failed after SSL fallback: 404 Not Found
+2025-12-06 06:28:28,619 - EnvironmentData - WARNING - Failed to fetch current data for customer 2671: 404 Client Error: Not Found for url: https://api.conserv.io/v1/sensors/export/17b27767-ebd9-47c5-8ac9-e79f0198716b/download
+2025-12-06 06:28:28,619 - EnvironmentData - INFO - Fetching current data for customer 1696
+2025-12-06 06:28:28,619 - EnvironmentData - INFO - Starting export for customer 1696: 2025-12-06 05:58:28.619308+00:00 to 2025-12-06 06:28:28.619308+00:00
+2025-12-06 06:28:28,619 - EnvironmentData - INFO - Conserv API POST https://api.conserv.io/v1/sensors/export headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:28:29,060 - EnvironmentData - INFO - Conserv export launched: 755172c5-e827-4abc-a91d-01120da38214
+2025-12-06 06:28:29,060 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/755172c5-e827-4abc-a91d-01120da38214/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:28:39,412 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/755172c5-e827-4abc-a91d-01120da38214/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:28:49,778 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/755172c5-e827-4abc-a91d-01120da38214/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:29:00,140 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/755172c5-e827-4abc-a91d-01120da38214/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:29:10,506 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/755172c5-e827-4abc-a91d-01120da38214/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:29:20,868 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/755172c5-e827-4abc-a91d-01120da38214/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:29:31,252 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/755172c5-e827-4abc-a91d-01120da38214/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:29:41,626 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/755172c5-e827-4abc-a91d-01120da38214/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:29:51,970 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/755172c5-e827-4abc-a91d-01120da38214/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:30:02,349 - EnvironmentData - INFO - Conserv API GET https://api.conserv.io/v1/sensors/export/755172c5-e827-4abc-a91d-01120da38214/status headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:30:02,717 - EnvironmentData - INFO - Export 755172c5-e827-4abc-a91d-01120da38214 completed successfully in 93.7 seconds
+2025-12-06 06:30:07,717 - EnvironmentData - INFO - Conserv API POST https://api.conserv.io/v1/sensors/export/755172c5-e827-4abc-a91d-01120da38214/download headers={'x-api-key': 'XXXX', 'Content-Type': 'application/json'}
+2025-12-06 06:30:08,073 - EnvironmentData - ERROR - API request failed after SSL fallback: 404 Not Found
+2025-12-06 06:30:08,073 - EnvironmentData - WARNING - Failed to fetch current data for customer 1696: 404 Client Error: Not Found for url: https://api.conserv.io/v1/sensors/export/755172c5-e827-4abc-a91d-01120da38214/download
+2025-12-06 06:30:08,074 - EnvironmentData - INFO - Filtered to 121 most recent readings per sensor
+2025-12-06 06:30:08,075 - EnvironmentData - INFO - Transforming Conserv data to standardized schema
+2025-12-06 06:30:08,077 - EnvironmentData - INFO - Conserv transformation complete: 242 records (doubled from device to sensor format)
+2025-12-06 06:30:08,077 - EnvironmentData - INFO - Successfully combined current readings from 2 customers: 242 total records
+2025-12-06 06:30:08,077 - EnvironmentData - INFO - Conserv current data shape: (242, 11)
+2025-12-06 06:30:08,078 - EnvironmentData - INFO - get_current_readings_conserv validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-06 06:30:08,079 - EnvironmentData - INFO - get_current_readings_conserv validation passed: one SensorName per SensorID.
+2025-12-06 06:30:08,079 - EnvironmentData - INFO - Successfully processed 242 current Conserv records
+2025-12-06 06:30:08,079 - EnvironmentData - INFO - Fetching current Coris data
+2025-12-06 06:30:08,079 - EnvironmentData - INFO - API call: https://cats.corismonitoring.com/api/cats/user/?ApiKey=XXXX&CatsUserID=XXXX
+2025-12-06 06:30:10,044 - EnvironmentData - INFO - get_current_readings_coris validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-06 06:30:10,045 - EnvironmentData - INFO - get_current_readings_coris validation passed: one SensorName per SensorID.
+2025-12-06 06:30:10,045 - EnvironmentData - INFO - Fetching current LI-COR data
+2025-12-06 06:30:10,045 - EnvironmentData - INFO - get_devices_as_dataframe
+2025-12-06 06:30:10,046 - EnvironmentData - INFO - get_devices
+2025-12-06 06:30:10,046 - EnvironmentData - INFO - Making API request to: devices
+2025-12-06 06:30:10,046 - EnvironmentData - DEBUG - Parameters: {'includeSensors': 'true'}
+2025-12-06 06:30:10,348 - EnvironmentData - INFO - Found 16 devices
+2025-12-06 06:30:10,349 - EnvironmentData - INFO - Retrieved 33 device/sensor combinations
+2025-12-06 06:30:10,351 - EnvironmentData - INFO - Retrieved 30 current readings from LI-COR
+2025-12-06 06:30:10,351 - EnvironmentData - INFO - Raw LI-COR data shape: (30, 13)
+2025-12-06 06:30:10,352 - EnvironmentData - INFO - get_current_readings_licor validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-06 06:30:10,353 - EnvironmentData - INFO - get_current_readings_licor validation passed: one SensorName per SensorID.
+2025-12-06 06:30:10,353 - EnvironmentData - INFO - Successfully processed 30 current LI-COR records
+2025-12-06 06:30:10,353 - EnvironmentData - INFO - validation passed for Conserv_Current_Readings: Schema enforcement completed
+2025-12-06 06:30:10,353 - EnvironmentData - INFO - validation passed for Coris_Current_Readings: Schema enforcement completed
+2025-12-06 06:30:10,353 - EnvironmentData - INFO - validation passed for LI-COR_Current_Readings: Schema enforcement completed
+2025-12-06 06:30:10,353 - EnvironmentData - INFO -   CONSERV: 242 rows
+2025-12-06 06:30:10,353 - EnvironmentData - INFO -   CORIS: 137 rows
+2025-12-06 06:30:10,353 - EnvironmentData - INFO -   LI-COR: 30 rows
+2025-12-06 06:30:10,752 - EnvironmentData - INFO - Initialized Conserv client with 5 customers
+2025-12-06 06:30:10,752 - EnvironmentData - INFO - Enabled data sources: ['Conserv', 'Coris', 'LI-COR']
+2025-12-06 06:30:10,757 - EnvironmentData - INFO - 409 new readings after schema enforcement.
+2025-12-06 06:30:10,773 - EnvironmentData - INFO - consolidate_readings validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-06 06:30:10,774 - EnvironmentData - INFO - consolidate_readings validation passed: one SensorName per SensorID.
+2025-12-06 06:30:10,780 - EnvironmentData - INFO - validation passed for CleanedNewReadings: Schema enforcement completed
+2025-12-06 06:30:10,780 - EnvironmentData - INFO - validation passed for HistoricalData: Schema enforcement completed
+2025-12-06 06:30:10,828 - EnvironmentData - INFO - Removed 13 duplicate readings (SensorID + SensorReadingUTC)
+2025-12-06 06:30:11,176 - EnvironmentData - INFO - consolidate_final validation passed: no duplicated SensorReadingUTC per SensorID.
+2025-12-06 06:30:11,187 - EnvironmentData - INFO - consolidate_final validation passed: one SensorName per SensorID.
+2025-12-06 06:30:11,383 - EnvironmentData - INFO - update_lookups validation passed: one SensorName per SensorID.
+2025-12-06 06:30:11,740 - EnvironmentData - INFO - Updated cubes: sensor_readings_daily and device_readings_daily
+2025-12-06 06:30:11,836 - EnvironmentData - INFO - Wrote 13 validation results to ./data-runner/validation-results.csv
+2025-12-06 06:30:12,445 - EnvironmentData - INFO - Wrote 27224 validation events to ./data-runner/validation-detail.parquet
+2025-12-06 06:30:13,123 - EnvironmentData - INFO - Exported data to ./data-runner/consolidated-data-sample.xlsx
