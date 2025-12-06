@@ -1338,3 +1338,16 @@ run_datetime_est,run_utc,test_name,result,details
 2025-12-06 09:56:40 EST,1765033000,alerts_Conserv,PASS,No alerts triggered for Conserv. All sensor readings are within the configured acceptable thresholds.
 2025-12-06 09:56:40 EST,1765033000,alerts_LI-COR,PASS,No alerts triggered for LI-COR. All sensor readings are within the configured acceptable thresholds.
 2025-12-06 09:56:40 EST,1765033000,alerts_Coris,PASS,No alerts triggered for Coris. All sensor readings are within the configured acceptable thresholds.
+2025-12-06 10:21:46 EST,1765034506,required_columns_present,PASS,All 11 required columns are present in sensor data.
+2025-12-06 10:21:46 EST,1765034506,column_data_types,PASS,"All columns have the expected data types (e.g., SensorReadingUTC is Int64, Source is String)."
+2025-12-06 10:21:46 EST,1765034506,non_null_values,PASS,Every sensor reading row has at least one non-null value in the 11 required columns.
+2025-12-06 10:21:46 EST,1765034506,no_duplicate_readings,PASS,No duplicate readings found. Each sensor has unique timestamps.
+2025-12-06 10:21:46 EST,1765034506,sensor_name_consistency,PASS,All sensors have consistent names across all their readings.
+2025-12-06 10:21:46 EST,1765034506,reading_interval_check,WARN,24320 readings have more than 15 minutes between consecutive readings. This may indicate sensor downtime or data gaps.
+2025-12-06 10:21:46 EST,1765034506,devices_missing_readings,WARN,"68 devices missing temperature, 67 devices missing humidity. See validation-detail.parquet for device list."
+2025-12-06 10:21:46 EST,1765034506,data_gaps_LI-COR,WARN,"Found 6006 gaps in LI-COR data where readings are more than 15 minutes apart. Average gap: 32.2 min, longest gap: 2807.0 min. Affected 30 sensors."
+2025-12-06 10:21:46 EST,1765034506,data_gaps_Conserv,WARN,"Found 16664 gaps in Conserv data where readings are more than 15 minutes apart. Average gap: 43.5 min, longest gap: 960.0 min. Affected 250 sensors."
+2025-12-06 10:21:46 EST,1765034506,data_gaps_Coris,WARN,"Found 9423 gaps in Coris data where readings are more than 15 minutes apart. Average gap: 645.5 min, longest gap: 1065720.0 min. Affected 137 sensors."
+2025-12-06 10:21:46 EST,1765034506,alerts_LI-COR,PASS,No alerts triggered for LI-COR. All sensor readings are within the configured acceptable thresholds.
+2025-12-06 10:21:46 EST,1765034506,alerts_Coris,PASS,No alerts triggered for Coris. All sensor readings are within the configured acceptable thresholds.
+2025-12-06 10:21:46 EST,1765034506,alerts_Conserv,PASS,No alerts triggered for Conserv. All sensor readings are within the configured acceptable thresholds.
