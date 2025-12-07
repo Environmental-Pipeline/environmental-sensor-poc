@@ -673,10 +673,6 @@ def generate_validation_results(
             "detected_utc", "detected_datetime_est"
         ])
         
-        if os.path.exists(events_parquet_path):
-            existing_events = polars.read_parquet(events_parquet_path)
-            events_df = polars.concat([existing_events, events_df], how="diagonal")
-        
         events_df.write_parquet(events_parquet_path)
         if logger:
             logger.info(f"Wrote {len(event_rows)} validation events to {events_parquet_path}")
