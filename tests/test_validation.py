@@ -873,8 +873,8 @@ class TestGenerateDiagnosticsReport(unittest.TestCase):
         # Should have more rows after second run
         self.assertGreater(second_count, first_count)
 
-    def test_appends_events_to_existing_detail_parquet(self):
-        """Test that validation-detail.parquet appends events when run multiple times."""
+    def test_replaces_existing_detail_parquet(self):
+        """Test that validation-detail.parquet replaces (not appends) when run multiple times."""
         # Data with gaps (60-min gap will generate DATA_GAP events)
         data_with_gaps = polars.DataFrame({
             "SensorReadingUTC": [1700000000, 1700003600],  # 60-min gap
@@ -908,7 +908,7 @@ class TestGenerateDiagnosticsReport(unittest.TestCase):
         self.assertTrue(os.path.exists(detail_path))
         first_count = polars.read_parquet(detail_path).shape[0]
         
-        # Second run - should append to existing validation-detail.parquet
+        # Second run - should replace existing validation-detail.parquet
         validation_results2 = []
         validation.generate_validation_results(
             sensors=data_with_gaps,
@@ -921,8 +921,8 @@ class TestGenerateDiagnosticsReport(unittest.TestCase):
         
         second_count = polars.read_parquet(detail_path).shape[0]
         
-        # Should have doubled the events
-        self.assertEqual(second_count, first_count * 2)
+        # Should have same count (replaced, not appended)
+        self.assertEqual(second_count, first_count)
 
 
 if __name__ == '__main__':
