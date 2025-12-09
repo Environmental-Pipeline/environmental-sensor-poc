@@ -98,13 +98,13 @@ Once the action finishes, you can checkout and pull the appropriate branch to ge
 
 **[Clear Data & Run Init, Wait, Pull, Consolidate](https://github.com/Environmental-Pipeline/environmental-sensor-poc/actions/workflows/single-run-test-branch.yml)**
 
-Manually-triggered test run. Go to `Run workflow` and select the `test` branch, with data in the `data-test` folder. Change the settings using the [test environment](https://github.com/Environmental-Pipeline/environmental-sensor-poc/settings/environments/10337000551/edit).
+Manually-triggered test run. Go to `Run workflow` and select the `test` branch, with data in the `data-test` folder. Change the settings using the [GitHub test environment](https://github.com/Environmental-Pipeline/environmental-sensor-poc/settings/environments/10337000551/edit).
 
 This action will delete the data folder from the `test` branch, run the data pipeline using the selected environment variables (using init, then waiting 15 minutes for new readings and running get_current_readings and consolidate_readings), and update the repository with the new data in the `data-test/` folder.
 
 **[Scheduled Pull on Runner Branch](https://github.com/Environmental-Pipeline/environmental-sensor-poc/actions/workflows/scheduled-runner.yml)**
 
-Runs every 15 minutes to pull the latest readings using the [runner environment](https://github.com/Environmental-Pipeline/environmental-sensor-poc/settings/environments/10400235755/edit) and commit them to the `runner` branch, with data in the `data-runner` folder. To disable it, set the environment variable `RUNNER_ACTIVE` to "False" in the [runner environment](https://github.com/Environmental-Pipeline/environmental-sensor-poc/settings/environments/10400235755/edit).
+Runs every 15 minutes to pull the latest readings using the [GitHub runner environment](https://github.com/Environmental-Pipeline/environmental-sensor-poc/settings/environments/10400235755/edit) and commit them to the `runner` branch, with data in the `data-runner` folder. To disable it, set the environment variable `RUNNER_ACTIVE` to "False" in the [GitHub runner environment](https://github.com/Environmental-Pipeline/environmental-sensor-poc/settings/environments/10400235755/edit).
 
 _This action has been disabled because it exceeded the limits on GitHub free accounts and was erroring out. It can now be triggered manually on the `runner` branch._
 
@@ -112,9 +112,9 @@ _This action has been disabled because it exceeded the limits on GitHub free acc
 ## APIs
 
 See detailed documentation at the top of each client file:
-* `clients/conserv_client.py`
-* `clients/coris_client.py`
-* `clients/licor_client.py`
+* [clients/conserv_client.py](https://github.com/Environmental-Pipeline/environmental-sensor-poc/blob/main/clients/conserv_client.py)
+* [clients/coris_client.py](https://github.com/Environmental-Pipeline/environmental-sensor-poc/blob/main/clients/coris_client.py)
+* [clients/licor_client.py](https://github.com/Environmental-Pipeline/environmental-sensor-poc/blob/main/clients/licor_client.py)
 
 General notes:
 
@@ -123,7 +123,7 @@ General notes:
 **Adding New APIs**
 
 Other APIs can be implemented following the established pattern:
-1. Create a dedicated API client. See `licor_client.py` as probably the best example (coris was the first so has no transformation function) or `conserv_client.py` if the API sends back tabular data for devices and not the typical data by sensor as that data will need to be transformed to a sensor-level format.
+1. Create a dedicated API client. See [clients/licor_client.py](https://github.com/Environmental-Pipeline/environmental-sensor-poc/blob/main/clients/licor_client.py) as probably the best example (coris was the first so has no transformation function) or [clients/conserv_client.py](https://github.com/Environmental-Pipeline/environmental-sensor-poc/blob/main/clients/conserv_client.py) if the API sends back tabular data for devices and not the typical data by sensor as that data will need to be transformed to a sensor-level format.
 2. Extend `EnvironmentData.initialize_database()` and `EnvironmentData.get_current_readings()` to include new source.
 3. Create a schema transformation method to map to existing column structure. See `EnvironmentData.validate_sensors()` or `experiments/1-examples-pull-data.ipynb` (data is printed at the end) for the expected format.
 4. Add unit tests for the new integration (see examples in the `tests/` folder).
