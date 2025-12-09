@@ -7,7 +7,7 @@ COPY requirements-docker.txt ./
 COPY requirements.txt ./
 RUN python3 -m pip install --no-cache-dir -r requirements-docker.txt
 
-# Copy necessary files. We leave out 1-examples-cron.ipynb since it could interfere with cron jobs.
+# Copy necessary files. We leave out 1-examples-pull-data.ipynb since it could interfere with cron jobs.
 # To use 2-examples-analysis.ipynb, wait until the first consolidation (after 10 minutes) has run to ensure data files exist.
 COPY EnvironmentData.py .env ./
 COPY experiments/2-examples-analysis.ipynb experiments/

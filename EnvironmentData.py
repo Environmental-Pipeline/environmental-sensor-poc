@@ -6,7 +6,7 @@ Consolidates readings into an analytical database of parquet files that can be r
 
 ## Commands:
 - Create HTML documentation in `docs/clients`: `pdoc EnvironmentData.py -o docs/ --no-search` 
-- See experiments/1-examples-cron.ipynb for example usage.
+- See experiments/1-examples-pull-data.ipynb for example usage.
 - Test with `pytest tests/test_EnvironmentData.py` or `python experiments/run_environment_data.py`
 """
 
@@ -24,6 +24,43 @@ from modules import consolidation
 
 
 class EnvironmentData:
+    """
+    Manages environmental sensor data from multiple API sources (Conserv, Coris, LI-COR).
+    
+    Attributes
+    ----------
+    home_directory : str
+        Base directory for finding .env file and resolving relative paths.
+    data_path : str
+        Path to store parquet files which make up the database.
+    testing : bool
+        Flag indicating if running in testing mode (limited sensors for fast tests).
+    testing_sensor_ids : list
+        List of sensor IDs to use when testing mode is enabled.
+    out_of_scope : list
+        List of sensor name patterns to exclude from data collection.
+    conserv_enabled : bool
+        Whether Conserv API integration is enabled.
+    coris_enabled : bool
+        Whether Coris API integration is enabled.
+    licor_enabled : bool
+        Whether LI-COR API integration is enabled.
+    logger : logging.Logger
+        Main logger instance for general logging (EnvironmentData.log).
+    logger_err : logging.Logger
+        Error-only logger instance (EnvironmentData-Errors.log).
+    conserv_client : ConservAPIClient or None
+        Client for Conserv API interactions (None if not enabled).
+    coris_client : CorisClient or None
+        Client for Coris API interactions (None if not enabled).
+    licor_client : LicorClient or None
+        Client for LI-COR API interactions (None if not enabled).
+    acceptable_range : dict
+        Dictionary defining acceptable value ranges for sensor readings.
+        Keys are reading types (e.g., 'SensorReadingF', 'SensorReadingRh').
+    cron_status : str
+        Current initialization status ('not-initialized' or 'initialized').
+    """
 
     def __init__(
         self,
@@ -64,7 +101,39 @@ class EnvironmentData:
 
         Returns
         -------
-        EnvironmentData: EnvironmentData object.
+        EnvironmentData
+            Initialized EnvironmentData object with the following key attributes:
+            
+            home_directory : str
+                Base directory for .env file location
+            data_path : str
+                Path to parquet database files
+            testing : bool
+                Testing mode flag
+            testing_sensor_ids : list
+                Sensor IDs for testing
+            out_of_scope : list
+                Excluded sensor patterns
+            conserv_enabled : bool
+                Conserv API integration status
+            coris_enabled : bool
+                Coris API integration status
+            licor_enabled : bool
+                LI-COR API integration status
+            logger : logging.Logger
+                Main logger (EnvironmentData.log)
+            logger_err : logging.Logger
+                Error logger (EnvironmentData-Errors.log)
+            conserv_client : ConservAPIClient or None
+                Conserv API client
+            coris_client : CorisClient or None
+                Coris API client
+            licor_client : LicorClient or None
+                LI-COR API client
+            acceptable_range : dict
+                Acceptable sensor value ranges
+            cron_status : str
+                Initialization status
         """
 
         # Save inputs to the class instance.
