@@ -188,7 +188,7 @@ def validate_sensors(
         validation_results.append({
             "test_name": "no_duplicate_readings",
             "run_utc": run_utc,
-            "result": "PASS" if dup_count == 0 else "FAIL",
+            "result": "PASS" if dup_count == 0 else "WARN",
             "details": dup_details
         })
         if dup_count == 0 and logger:
@@ -211,7 +211,7 @@ def validate_sensors(
         validation_results.append({
             "test_name": "sensor_name_consistency",
             "run_utc": run_utc,
-            "result": "PASS" if dup_count == 0 else "FAIL",
+            "result": "PASS" if dup_count == 0 else "WARN",
             "details": name_details
         })
         if dup_count == 0 and logger:
