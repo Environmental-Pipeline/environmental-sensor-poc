@@ -1,12 +1,12 @@
 run_datetime_est,run_utc,test_name,result,details
-2025-12-04 12:33:54 EST,1764869634,required_columns_present,PASS,All 11 required columns are present in sensor data.
-2025-12-04 12:33:54 EST,1764869634,column_data_types,PASS,"All columns have the expected data types (e.g., SensorReadingUTC is Int64, Source is String)."
-2025-12-04 12:33:54 EST,1764869634,non_null_values,PASS,Every sensor reading row has at least one non-null value in the 11 required columns.
-2025-12-04 12:33:54 EST,1764869634,no_duplicate_readings,PASS,No duplicate readings found. Each sensor has unique timestamps.
-2025-12-04 12:33:54 EST,1764869634,sensor_name_consistency,PASS,All sensors have consistent names across all their readings.
-2025-12-04 12:33:54 EST,1764869634,reading_interval_check,PASS,All consecutive readings are within 15 minutes of each other (expected interval).
-2025-12-04 12:33:54 EST,1764869634,devices_missing_readings,WARN,"2 devices missing temperature, 2 devices missing humidity. See validation-detail.csv for device list."
-2025-12-04 12:33:54 EST,1764869634,data_gaps_Conserv,WARN,"Found 12 gaps in Conserv data where readings are more than 15 minutes apart. Average gap: 192.5 min, longest gap: 945.0 min. Affected 4 sensors."
-2025-12-04 12:33:54 EST,1764869634,data_gaps_Coris,WARN,"Found 6 gaps in Coris data where readings are more than 15 minutes apart. Average gap: 3930.7 min, longest gap: 11731.0 min. Affected 6 sensors."
-2025-12-04 12:33:54 EST,1764869634,alerts_Coris,PASS,No alerts triggered for Coris. All sensor readings are within the configured acceptable thresholds.
-2025-12-04 12:33:54 EST,1764869634,alerts_Conserv,PASS,No alerts triggered for Conserv. All sensor readings are within the configured acceptable thresholds.
+2026-01-12 09:49:57 EST,1768229397,required_columns_present,PASS,All 11 required columns are present in sensor data.
+2026-01-12 09:49:57 EST,1768229397,column_data_types,PASS,"All columns have the expected data types (e.g., SensorReadingUTC is Int64, Source is String)."
+2026-01-12 09:49:57 EST,1768229397,non_null_values,PASS,Every sensor reading row has at least one non-null value in the 11 required columns.
+2026-01-12 09:49:57 EST,1768229397,no_duplicate_readings,PASS,No duplicate readings found. Each sensor has unique timestamps.
+2026-01-12 09:49:57 EST,1768229397,sensor_name_consistency,PASS,All sensors have consistent names across all their readings.
+2026-01-12 09:49:57 EST,1768229397,reading_interval_check,PASS,All consecutive readings are within 15 minutes of each other (expected interval).
+2026-01-12 09:49:57 EST,1768229397,devices_missing_readings,WARN,"2 devices missing temperature, 2 devices missing humidity. See validation-detail.parquet for device list."
+2026-01-12 09:49:57 EST,1768229397,data_gaps_Conserv,WARN,"Found 102 gaps in Conserv data where readings are more than 15 minutes apart. Average gap: 50.6 min, longest gap: 135.0 min. Affected 8 sensors."
+2026-01-12 09:49:57 EST,1768229397,data_gaps_Coris,WARN,"Found 6 gaps in Coris data where readings are more than 15 minutes apart. Average gap: 22596.7 min, longest gap: 67727.0 min. Affected 6 sensors."
+2026-01-12 09:49:57 EST,1768229397,alerts_Conserv,PASS,No alerts triggered for Conserv. All sensor readings are within the configured acceptable thresholds.
+2026-01-12 09:49:57 EST,1768229397,alerts_Coris,PASS,No alerts triggered for Coris. All sensor readings are within the configured acceptable thresholds.
