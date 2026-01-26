@@ -42,8 +42,6 @@ Authentication to Microsoft Fabric uses a service principal with certificate-bas
 
 | Configuration | Value |
 |---------------|-------|
-| App ID | *(configured in environment)* |
-| Tenant ID | *(configured in environment)* |
-| Certificate Path | *(configured on VM)* |
-
-The service principal credentials should be configured as environment variables or in a secure configuration file on the VM.
+| App ID | `c8060d79-3927-46b2-943e-d13020cfcefe` |
+| Tenant ID | `dd8cbebb-2139-4df8-b411-4e3e87abeb5c` |
+| Certificate Path | `/home/aha48/fabric-service-principal-combined.pem` |
