@@ -13,6 +13,8 @@ COPY EnvironmentData.py .env ./
 COPY experiments/2-examples-analysis.ipynb experiments/
 COPY clients clients/
 COPY modules modules/
+COPY data data/
+COPY templates templates/
 COPY jobs jobs/
 
 COPY jobs/cronjobs /etc/cron.d/cronjobs
