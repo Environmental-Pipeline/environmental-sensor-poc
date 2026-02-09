@@ -1,13 +1,12 @@
 building_code,latitude,longitude,building_name
-YPM,41.3163,-72.9223,Yale Peabody Museum
-KGL,41.3111,-72.9267,Kline Geology Laboratory
-ESC,41.3090,-72.9282,Environmental Science Center
-CSC,41.2900,-72.9658,West Campus - CSC
-BRBL,41.3113,-72.9289,Beinecke Rare Book Library
-YCBA,41.3083,-72.9318,Yale Center for British Art
-FAST,41.2900,-72.9658,West Campus - FAST
-KAHN,41.3084,-72.9310,Kahn Building
-KHAN,41.3084,-72.9310,Khan Building
-OYAG,41.3084,-72.9310,OYAG Gallery
-SH,41.2900,-72.9658,West Campus - SH
-BARCH,41.3113,-72.9289,Beinecke Archive
+YPM,41.3159749,-72.9212249,Yale Peabody Museum
+KGL,41.3165718,-72.9210786,Kline Geology Laboratory
+ESC,41.3161319,-72.9217858,Environmental Science Center
+YCBA,41.3078875,-72.9305307,Yale Center for British Art
+KAHN,41.3083900,-72.9309580,Louis Kahn Building (Yale Art Gallery)
+KHAN,41.3083900,-72.9309580,Louis Kahn Building (Yale Art Gallery)
+OYAG,41.3083900,-72.9309580,Old Yale Art Gallery
+CSC,41.2598099,-72.9873615,Collection Studies Center
+SH,41.2598099,-72.9873615,Shared Spaces
+FAST,41.2598099,-72.9873615,Fine Art Security Transport
+BARCH,41.3115681,-72.9273095,Archives (Beinecke Library)
