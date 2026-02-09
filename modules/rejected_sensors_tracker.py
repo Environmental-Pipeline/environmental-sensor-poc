@@ -93,8 +93,8 @@ def classify_invalid_sensor(
     if "floater" in sensor_lower:
         return "expected_exclusion", "floater"
 
-    # exhibition: DeviceName starts with "Exh" (case-insensitive)
-    if device_name and device_name.startswith("Exh"):
+    # exhibition: DeviceName starts with *Exh* or Exh (case-insensitive)
+    if device_name and (device_name.startswith("*Exh*") or device_name.startswith("Exh")):
         return "expected_exclusion", "exhibition"
 
     # obsolete: DeviceName starts with lowercase 'o' followed by uppercase letter
@@ -426,6 +426,14 @@ def generate_needs_attention_report(
         if logger:
             logger.info("No active needs_attention sensors to report")
         return None
+
+    # Deduplicate by SensorName: sensors with both Temperature and RH have
+    # different SensorIDs but the same display name. Keep the most recent LastSeenUTC.
+    needs_attention = (
+        needs_attention
+        .sort("LastSeenUTC", descending=True)
+        .unique(subset=["SensorName"], keep="first")
+    )
 
     # Sort by Source, SubCategory, SensorName
     needs_attention = needs_attention.sort(["Source", "SubCategory", "SensorName"])

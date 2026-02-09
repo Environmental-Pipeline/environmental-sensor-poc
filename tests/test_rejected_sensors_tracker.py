@@ -64,6 +64,28 @@ class TestClassifyInvalidSensor(unittest.TestCase):
         self.assertEqual(cat, "expected_exclusion")
         self.assertEqual(sub, "exhibition")
 
+    def test_exhibition_with_asterisks_and_wrong_length(self):
+        """Exhibition sensor with *Exh* prefix and wrong length is still exhibition."""
+        cat, sub = rejected_sensors_tracker.classify_invalid_sensor(
+            source="Conserv",
+            sensor_name="conserv:307:c000172:Temperature",
+            device_name="*Exh*AOYAG_0100137___NaD_",
+            validation_errors=["Length is 25, must be exactly 20 characters"],
+        )
+        self.assertEqual(cat, "expected_exclusion")
+        self.assertEqual(sub, "exhibition")
+
+    def test_exhibition_with_asterisks_variant(self):
+        """Another *Exh* prefixed sensor classified as exhibition."""
+        cat, sub = rejected_sensors_tracker.classify_invalid_sensor(
+            source="Conserv",
+            sensor_name="conserv:308:c000200:Temperature",
+            device_name="*Exh*AOYAG_01ScHall_c009148",
+            validation_errors=["Length is 27, must be exactly 20 characters"],
+        )
+        self.assertEqual(cat, "expected_exclusion")
+        self.assertEqual(sub, "exhibition")
+
     def test_obsolete_device_name(self):
         """Sensors with DeviceName starting with 'o' + uppercase are expected_exclusion/obsolete."""
         cat, sub = rejected_sensors_tracker.classify_invalid_sensor(
@@ -71,6 +93,17 @@ class TestClassifyInvalidSensor(unittest.TestCase):
             sensor_name="conserv:308:c000200:Temperature",
             device_name="oAOYAG",
             validation_errors=["Length is 6, must be exactly 20 characters"],
+        )
+        self.assertEqual(cat, "expected_exclusion")
+        self.assertEqual(sub, "obsolete")
+
+    def test_obsolete_with_wrong_length(self):
+        """Obsolete sensor with wrong length is still classified as obsolete."""
+        cat, sub = rejected_sensors_tracker.classify_invalid_sensor(
+            source="Conserv",
+            sensor_name="conserv:308:c000200:Temperature",
+            device_name="oAOYAG_0100137___GRD_",
+            validation_errors=["Length is 21, must be exactly 20 characters"],
         )
         self.assertEqual(cat, "expected_exclusion")
         self.assertEqual(sub, "obsolete")
@@ -638,6 +671,45 @@ class TestGenerateNeedsAttentionReport(unittest.TestCase):
                 logger=self.logger,
             )
             self.assertIsNone(result)
+
+    def test_report_deduplicates_by_sensor_name(self):
+        """Report deduplicates by SensorName, keeping most recent LastSeenUTC."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tracking_path = os.path.join(tmpdir, "tracking.csv")
+            output_path = os.path.join(tmpdir, "needs_attention.csv")
+
+            # Two SensorIDs with same SensorName (Temperature + RH for same device)
+            tracking = polars.DataFrame({
+                "Source": ["Conserv", "Conserv", "Conserv"],
+                "SensorID": ["s1-temp", "s1-rh", "s2-temp"],
+                "SensorName": ["Short Name", "Short Name", "Other Name"],
+                "Category": ["needs_attention", "needs_attention", "needs_attention"],
+                "SubCategory": ["wrong_length", "wrong_length", "wrong_length"],
+                "Reason": ["Length is 10", "Length is 10", "Length is 10"],
+                "FirstSeenUTC": [1000, 1000, 1000],
+                "LastSeenUTC": [2000, 3000, 2000],
+                "Status": ["active", "active", "active"],
+                "FixedUTC": [None, None, None],
+            })
+            tracking.write_csv(tracking_path)
+
+            rejected_sensors_tracker.generate_needs_attention_report(
+                tracking_file_path=tracking_path,
+                output_path=output_path,
+                logger=self.logger,
+            )
+
+            report = polars.read_csv(output_path)
+            # "Short Name" should appear only once, "Other Name" once = 2 total
+            self.assertEqual(report.shape[0], 2)
+            sensor_names = report["SensorName"].to_list()
+            self.assertEqual(len(set(sensor_names)), 2)
+            self.assertIn("Short Name", sensor_names)
+            self.assertIn("Other Name", sensor_names)
+
+            # The kept row for "Short Name" should have the most recent LastSeenUTC
+            short_row = report.filter(polars.col("SensorName") == "Short Name")
+            self.assertEqual(short_row["LastSeenUTC"].to_list()[0], 3000)
 
     def test_empty_tracking_file(self):
         """Returns None for empty tracking file."""
