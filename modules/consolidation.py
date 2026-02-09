@@ -440,48 +440,36 @@ def build_devices(
 
     # Get the data for each of the selected sensors.
     devices = None
+    join_keys = ["Source", "DeviceID", "SensorReadingUTC", "QueryUTC"]
     data = data.filter(polars.col("DeviceID").is_null().not_())
     for reading in acceptable_range:
+        if reading not in data.columns:
+            continue
         idt = data.filter(polars.col(reading).is_null().not_()).select(
-            ["Source", "DeviceID", "SensorReadingUTC", "QueryUTC", "Historical", reading]
+            join_keys + ["Historical", reading]
         )
+        if idt.is_empty():
+            continue
         if isinstance(devices, polars.DataFrame):
             devices = devices.join(
                 idt,
                 how="full",
-                on=["Source", "DeviceID", "SensorReadingUTC", "QueryUTC"],
+                on=join_keys,
             )
+            # Coalesce _right columns immediately to prevent accumulation across iterations
+            for key_col in join_keys + ["Historical"]:
+                right_cols = [c for c in devices.columns if c.startswith(key_col + "_right")]
+                if right_cols:
+                    devices = devices.with_columns(
+                        polars.coalesce([key_col] + right_cols).alias(key_col)
+                    ).drop(right_cols)
         else:
             devices = idt
         del idt, reading
 
-    # this will result in columns like DeviceID_right when there is not a perfect match.
-    # coalesce to a single column.
-    cols_Source = [x for x in devices.columns if "Source" in x]
-    cols_DeviceID = [x for x in devices.columns if "DeviceID" in x]
-    cols_SensorReadingUTC = [x for x in devices.columns if "SensorReadingUTC" in x]
-    cols_QueryUTC = [x for x in devices.columns if "QueryUTC" in x]
-    cols_Historical = [x for x in devices.columns if "Historical" in x]
-
-    devices = devices.with_columns(
-        polars.coalesce(cols_Source).alias("Source")
-    )
-    devices = devices.with_columns(
-        polars.coalesce(cols_DeviceID).alias("DeviceID")
-    )
-    devices = devices.with_columns(
-        polars.coalesce(cols_SensorReadingUTC).alias("SensorReadingUTC")
-    )
-    devices = devices.with_columns(polars.coalesce(cols_QueryUTC).alias("QueryUTC"))
-    devices = devices.with_columns(polars.coalesce(cols_Historical).alias("Historical"))
-
-    devices = devices.drop(
-        [
-            x
-            for x in cols_Source + cols_DeviceID + cols_SensorReadingUTC + cols_QueryUTC + cols_Historical
-            if x not in ["Source", "DeviceID", "SensorReadingUTC", "QueryUTC", "Historical"]
-        ]
-    )
+    # If no reading types had data, create an empty devices DataFrame
+    if devices is None:
+        devices = data.select(join_keys + ["Historical"]).head(0)
 
     # If a device has multiple names, error out:
     device_names = (
@@ -517,10 +505,11 @@ def build_devices(
     # Join sensor information to devices
     devices = devices.join(device_sensors, how="left", on="DeviceID")
 
-    # Rearrange columns.
+    # Rearrange columns (only include reading columns that exist in the data).
+    reading_cols = [r for r in acceptable_range.keys() if r in devices.columns]
     devices = devices.select(
         ["Source", "DeviceID", "DeviceName", "Sensors", "SensorNames", "SensorTypes", "SensorReadingUTC", "QueryUTC", "Historical"]
-        + list(acceptable_range.keys())
+        + reading_cols
     )
 
     # Return the data.
@@ -546,12 +535,13 @@ def update_cubes(
         Logger instance for logging messages.
     """
 
-    sumcols = list(acceptable_range.keys())
     utcs = polars.read_parquet(f"{data_path}/utcs.parquet")
 
     sensor_readings = polars.read_parquet(
         f"{data_path}/sensor_readings.parquet"
     )
+    # Only aggregate columns that exist in the data
+    sumcols = [c for c in acceptable_range.keys() if c in sensor_readings.columns]
     sensor_readings = sensor_readings.filter(
         (polars.col("Historical") == True) | 
         ((polars.col("SensorReadingUTC") - polars.col("QueryUTC")).abs() < 60 * 5)
@@ -583,8 +573,10 @@ def update_cubes(
     device_readings = polars.read_parquet(
         f"{data_path}/device_readings.parquet"
     )
+    # Only aggregate columns that exist in device_readings
+    device_sumcols = [c for c in acceptable_range.keys() if c in device_readings.columns]
     device_readings = device_readings.filter(
-        (polars.col("Historical") == True) | 
+        (polars.col("Historical") == True) |
         ((polars.col("SensorReadingUTC") - polars.col("QueryUTC")).abs() < 60 * 5)
     )  # include historical data and recent readings within 5min window
     device_readings = device_readings.join(
@@ -599,9 +591,9 @@ def update_cubes(
         .agg(
             [
                 polars.len().alias("row_count"),
-                polars.col(sumcols).sum().name.suffix("_sum"),
-                polars.col(sumcols).min().name.suffix("_min"),
-                polars.col(sumcols).max().name.suffix("_max"),
+                polars.col(device_sumcols).sum().name.suffix("_sum"),
+                polars.col(device_sumcols).min().name.suffix("_min"),
+                polars.col(device_sumcols).max().name.suffix("_max"),
             ]
         )
         .sort(["Source", "date", "DeviceID"])

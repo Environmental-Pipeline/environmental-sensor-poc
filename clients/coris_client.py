@@ -16,7 +16,7 @@ The client queries available sensors and then loops over them to get readings. A
 
 Individual sensors only make one type of reading, so data is stored as one table per sensor type to prevent excessively repetitive or sparse tables. 
 
-The project reads `SensorType` = "Temperature", "Humidity" from the Coris API. New types can be brought in by adding a new entry to the `readings` object in the `EnvironmentData` class. 
+The project reads `SensorType` = "Temperature", "Humidity", "LuxSensor" from the Coris API. New types can be brought in by adding a new entry to the `readings` object in the `EnvironmentData` class. For LuxSensor types, the API uses ReadingType=SensorReading which is mapped to the SensorReadingLux column.
 
 ### Get User Account and Sensor Information
 
@@ -102,49 +102,62 @@ class CorisClient:
     - Data transformation to standardized schema
     """
     
-    def __init__(self, logger: Optional[logging.Logger] = None, home_directory: str = "."):
+    def __init__(self, logger: Optional[logging.Logger] = None, home_directory: str = ".",
+                 api_key: Optional[str] = None, cats_user_id: Optional[str] = None):
         """
         Initialize the Coris API client.
-        
+
         Parameters
         ----------
         logger : Optional[logging.Logger]
             Logger instance for recording API interactions
         home_directory : str, default="."
             Base directory for finding .env file
+        api_key : Optional[str]
+            Coris API key. If provided, skips reading from .env file.
+        cats_user_id : Optional[str]
+            CATS User ID. If provided, skips reading from .env file.
         """
-        # Read API key from environment variables
-        env_file_path = os.path.join(home_directory, ".env")
-        api_key = None
-        with open(env_file_path) as f:
-            for line in f:
-                if line.startswith("CORIS_API_KEY"):
-                    api_key = line.split("=", 1)[1].strip()
-                    break
-        
-        # Read CATS User ID from environment variables
-        cats_user_id_str = None
-        with open(env_file_path) as f:
-            for line in f:
-                if line.startswith("CATS_USER_ID"):
-                    cats_user_id_str = line.split("=", 1)[1].strip()
-                    break
-        
-        if not api_key:
-            raise ValueError(
-                f"CORIS_API_KEY not found in environment or .env file at {env_file_path}. "
-                f"If running from a subdirectory, set home_directory parameter to parent directory (e.g., home_directory='..').")
-        
-        if not cats_user_id_str:
-            raise ValueError(
-                f"CATS_USER_ID not found in environment or .env file at {env_file_path}. "
-                f"If running from a subdirectory, set home_directory parameter to parent directory (e.g., home_directory='..').")
-        
-        self.api_key = api_key
-        self.cats_user_id = cats_user_id_str
+        if api_key and cats_user_id:
+            # Use explicitly provided credentials
+            self.api_key = api_key
+            self.cats_user_id = cats_user_id
+        else:
+            # Read API key from .env file
+            env_file_path = os.path.join(home_directory, ".env")
+            api_key_val = None
+            with open(env_file_path) as f:
+                for line in f:
+                    key = line.split("=", 1)[0].strip()
+                    if key == "CORIS_API_KEY":
+                        api_key_val = line.split("=", 1)[1].strip()
+                        break
+
+            # Read CATS User ID from .env file
+            cats_user_id_str = None
+            with open(env_file_path) as f:
+                for line in f:
+                    key = line.split("=", 1)[0].strip()
+                    if key == "CATS_USER_ID":
+                        cats_user_id_str = line.split("=", 1)[1].strip()
+                        break
+
+            if not api_key_val:
+                raise ValueError(
+                    f"CORIS_API_KEY not found in environment or .env file at {env_file_path}. "
+                    f"If running from a subdirectory, set home_directory parameter to parent directory (e.g., home_directory='..').")
+
+            if not cats_user_id_str:
+                raise ValueError(
+                    f"CATS_USER_ID not found in environment or .env file at {env_file_path}. "
+                    f"If running from a subdirectory, set home_directory parameter to parent directory (e.g., home_directory='..').")
+
+            self.api_key = api_key_val
+            self.cats_user_id = cats_user_id_str
+
         self.logger = logger or logging.getLogger(__name__)
         self.base_url = "https://cats.corismonitoring.com/api"
-        
+
         # Reading interval in seconds (15 minutes = 900 seconds)
         # Consistent with Conserv (15-min exports) and LI-COR (downsampled to 15 min)
         self.reading_spacing_seconds = 900
@@ -229,28 +242,41 @@ class CorisClient:
             polars.lit("Coris").alias("Source"),
             polars.lit(None, dtype=polars.Int32).alias("customer_id"),
         ])
-        
+
+        # Map SensorReading to SensorReadingLux for LuxSensor types
+        if "SensorReading" in sensors.columns and "SensorType" in sensors.columns:
+            sensors = sensors.with_columns(
+                polars.when(polars.col("SensorType") == "LuxSensor")
+                .then(polars.col("SensorReading").cast(polars.Float32))
+                .otherwise(polars.lit(None, dtype=polars.Float32))
+                .alias("SensorReadingLux")
+            )
+
         return sensors
     
-    def get_historical_data(self, sensor_id: int, reading_type: str, 
+    def get_historical_data(self, sensor_id: int, reading_type: str,
                           start_utc: int, end_utc: int,
-                          sensor_metadata: polars.DataFrame) -> polars.DataFrame:
+                          sensor_metadata: polars.DataFrame,
+                          column_name: Optional[str] = None) -> polars.DataFrame:
         """
         Get historical sensor data for a specific sensor and reading type.
-        
+
         Parameters
         ----------
         sensor_id : int
             Coris sensor ID
         reading_type : str
-            Type of reading (e.g., 'SensorReadingF', 'SensorReadingRh')
+            Type of reading (e.g., 'SensorReadingF', 'SensorReadingRh', 'SensorReading')
         start_utc : int
             Start time as UTC timestamp
         end_utc : int
             End time as UTC timestamp
         sensor_metadata : polars.DataFrame
             Sensor metadata to attach to readings
-            
+        column_name : Optional[str]
+            Override name for the reading value column. If None, uses reading_type.
+            Used to map API reading types to schema columns (e.g., 'SensorReading' -> 'SensorReadingLux').
+
         Returns
         -------
         polars.DataFrame
@@ -288,8 +314,9 @@ class CorisClient:
             return polars.DataFrame()  # Return empty DataFrame instead of crashing
         
         # Parse CSV response
+        output_column = column_name or reading_type
         data = polars.read_csv(response.content, has_header=False)
-        data.columns = ["SensorReadingUTC", reading_type]
+        data.columns = ["SensorReadingUTC", output_column]
         
         # Add sensor metadata
         consolidated_sensor_id = f"coris:{sensor_id}"
@@ -341,45 +368,73 @@ class CorisClient:
         List[polars.DataFrame]
             List of DataFrames containing historical readings
         """
-        sensors = self.get_sensors(out_of_scope=out_of_scope, testing=testing, 
+        sensors = self.get_sensors(out_of_scope=out_of_scope, testing=testing,
                                  testing_sensor_ids=testing_sensor_ids or [])
         readings = []
-        
+
         for reading_type in acceptable_range:
-            # Get sensor IDs that have this reading type - extract numeric ID from consolidated format
-            sensor_ids = (
-                sensors.filter(polars.col(reading_type).is_nan().not_())["SensorID"]
-                .str.split(":")
-                .list.last()
-                .cast(polars.Int32)
-                .unique()
-                .to_list()
-            )
-            
+            # Handle SensorReadingLux: uses API ReadingType "SensorReading" filtered to LuxSensor types
+            if reading_type == "SensorReadingLux":
+                api_reading_type = "SensorReading"
+                column_name = "SensorReadingLux"
+                # Filter to LuxSensor types that have a SensorReading value
+                if "SensorReading" not in sensors.columns or "SensorType" not in sensors.columns:
+                    continue
+                filtered = sensors.filter(
+                    (polars.col("SensorType") == "LuxSensor") &
+                    (polars.col("SensorReading").is_not_null()) &
+                    (polars.col("SensorReading").is_nan().not_())
+                )
+                if filtered.is_empty():
+                    continue
+                sensor_ids = (
+                    filtered["SensorID"]
+                    .str.split(":")
+                    .list.last()
+                    .cast(polars.Int32)
+                    .unique()
+                    .to_list()
+                )
+            else:
+                api_reading_type = reading_type
+                column_name = None  # Use reading_type as column name (default)
+                # Get sensor IDs that have this reading type - extract numeric ID from consolidated format
+                if reading_type not in sensors.columns:
+                    continue
+                sensor_ids = (
+                    sensors.filter(polars.col(reading_type).is_nan().not_())["SensorID"]
+                    .str.split(":")
+                    .list.last()
+                    .cast(polars.Int32)
+                    .unique()
+                    .to_list()
+                )
+
             if testing:
                 sensor_ids = sensor_ids[0:3]
                 if testing_sensor_ids is not None:
                     testing_sensor_ids.extend(sensor_ids)
-            
+
             # Query API for each sensor
             pbar = tqdm.tqdm(total=len(sensor_ids), desc=f"Gather Coris readings: {reading_type}")
-            
+
             for sensor_id in sensor_ids:
                 data = self.get_historical_data(
                     sensor_id=sensor_id,
-                    reading_type=reading_type,
+                    reading_type=api_reading_type,
                     start_utc=start_utc,
                     end_utc=end_utc,
-                    sensor_metadata=sensors
+                    sensor_metadata=sensors,
+                    column_name=column_name,
                 )
-                
+
                 if not data.is_empty():
                     readings.append(data)
-                
+
                 pbar.update(1)
-            
+
             pbar.close()
-        
+
         return readings
     
     def get_current_readings(self, out_of_scope: List[str] = None,

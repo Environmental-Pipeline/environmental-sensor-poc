@@ -210,10 +210,24 @@ class EnvironmentData:
         if self.conserv_enabled:
             self.conserv_client = ConservAPIClient(self.logger, home_directory=self.home_directory)
 
-        # Initialize Coris API client if enabled
+        # Initialize Coris API clients if enabled (supports multiple accounts)
         self.coris_client = None
+        self.coris_clients = []
         if self.coris_enabled:
+            # Primary account (Yale Museum) - reads from CORIS_API_KEY and CATS_USER_ID
             self.coris_client = CorisClient(self.logger, home_directory=self.home_directory)
+            self.coris_clients.append(self.coris_client)
+
+            # Additional accounts (e.g., Yale Libraries for lux sensors)
+            additional_accounts = self._read_additional_coris_accounts()
+            for account in additional_accounts:
+                client = CorisClient(
+                    self.logger,
+                    home_directory=self.home_directory,
+                    api_key=account["api_key"],
+                    cats_user_id=account["cats_user_id"],
+                )
+                self.coris_clients.append(client)
 
         # Initialize LI-COR API client if enabled
         self.licor_client = None
@@ -221,14 +235,14 @@ class EnvironmentData:
             self.licor_client = LicorClient(self.logger, home_directory=self.home_directory)
 
         # Set up the readings data structure that will be used throughout.
-        self.acceptable_range = {"SensorReadingF": [], "SensorReadingRh": []}
+        self.acceptable_range = {"SensorReadingF": [], "SensorReadingRh": [], "SensorReadingLux": []}
 
         # Debug: Show which data sources are actually enabled
         enabled_sources = []
         if self.conserv_enabled and self.conserv_client:
             enabled_sources.append("Conserv") 
-        if self.coris_enabled and self.coris_client:
-            enabled_sources.append("Coris")
+        if self.coris_enabled and self.coris_clients:
+            enabled_sources.append(f"Coris ({len(self.coris_clients)} account(s))")
         if self.licor_enabled and self.licor_client:
             enabled_sources.append("LI-COR")
         
@@ -237,6 +251,38 @@ class EnvironmentData:
 
         # Initialize the database by creating a parquet file for each reading type and populate it with historical data.
         self.initialize_database(days_back=days_back)
+
+    def _read_additional_coris_accounts(self):
+        """
+        Read additional Coris account credentials from the .env file.
+        Looks for CORIS_API_KEY_LIBRARIES / CATS_USER_ID_LIBRARIES pairs.
+
+        Returns
+        -------
+        list[dict] : List of dicts with 'api_key' and 'cats_user_id' keys.
+        """
+        accounts = []
+        env_file_path = os.path.join(self.home_directory, ".env")
+
+        # Read all env variables into a dict for exact key matching
+        env_vars = {}
+        with open(env_file_path) as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if "=" in line:
+                    key, value = line.split("=", 1)
+                    env_vars[key.strip()] = value.strip()
+
+        # Check for Yale Libraries account
+        api_key = env_vars.get("CORIS_API_KEY_LIBRARIES")
+        cats_user_id = env_vars.get("CATS_USER_ID_LIBRARIES")
+        if api_key and cats_user_id and not api_key.startswith("your_"):
+            accounts.append({"api_key": api_key, "cats_user_id": cats_user_id})
+            self.logger.info(f"Found additional Coris account: CATS_USER_ID_LIBRARIES={cats_user_id}")
+
+        return accounts
 
     # function to update cron status.
     def update_cron_status(self, status: str):
@@ -348,24 +394,25 @@ class EnvironmentData:
 
         # ============ CORIS HISTORICAL DATA PROCESSING ============
         readings = []
-        if self.coris_enabled and self.coris_client:
-            # Get historical data from Coris API using the client
-            coris_readings = self.coris_client.get_historical_data_bulk(
-                acceptable_range=self.acceptable_range,
-                start_utc=start_utc,
-                end_utc=current_utc,
-                out_of_scope=self.out_of_scope,
-                testing=self.testing,
-                testing_sensor_ids=self.testing_sensor_ids
-            )
-
-            # Clean and validate the Coris data
-            for i, data in enumerate(coris_readings):
-                coris_readings[i] = self.clean_validate_sensors(
-                    sensors=data, step="initialize_database_coris"
+        if self.coris_enabled and self.coris_clients:
+            # Get historical data from all Coris accounts
+            for client_idx, coris_client in enumerate(self.coris_clients):
+                coris_readings = coris_client.get_historical_data_bulk(
+                    acceptable_range=self.acceptable_range,
+                    start_utc=start_utc,
+                    end_utc=current_utc,
+                    out_of_scope=self.out_of_scope,
+                    testing=self.testing,
+                    testing_sensor_ids=self.testing_sensor_ids
                 )
-            
-            readings.extend(coris_readings)
+
+                # Clean and validate the Coris data
+                for i, data in enumerate(coris_readings):
+                    coris_readings[i] = self.clean_validate_sensors(
+                        sensors=data, step=f"initialize_database_coris_{client_idx}"
+                    )
+
+                readings.extend(coris_readings)
 
         # ============ LI-COR HISTORICAL DATA PROCESSING ============
         licor_readings = []
@@ -536,28 +583,34 @@ class EnvironmentData:
 
         # ============ CORIS DATA PROCESSING ============
         coris_sensors = None
-        if self.coris_enabled and self.coris_client:
+        if self.coris_enabled and self.coris_clients:
             self.logger.info("Fetching current Coris data")
-            
-            # Get the current status from the Coris API using the client
-            coris_sensors = self.coris_client.get_current_readings(
-                out_of_scope=self.out_of_scope,
-                testing=self.testing,
-                testing_sensor_ids=self.testing_sensor_ids
-            )
-            
-            # Convert data types to match expected schema before validation
-            if not coris_sensors.is_empty():
-                for reading in self.acceptable_range:
-                    if reading in coris_sensors.columns:
-                        coris_sensors = coris_sensors.with_columns(
-                            polars.col(reading).cast(polars.Float32)
-                        )
-            
-            self.validate_sensors(
-                sensors=coris_sensors, utc=current_utc, step="get_current_readings_coris"
-            )
-            print(f"✓ Coris: {coris_sensors.shape[0]} records")
+
+            coris_dfs = []
+            for client_idx, coris_client in enumerate(self.coris_clients):
+                client_sensors = coris_client.get_current_readings(
+                    out_of_scope=self.out_of_scope,
+                    testing=self.testing,
+                    testing_sensor_ids=self.testing_sensor_ids
+                )
+
+                # Convert data types to match expected schema before validation
+                if not client_sensors.is_empty():
+                    for reading in self.acceptable_range:
+                        if reading in client_sensors.columns:
+                            client_sensors = client_sensors.with_columns(
+                                polars.col(reading).cast(polars.Float32)
+                            )
+                    coris_dfs.append(client_sensors)
+
+            if coris_dfs:
+                coris_sensors = polars.concat(coris_dfs, how="diagonal")
+                self.validate_sensors(
+                    sensors=coris_sensors, utc=current_utc, step="get_current_readings_coris"
+                )
+                print(f"✓ Coris: {coris_sensors.shape[0]} records")
+            else:
+                coris_sensors = polars.DataFrame()
         else:
             # Create empty DataFrame with required schema when Coris is disabled
             coris_sensors = polars.DataFrame()
@@ -958,8 +1011,9 @@ class EnvironmentData:
             "SensorID", 
             "SensorName", 
             "SensorType",
-            "SensorReadingF", 
+            "SensorReadingF",
             "SensorReadingRh",
+            "SensorReadingLux",
             "SensorReadingUTC_SecondsFromPrior",
             "Historical",
             "weather_temp_c",

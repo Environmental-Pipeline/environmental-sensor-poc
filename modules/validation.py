@@ -738,6 +738,7 @@ def clean_validate_sensors(
         "SensorID": polars.String,
         "SensorReadingF": polars.Float32,
         "SensorReadingRh": polars.Float32,
+        "SensorReadingLux": polars.Float32,
     }
     for col, expected_type in validation_types.items():
         if col in sensors.columns and sensors[col].dtype != expected_type:
@@ -831,6 +832,7 @@ def get_master_schema() -> dict:
         "SensorReadingUTC_SecondsFromPrior": polars.Int64,
         "SensorReadingF": polars.Float32,
         "SensorReadingRh": polars.Float32,
+        "SensorReadingLux": polars.Float32,
         "SensorName": polars.String,
         "SensorPort": polars.Int64,
         "ServerUTC": polars.Int64,
