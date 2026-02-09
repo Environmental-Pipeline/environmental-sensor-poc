@@ -739,10 +739,9 @@ class EnvironmentData:
         # ============ FILTER INVALID SENSOR NAMES ============
         # Filter out sensors that don't conform to the Yale naming convention
         # This ensures data quality before the final parquet is written
-        if not dt.is_empty() and "SensorName" in dt.columns:
+        if not dt.is_empty() and "Source" in dt.columns:
             valid_df, invalid_df = sensor_name_validator.filter_invalid_sensors(
                 df=dt,
-                sensor_name_column="SensorName",
                 logger=self.logger
             )
 

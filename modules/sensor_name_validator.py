@@ -150,52 +150,137 @@ def is_valid_sensor_name(name: str) -> Tuple[bool, List[str]]:
     return len(errors) == 0, errors
 
 
+def _get_validation_name(source: str, sensor_name: Optional[str], device_name: Optional[str]) -> Optional[str]:
+    """
+    Extract the name to validate based on sensor source.
+
+    - Conserv: Use DeviceName (exactly 20 chars, Yale convention)
+    - Coris: Use first 20 characters of SensorName
+    - LI-COR: Returns None (excluded from validation)
+
+    Args:
+        source: The sensor source ('Conserv', 'Coris', 'LI-COR')
+        sensor_name: Value from SensorName column
+        device_name: Value from DeviceName column
+
+    Returns:
+        The name string to validate, or None if source should be excluded
+    """
+    if source == "Conserv":
+        return device_name
+    elif source == "Coris":
+        if sensor_name and isinstance(sensor_name, str) and len(sensor_name) >= 20:
+            return sensor_name[:20]
+        return sensor_name
+    else:
+        # LI-COR and any unknown sources are excluded
+        return None
+
+
 def filter_invalid_sensors(
     df: polars.DataFrame,
-    sensor_name_column: str = "SensorName",
     logger: Optional[logging.Logger] = None
 ) -> Tuple[polars.DataFrame, polars.DataFrame]:
     """
     Filter a DataFrame to separate valid and invalid sensor names.
 
+    Validation logic per source:
+    - Conserv: Validate DeviceName (exactly 20 chars)
+    - Coris: Validate first 20 chars of SensorName
+    - LI-COR: Exclude entirely (treat as invalid)
+
     Args:
         df: DataFrame containing sensor data
-        sensor_name_column: Name of the column containing sensor names
         logger: Optional logger for status messages
 
     Returns:
         Tuple of (valid_df, invalid_df)
         - valid_df: DataFrame with only valid sensor names
-        - invalid_df: DataFrame with invalid sensor names
+        - invalid_df: DataFrame with invalid sensor names (includes LI-COR)
     """
     if df.is_empty():
         return df, polars.DataFrame()
 
-    if sensor_name_column not in df.columns:
+    if "Source" not in df.columns:
         if logger:
-            logger.warning(f"Column '{sensor_name_column}' not found in DataFrame")
+            logger.warning("Column 'Source' not found in DataFrame, cannot validate by source")
         return df, polars.DataFrame()
 
-    # Get unique sensor names
-    unique_names = df.select(sensor_name_column).unique()[sensor_name_column].to_list()
+    valid_frames = []
+    invalid_frames = []
 
-    # Validate each unique name
-    valid_names = set()
-    invalid_names = set()
+    # Process each source separately
+    sources = df.select("Source").unique()["Source"].to_list()
 
-    for name in unique_names:
-        is_valid, _ = is_valid_sensor_name(name)
-        if is_valid:
-            valid_names.add(name)
+    for source in sources:
+        source_df = df.filter(polars.col("Source") == source)
+
+        if source == "LI-COR":
+            # LI-COR is excluded entirely
+            if logger:
+                logger.info(f"LI-COR: excluding {source_df.shape[0]} readings (source disabled)")
+            invalid_frames.append(source_df)
+            continue
+
+        if source == "Conserv":
+            if "DeviceName" not in df.columns:
+                if logger:
+                    logger.warning("Column 'DeviceName' not found - cannot validate Conserv sensors")
+                invalid_frames.append(source_df)
+                continue
+            # Validate DeviceName for Conserv
+            unique_pairs = source_df.select("DeviceName").unique()["DeviceName"].to_list()
+            valid_names = set()
+            invalid_names = set()
+            for name in unique_pairs:
+                is_valid, _ = is_valid_sensor_name(name)
+                if is_valid:
+                    valid_names.add(name)
+                else:
+                    invalid_names.add(name)
+            if valid_names:
+                valid_frames.append(source_df.filter(polars.col("DeviceName").is_in(list(valid_names))))
+            if invalid_names:
+                invalid_frames.append(source_df.filter(polars.col("DeviceName").is_in(list(invalid_names))))
+            if logger:
+                logger.info(f"Conserv: {len(valid_names)} valid, {len(invalid_names)} invalid unique DeviceNames")
+
+        elif source == "Coris":
+            if "SensorName" not in df.columns:
+                if logger:
+                    logger.warning("Column 'SensorName' not found - cannot validate Coris sensors")
+                invalid_frames.append(source_df)
+                continue
+            # Validate first 20 chars of SensorName for Coris
+            unique_names = source_df.select("SensorName").unique()["SensorName"].to_list()
+            valid_names = set()
+            invalid_names = set()
+            for name in unique_names:
+                name_to_validate = name[:20] if (name and isinstance(name, str) and len(name) >= 20) else name
+                is_valid, _ = is_valid_sensor_name(name_to_validate)
+                if is_valid:
+                    valid_names.add(name)
+                else:
+                    invalid_names.add(name)
+            if valid_names:
+                valid_frames.append(source_df.filter(polars.col("SensorName").is_in(list(valid_names))))
+            if invalid_names:
+                invalid_frames.append(source_df.filter(polars.col("SensorName").is_in(list(invalid_names))))
+            if logger:
+                logger.info(f"Coris: {len(valid_names)} valid, {len(invalid_names)} invalid unique SensorNames (first 20 chars)")
+
         else:
-            invalid_names.add(name)
+            # Unknown source - treat as invalid
+            if logger:
+                logger.warning(f"Unknown source '{source}': excluding {source_df.shape[0]} readings")
+            invalid_frames.append(source_df)
 
-    # Split the DataFrame
-    valid_df = df.filter(polars.col(sensor_name_column).is_in(list(valid_names)))
-    invalid_df = df.filter(polars.col(sensor_name_column).is_in(list(invalid_names)))
+    # Combine frames
+    valid_df = polars.concat(valid_frames, how="diagonal") if valid_frames else polars.DataFrame()
+    invalid_df = polars.concat(invalid_frames, how="diagonal") if invalid_frames else polars.DataFrame()
 
     if logger:
-        logger.info(f"Sensor name validation: {len(valid_names)} valid, {len(invalid_names)} invalid unique names")
+        logger.info(f"Sensor name validation total: {valid_df.shape[0]} valid rows, {invalid_df.shape[0]} invalid rows")
 
     return valid_df, invalid_df
 
@@ -231,7 +316,7 @@ def generate_rejected_sensors_report(
         return None
 
     # Get unique sensors with their metadata
-    sensor_columns = ["SensorName", "SensorID", "DeviceID", "Source"]
+    sensor_columns = ["SensorName", "DeviceName", "SensorID", "DeviceID", "Source"]
     available_columns = [col for col in sensor_columns if col in invalid_df.columns]
 
     if not available_columns:
@@ -246,12 +331,23 @@ def generate_rejected_sensors_report(
         .agg(polars.len().alias("SampleCount"))
     )
 
-    # Add validation errors for each sensor name
+    # Add validation errors for each sensor, using the correct column per source
     validation_errors_list = []
     for row in unique_sensors.iter_rows(named=True):
-        sensor_name = row.get("SensorName")
-        _, errors = is_valid_sensor_name(sensor_name)
-        validation_errors_list.append("; ".join(errors) if errors else "Unknown error")
+        source = row.get("Source", "")
+        if source == "LI-COR":
+            validation_errors_list.append("LI-COR source excluded from validation")
+        elif source == "Conserv":
+            device_name = row.get("DeviceName")
+            _, errors = is_valid_sensor_name(device_name)
+            validation_errors_list.append("; ".join(errors) if errors else "Unknown error")
+        elif source == "Coris":
+            sensor_name = row.get("SensorName")
+            name_to_validate = sensor_name[:20] if (sensor_name and isinstance(sensor_name, str) and len(sensor_name) >= 20) else sensor_name
+            _, errors = is_valid_sensor_name(name_to_validate)
+            validation_errors_list.append("; ".join(errors) if errors else "Unknown error")
+        else:
+            validation_errors_list.append(f"Unknown source: {source}")
 
     unique_sensors = unique_sensors.with_columns(
         polars.Series("ValidationErrors", validation_errors_list)
@@ -264,7 +360,7 @@ def generate_rejected_sensors_report(
     )
 
     # Reorder columns for the report
-    report_columns = ["SensorName", "SensorID", "DeviceID", "Source", "ValidationErrors", "SampleCount", "DateRejected"]
+    report_columns = ["SensorName", "DeviceName", "SensorID", "DeviceID", "Source", "ValidationErrors", "SampleCount", "DateRejected"]
     report_columns = [col for col in report_columns if col in unique_sensors.columns]
     unique_sensors = unique_sensors.select(report_columns)
 

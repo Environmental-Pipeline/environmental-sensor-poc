@@ -166,109 +166,192 @@ class TestIsValidSensorName(unittest.TestCase):
 
 
 class TestFilterInvalidSensors(unittest.TestCase):
-    """Test the filter_invalid_sensors function."""
+    """Test the filter_invalid_sensors function with per-source validation."""
 
     @classmethod
     def setUpClass(cls):
         cls.logger = create_test_logger()
 
-    def test_filter_separates_valid_and_invalid(self):
-        """Test that filter correctly separates valid from invalid sensors."""
+    def test_conserv_validates_device_name(self):
+        """Test that Conserv sensors are validated using DeviceName column."""
         df = polars.DataFrame({
             "SensorName": [
-                "PYPM__0100104SET____",  # valid
-                "conserv:307:temp",       # invalid
-                "LBRBL_0200203W______",  # valid
-                "Invalid Sensor Name",    # invalid
+                "conserv:307:c000172:Temperature",  # API format (not Yale convention)
+                "conserv:307:c000173:RH",            # API format (not Yale convention)
             ],
-            "SensorID": ["s1", "s2", "s3", "s4"],
-            "Value": [1.0, 2.0, 3.0, 4.0],
+            "DeviceName": [
+                "PYPM__0100104SET____",  # valid Yale convention
+                "Bad Device Name",       # invalid
+            ],
+            "SensorID": ["s1", "s2"],
+            "Source": ["Conserv", "Conserv"],
+            "Value": [1.0, 2.0],
         })
 
         valid_df, invalid_df = sensor_name_validator.filter_invalid_sensors(
-            df=df,
-            sensor_name_column="SensorName",
-            logger=self.logger
+            df=df, logger=self.logger
+        )
+
+        self.assertEqual(valid_df.shape[0], 1)
+        self.assertEqual(invalid_df.shape[0], 1)
+        self.assertEqual(valid_df["DeviceName"].to_list(), ["PYPM__0100104SET____"])
+        self.assertEqual(invalid_df["DeviceName"].to_list(), ["Bad Device Name"])
+
+    def test_coris_validates_first_20_chars_of_sensor_name(self):
+        """Test that Coris sensors validate the first 20 chars of SensorName."""
+        df = polars.DataFrame({
+            "SensorName": [
+                "PYPM__0100104SET____ RH YPM 104_D444",  # first 20 chars valid
+                "Invalid Name That Is Too Long Here___",   # first 20 chars invalid
+                "LBRBL_0200203W______ Temp BRBL 203",     # first 20 chars valid
+            ],
+            "DeviceName": [
+                "YPM 104 D444",
+                "Some Device",
+                "BRBL 203",
+            ],
+            "SensorID": ["s1", "s2", "s3"],
+            "Source": ["Coris", "Coris", "Coris"],
+            "Value": [1.0, 2.0, 3.0],
+        })
+
+        valid_df, invalid_df = sensor_name_validator.filter_invalid_sensors(
+            df=df, logger=self.logger
         )
 
         self.assertEqual(valid_df.shape[0], 2)
+        self.assertEqual(invalid_df.shape[0], 1)
+        valid_names = valid_df["SensorName"].to_list()
+        self.assertIn("PYPM__0100104SET____ RH YPM 104_D444", valid_names)
+        self.assertIn("LBRBL_0200203W______ Temp BRBL 203", valid_names)
+
+    def test_licor_excluded_entirely(self):
+        """Test that LI-COR sensors are excluded entirely (all treated as invalid)."""
+        df = polars.DataFrame({
+            "SensorName": [
+                "RX Station 1_RH",
+                "RX Station 2_Temperature",
+            ],
+            "DeviceName": [
+                "RX Station 1",
+                "RX Station 2",
+            ],
+            "SensorID": ["s1", "s2"],
+            "Source": ["LI-COR", "LI-COR"],
+            "Value": [1.0, 2.0],
+        })
+
+        valid_df, invalid_df = sensor_name_validator.filter_invalid_sensors(
+            df=df, logger=self.logger
+        )
+
+        self.assertEqual(valid_df.shape[0], 0)
         self.assertEqual(invalid_df.shape[0], 2)
 
-        valid_names = valid_df["SensorName"].to_list()
-        self.assertIn("PYPM__0100104SET____", valid_names)
-        self.assertIn("LBRBL_0200203W______", valid_names)
+    def test_mixed_sources(self):
+        """Test filter with a mix of Conserv, Coris, and LI-COR sensors."""
+        df = polars.DataFrame({
+            "SensorName": [
+                "conserv:307:c000172:Temperature",            # Conserv - validated via DeviceName
+                "PYPM__0100104SET____ RH YPM 104_D444",      # Coris - first 20 valid
+                "RX Station 1_RH",                            # LI-COR - excluded
+                "conserv:308:c000200:RH",                     # Conserv - validated via DeviceName
+                "Invalid Coris Name That Fails______ RH",    # Coris - first 20 invalid
+            ],
+            "DeviceName": [
+                "PYPM__0300302______F",  # valid for Conserv
+                "YPM 104 D444",          # irrelevant for Coris
+                "RX Station 1",          # irrelevant for LI-COR
+                "Bad Conserv Name",      # invalid for Conserv
+                "Some Device",           # irrelevant for Coris
+            ],
+            "SensorID": ["s1", "s2", "s3", "s4", "s5"],
+            "Source": ["Conserv", "Coris", "LI-COR", "Conserv", "Coris"],
+            "Value": [1.0, 2.0, 3.0, 4.0, 5.0],
+        })
 
-        invalid_names = invalid_df["SensorName"].to_list()
-        self.assertIn("conserv:307:temp", invalid_names)
-        self.assertIn("Invalid Sensor Name", invalid_names)
+        valid_df, invalid_df = sensor_name_validator.filter_invalid_sensors(
+            df=df, logger=self.logger
+        )
+
+        # Valid: 1 Conserv (valid DeviceName) + 1 Coris (valid first 20)
+        self.assertEqual(valid_df.shape[0], 2)
+        # Invalid: 1 Conserv (bad DeviceName) + 1 Coris (bad first 20) + 1 LI-COR (excluded)
+        self.assertEqual(invalid_df.shape[0], 3)
+
+        valid_sources = valid_df["Source"].to_list()
+        self.assertIn("Conserv", valid_sources)
+        self.assertIn("Coris", valid_sources)
+        self.assertNotIn("LI-COR", valid_sources)
 
     def test_filter_empty_dataframe(self):
         """Test filter with empty DataFrame."""
-        df = polars.DataFrame({"SensorName": [], "Value": []})
+        df = polars.DataFrame({"SensorName": [], "Source": [], "DeviceName": [], "Value": []})
 
         valid_df, invalid_df = sensor_name_validator.filter_invalid_sensors(
-            df=df,
-            sensor_name_column="SensorName",
-            logger=self.logger
+            df=df, logger=self.logger
         )
 
         self.assertEqual(valid_df.shape[0], 0)
         self.assertEqual(invalid_df.shape[0], 0)
 
-    def test_filter_all_valid(self):
-        """Test filter when all sensors are valid."""
+    def test_filter_missing_source_column(self):
+        """Test filter with missing Source column returns original as valid."""
         df = polars.DataFrame({
-            "SensorName": [
-                "PYPM__0100104SET____",
-                "LBRBL_0200203W______",
-            ],
+            "SensorName": ["PYPM__0100104SET____", "invalid"],
             "Value": [1.0, 2.0],
         })
 
         valid_df, invalid_df = sensor_name_validator.filter_invalid_sensors(
-            df=df,
-            sensor_name_column="SensorName",
-            logger=self.logger
+            df=df, logger=self.logger
+        )
+
+        # Should return original df as valid when Source column is missing
+        self.assertEqual(valid_df.shape[0], 2)
+        self.assertEqual(invalid_df.shape[0], 0)
+
+    def test_conserv_all_valid(self):
+        """Test filter when all Conserv sensors have valid DeviceNames."""
+        df = polars.DataFrame({
+            "SensorName": [
+                "conserv:307:c000172:Temperature",
+                "conserv:308:c000173:RH",
+            ],
+            "DeviceName": [
+                "PYPM__0100104SET____",
+                "LBRBL_0200203W______",
+            ],
+            "SensorID": ["s1", "s2"],
+            "Source": ["Conserv", "Conserv"],
+            "Value": [1.0, 2.0],
+        })
+
+        valid_df, invalid_df = sensor_name_validator.filter_invalid_sensors(
+            df=df, logger=self.logger
         )
 
         self.assertEqual(valid_df.shape[0], 2)
         self.assertEqual(invalid_df.shape[0], 0)
 
-    def test_filter_all_invalid(self):
-        """Test filter when all sensors are invalid."""
+    def test_coris_all_invalid(self):
+        """Test filter when all Coris sensors have invalid SensorNames."""
         df = polars.DataFrame({
             "SensorName": [
-                "invalid_sensor_1",
-                "invalid_sensor_2",
+                "invalid_sensor_1_pad",
+                "invalid_sensor_2_pad",
             ],
+            "DeviceName": ["d1", "d2"],
+            "SensorID": ["s1", "s2"],
+            "Source": ["Coris", "Coris"],
             "Value": [1.0, 2.0],
         })
 
         valid_df, invalid_df = sensor_name_validator.filter_invalid_sensors(
-            df=df,
-            sensor_name_column="SensorName",
-            logger=self.logger
+            df=df, logger=self.logger
         )
 
         self.assertEqual(valid_df.shape[0], 0)
         self.assertEqual(invalid_df.shape[0], 2)
-
-    def test_filter_missing_column(self):
-        """Test filter with missing sensor name column."""
-        df = polars.DataFrame({
-            "OtherColumn": ["a", "b"],
-            "Value": [1.0, 2.0],
-        })
-
-        valid_df, invalid_df = sensor_name_validator.filter_invalid_sensors(
-            df=df,
-            sensor_name_column="SensorName",
-            logger=self.logger
-        )
-
-        # Should return original df as valid when column is missing
-        self.assertEqual(valid_df.shape[0], 2)
-        self.assertEqual(invalid_df.shape[0], 0)
 
 
 class TestGenerateRejectedSensorsReport(unittest.TestCase):
@@ -282,6 +365,7 @@ class TestGenerateRejectedSensorsReport(unittest.TestCase):
         """Test that report generates a CSV file."""
         df = polars.DataFrame({
             "SensorName": ["invalid_1", "invalid_1", "invalid_2"],  # 2 unique sensors
+            "DeviceName": ["dev_1", "dev_1", "dev_2"],
             "SensorID": ["s1", "s1", "s2"],
             "DeviceID": ["d1", "d1", "d2"],
             "Source": ["Coris", "Coris", "Conserv"],
@@ -302,6 +386,7 @@ class TestGenerateRejectedSensorsReport(unittest.TestCase):
             report = polars.read_csv(csv_path)
             self.assertEqual(report.shape[0], 2)  # 2 unique sensors
             self.assertIn("SensorName", report.columns)
+            self.assertIn("DeviceName", report.columns)
             self.assertIn("ValidationErrors", report.columns)
             self.assertIn("SampleCount", report.columns)
             self.assertIn("DateRejected", report.columns)
@@ -326,6 +411,7 @@ class TestGenerateRejectedSensorsReport(unittest.TestCase):
         """Test that sample counts are correct."""
         df = polars.DataFrame({
             "SensorName": ["invalid_1", "invalid_1", "invalid_1", "invalid_2"],
+            "DeviceName": ["dev_1", "dev_1", "dev_1", "dev_2"],
             "SensorID": ["s1", "s1", "s1", "s2"],
             "DeviceID": ["d1", "d1", "d1", "d2"],
             "Source": ["Coris", "Coris", "Coris", "Conserv"],
@@ -346,6 +432,27 @@ class TestGenerateRejectedSensorsReport(unittest.TestCase):
 
             self.assertEqual(sensor_1_row["SampleCount"].to_list()[0], 3)
             self.assertEqual(sensor_2_row["SampleCount"].to_list()[0], 1)
+
+    def test_generate_report_licor_error_message(self):
+        """Test that LI-COR sensors get appropriate error message in report."""
+        df = polars.DataFrame({
+            "SensorName": ["RX Station 1_RH"],
+            "DeviceName": ["RX Station 1"],
+            "SensorID": ["s1"],
+            "DeviceID": ["d1"],
+            "Source": ["LI-COR"],
+        })
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            csv_path = sensor_name_validator.generate_rejected_sensors_report(
+                invalid_df=df,
+                data_path=tmpdir,
+                logger=self.logger
+            )
+
+            report = polars.read_csv(csv_path)
+            self.assertEqual(report.shape[0], 1)
+            self.assertIn("LI-COR", report["ValidationErrors"].to_list()[0])
 
 
 class TestValidSectionCodes(unittest.TestCase):
