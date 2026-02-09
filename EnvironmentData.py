@@ -21,6 +21,7 @@ from clients.coris_client import CorisClient
 from clients.licor_client import LicorClient
 from modules import validation
 from modules import consolidation
+from modules import sensor_name_validator
 
 
 class EnvironmentData:
@@ -734,6 +735,36 @@ class EnvironmentData:
         if initial_count != final_count:
             duplicates_removed = initial_count - final_count
             self.logger.info(f"Removed {duplicates_removed} duplicate readings (SensorID + SensorReadingUTC)")
+
+        # ============ FILTER INVALID SENSOR NAMES ============
+        # Filter out sensors that don't conform to the Yale naming convention
+        # This ensures data quality before the final parquet is written
+        if not dt.is_empty() and "SensorName" in dt.columns:
+            valid_df, invalid_df = sensor_name_validator.filter_invalid_sensors(
+                df=dt,
+                sensor_name_column="SensorName",
+                logger=self.logger
+            )
+
+            # Generate rejected sensors report if there are any invalid sensors
+            if not invalid_df.is_empty():
+                unique_invalid = invalid_df.select("SensorName").unique().shape[0]
+                self.logger.info(
+                    f"Sensor name validation: filtering out {invalid_df.shape[0]} readings "
+                    f"from {unique_invalid} sensors with non-conforming names"
+                )
+
+                # Generate the rejected sensors CSV report
+                csv_path = sensor_name_validator.generate_rejected_sensors_report(
+                    invalid_df=invalid_df,
+                    data_path=self.data_path,
+                    logger=self.logger
+                )
+                if csv_path:
+                    self.logger.info(f"Rejected sensors report written to: {csv_path}")
+
+            # Use only valid sensors for the final output
+            dt = valid_df
 
         # Add time difference between readings for each sensor within each source, device, and type
         # Only calculate for non-Historical data to avoid mixing backfilled data with real-time readings
