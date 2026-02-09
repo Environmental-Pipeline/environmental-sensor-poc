@@ -23,6 +23,7 @@ from modules import validation
 from modules import consolidation
 from modules import sensor_name_validator
 from modules import rejected_sensors_tracker
+from modules import weather_enrichment
 
 
 class EnvironmentData:
@@ -781,6 +782,23 @@ class EnvironmentData:
             # Use only valid sensors for the final output
             dt = valid_df
 
+        # ============ WEATHER ENRICHMENT ============
+        # Enrich sensor readings with outdoor weather data from Open-Meteo Archive API
+        if not dt.is_empty():
+            coordinates_path = os.path.join(self.home_directory, "data", "building_coordinates.csv")
+            if os.path.exists(coordinates_path):
+                try:
+                    dt = weather_enrichment.enrich_sensors_with_weather(
+                        sensors=dt,
+                        coordinates_path=coordinates_path,
+                        cache_dir=os.path.join(self.data_path, "weather_cache"),
+                        logger=self.logger,
+                    )
+                except Exception as e:
+                    self.logger.warning(f"Weather enrichment failed, continuing without: {e}")
+            else:
+                self.logger.info(f"Building coordinates not found at {coordinates_path}, skipping weather enrichment")
+
         # Add time difference between readings for each sensor within each source, device, and type
         # Only calculate for non-Historical data to avoid mixing backfilled data with real-time readings
         if not dt.is_empty():
@@ -943,7 +961,11 @@ class EnvironmentData:
             "SensorReadingF", 
             "SensorReadingRh",
             "SensorReadingUTC_SecondsFromPrior",
-            "Historical"
+            "Historical",
+            "weather_temp_c",
+            "weather_humidity_pct",
+            "weather_precip_mm",
+            "weather_cloud_cover_pct",
         ]
             
         # Only select columns that exist in both the data and the allowed columns
