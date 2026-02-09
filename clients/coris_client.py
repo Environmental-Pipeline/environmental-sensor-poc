@@ -317,7 +317,10 @@ class CorisClient:
         output_column = column_name or reading_type
         data = polars.read_csv(response.content, has_header=False)
         data.columns = ["SensorReadingUTC", output_column]
-        
+
+        # Ensure consistent dtypes: reading values as Float32, timestamps as Int64
+        data = data.with_columns(polars.col(output_column).cast(polars.Float32, strict=False))
+
         # Add sensor metadata
         consolidated_sensor_id = f"coris:{sensor_id}"
         data = data.with_columns(polars.lit(consolidated_sensor_id).alias("SensorID"))
