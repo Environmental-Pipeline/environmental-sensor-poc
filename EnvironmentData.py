@@ -22,6 +22,7 @@ from clients.licor_client import LicorClient
 from modules import validation
 from modules import consolidation
 from modules import sensor_name_validator
+from modules import rejected_sensors_tracker
 
 
 class EnvironmentData:
@@ -761,6 +762,21 @@ class EnvironmentData:
                 )
                 if csv_path:
                     self.logger.info(f"Rejected sensors report written to: {csv_path}")
+
+                # Update persistent tracking
+                new_count, fixed_count, active_count = rejected_sensors_tracker.update_tracking_file(
+                    invalid_df=invalid_df,
+                    tracking_file_path=f"{self.data_path}/rejected_sensors_tracking.csv",
+                    logger=self.logger
+                )
+                self.logger.info(f"Rejected sensors tracking: {new_count} new, {fixed_count} fixed, {active_count} still active")
+
+                # Generate report for units
+                report_path = rejected_sensors_tracker.generate_needs_attention_report(
+                    tracking_file_path=f"{self.data_path}/rejected_sensors_tracking.csv",
+                    output_path=f"{self.data_path}/rejected_sensors_needs_attention.csv",
+                    logger=self.logger
+                )
 
             # Use only valid sensors for the final output
             dt = valid_df
