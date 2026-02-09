@@ -40,20 +40,42 @@ OPEN_METEO_ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
 WEATHER_PARAMS = [
     "temperature_2m",
     "relative_humidity_2m",
+    "dew_point_2m",
+    "apparent_temperature",
+    "pressure_msl",
+    "surface_pressure",
     "precipitation",
+    "rain",
+    "snowfall",
     "cloud_cover",
+    "wind_speed_10m",
+    "wind_direction_10m",
+    "shortwave_radiation",
+    "direct_radiation",
+    "weather_code",
 ]
 
 # Mapping from Open-Meteo parameter names to output column names
 WEATHER_COLUMN_MAP = {
     "temperature_2m": "weather_temp_c",
     "relative_humidity_2m": "weather_humidity_pct",
+    "dew_point_2m": "weather_dew_point_c",
+    "apparent_temperature": "weather_apparent_temp_c",
+    "pressure_msl": "weather_pressure_msl_hpa",
+    "surface_pressure": "weather_pressure_surface_hpa",
     "precipitation": "weather_precip_mm",
+    "rain": "weather_rain_mm",
+    "snowfall": "weather_snowfall_cm",
     "cloud_cover": "weather_cloud_cover_pct",
+    "wind_speed_10m": "weather_wind_speed_kmh",
+    "wind_direction_10m": "weather_wind_direction_deg",
+    "shortwave_radiation": "weather_shortwave_rad_wm2",
+    "direct_radiation": "weather_direct_rad_wm2",
+    "weather_code": "weather_wmo_code",
 }
 
-
 def load_building_coordinates(coordinates_path: str) -> polars.DataFrame:
+
     """
     Load building coordinates from a CSV file.
 
@@ -416,15 +438,14 @@ def enrich_sensors_with_weather(
 
         # Create a row for each building code at this location
         for code in codes:
-            location_weather = weather_df.select(
-                [
-                    polars.col("weather_hour_utc"),
-                    polars.col("temperature_2m").alias("weather_temp_c"),
-                    polars.col("relative_humidity_2m").alias("weather_humidity_pct"),
-                    polars.col("precipitation").alias("weather_precip_mm"),
-                    polars.col("cloud_cover").alias("weather_cloud_cover_pct"),
-                ]
-            ).with_columns(polars.lit(code).alias("building_code"))
+            # Build column selections dynamically from WEATHER_COLUMN_MAP
+            weather_cols = [polars.col("weather_hour_utc")]
+            for param, col_name in WEATHER_COLUMN_MAP.items():
+                if param in weather_df.columns:
+                    weather_cols.append(polars.col(param).alias(col_name))
+            location_weather = weather_df.select(weather_cols).with_columns(
+                polars.lit(code).alias("building_code")
+            )
             weather_lookup_parts.append(location_weather)
 
         # Rate-limit to be respectful to the free API
