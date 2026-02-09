@@ -7,16 +7,23 @@ Sensor names must be exactly 20 characters and follow the format:
 Position: 1----5----0----5----0
 Format:   CBBBBBFFRRRRRSSPCCCF
 
+Strict validation (positions 1-6):
 | Position | Length | Content | Valid Values |
 |----------|--------|---------|--------------|
 | 1 | 1 | Collection Unit | L, P, B, A, G, I, S |
-| 2-6 | 5 | Building Code | Left-aligned, padded with '_' |
-| 7-8 | 2 | Floor | 01, 02, LL, RF, B1, B2, etc. |
-| 9-13 | 5 | Room Number | Alphanumeric, 5 chars |
-| 14-15 | 2 | Room Section | N, S, E, W, NE, NW, SE, SW, CT, etc. or __ |
-| 16 | 1 | Position | Any letter/number or _ |
-| 17-19 | 3 | Shelf/Cabinet | 3 chars or ___ |
-| 20 | 1 | Floater Flag | F (floater) or _ (fixed) |
+| 2-6 | 5 | Building Code | Alphanumeric, left-aligned, padded with '_' |
+
+Lenient validation (positions 7-20): any alphanumeric or underscore
+| Position | Length | Content |
+|----------|--------|---------|
+| 7-8 | 2 | Floor |
+| 9-13 | 5 | Room Number |
+| 14-15 | 2 | Room Section |
+| 16 | 1 | Position |
+| 17-19 | 3 | Shelf/Cabinet |
+| 20 | 1 | Floater Flag |
+
+Spaces in names are normalized to underscores before validation.
 
 ## Commands:
 - Test with `pytest tests/test_sensor_name_validator.py`
@@ -38,27 +45,6 @@ VALID_COLLECTION_UNITS = {'L', 'P', 'B', 'A', 'G', 'I', 'S'}
 
 # Known building codes (positions 2-6, without padding)
 KNOWN_BUILDINGS = {'YPM', 'KGL', 'ESC', 'CSC', 'BRBL', 'BARCH', 'YCBA', 'FAST'}
-
-# Valid room sections (positions 14-15) - must be exactly 2 characters
-VALID_SECTIONS = {
-    'N_', 'S_', 'E_', 'W_',  # Cardinal directions (single char, right-padded)
-    'NE', 'NW', 'SE', 'SW',  # Diagonal directions
-    'CE', 'CW', 'CT', 'NC', 'SC', 'EC', 'WC',  # Center-based
-    '__',  # None specified
-}
-
-# Generate numeric bays 01-28
-for i in range(1, 29):
-    VALID_SECTIONS.add(f'{i:02d}')
-
-# Generate letter bays _A through _G
-for letter in 'ABCDEFG':
-    VALID_SECTIONS.add(f'_{letter}')
-
-# Generate directional bays N1-N8, S1-S8
-for direction in ['N', 'S']:
-    for i in range(1, 9):
-        VALID_SECTIONS.add(f'{direction}{i}')
 
 
 def is_valid_sensor_name(name: str) -> Tuple[bool, List[str]]:
@@ -111,26 +97,20 @@ def is_valid_sensor_name(name: str) -> Tuple[bool, List[str]]:
             # This means there are underscores before the building code starts
             pass  # We'll be lenient here - just check format
 
-    # Positions 7-8: Floor
+    # Positions 7-8: Floor (any alphanumeric or underscore)
     floor = name[6:8]
-    valid_floor_patterns = [
-        # Numeric floors (01-99)
-        floor.isdigit() and len(floor) == 2,
-        # Special floors
-        floor in {'LL', 'RF', 'B1', 'B2', 'B3', 'B4', 'G1', 'G2', 'M1', 'M2', 'LG', 'UG', 'AT', 'BM'},
-    ]
-    if not any(valid_floor_patterns):
-        errors.append(f"Invalid floor '{floor}' at positions 7-8. Expected numeric (01-99) or special (LL, RF, B1, B2, etc.)")
+    if not all(c.isalnum() or c == '_' for c in floor):
+        errors.append(f"Floor '{floor}' at positions 7-8 contains invalid characters")
 
     # Positions 9-13: Room Number (5 alphanumeric characters)
     room_number = name[8:13]
     if not all(c.isalnum() or c == '_' for c in room_number):
         errors.append(f"Room number '{room_number}' at positions 9-13 contains invalid characters")
 
-    # Positions 14-15: Room Section
+    # Positions 14-15: Room Section (any alphanumeric or underscore)
     room_section = name[13:15]
-    if room_section not in VALID_SECTIONS:
-        errors.append(f"Invalid room section '{room_section}' at positions 14-15. Valid: N, S, E, W, NE, NW, SE, SW, CT, __, etc.")
+    if not all(c.isalnum() or c == '_' for c in room_section):
+        errors.append(f"Room section '{room_section}' at positions 14-15 contains invalid characters")
 
     # Position 16: Position indicator (any alphanumeric or _)
     position = name[15]
@@ -142,17 +122,26 @@ def is_valid_sensor_name(name: str) -> Tuple[bool, List[str]]:
     if not all(c.isalnum() or c == '_' for c in shelf):
         errors.append(f"Shelf/cabinet '{shelf}' at positions 17-19 contains invalid characters")
 
-    # Position 20: Floater Flag
+    # Position 20: Floater Flag (any alphanumeric or underscore)
     floater_flag = name[19]
-    if floater_flag not in {'F', '_'}:
-        errors.append(f"Invalid floater flag '{floater_flag}' at position 20. Must be 'F' or '_'")
+    if not (floater_flag.isalnum() or floater_flag == '_'):
+        errors.append(f"Invalid floater flag '{floater_flag}' at position 20")
 
     return len(errors) == 0, errors
+
+
+def _normalize_name(name: str) -> str:
+    """Replace spaces with underscores to handle common data entry errors."""
+    if name is None:
+        return name
+    return name.replace(' ', '_')
 
 
 def _get_validation_name(source: str, sensor_name: Optional[str], device_name: Optional[str]) -> Optional[str]:
     """
     Extract the name to validate based on sensor source.
+
+    Normalizes the name (spaces -> underscores) before returning.
 
     - Conserv: Use DeviceName (exactly 20 chars, Yale convention)
     - Coris: Use first 20 characters of SensorName
@@ -164,14 +153,14 @@ def _get_validation_name(source: str, sensor_name: Optional[str], device_name: O
         device_name: Value from DeviceName column
 
     Returns:
-        The name string to validate, or None if source should be excluded
+        The normalized name string to validate, or None if source should be excluded
     """
     if source == "Conserv":
-        return device_name
+        return _normalize_name(device_name)
     elif source == "Coris":
         if sensor_name and isinstance(sensor_name, str) and len(sensor_name) >= 20:
-            return sensor_name[:20]
-        return sensor_name
+            return _normalize_name(sensor_name[:20])
+        return _normalize_name(sensor_name)
     else:
         # LI-COR and any unknown sources are excluded
         return None
@@ -228,12 +217,12 @@ def filter_invalid_sensors(
                     logger.warning("Column 'DeviceName' not found - cannot validate Conserv sensors")
                 invalid_frames.append(source_df)
                 continue
-            # Validate DeviceName for Conserv
+            # Validate DeviceName for Conserv (normalize spaces to underscores first)
             unique_pairs = source_df.select("DeviceName").unique()["DeviceName"].to_list()
             valid_names = set()
             invalid_names = set()
             for name in unique_pairs:
-                is_valid, _ = is_valid_sensor_name(name)
+                is_valid, _ = is_valid_sensor_name(_normalize_name(name))
                 if is_valid:
                     valid_names.add(name)
                 else:
@@ -251,13 +240,13 @@ def filter_invalid_sensors(
                     logger.warning("Column 'SensorName' not found - cannot validate Coris sensors")
                 invalid_frames.append(source_df)
                 continue
-            # Validate first 20 chars of SensorName for Coris
+            # Validate first 20 chars of SensorName for Coris (normalize spaces to underscores first)
             unique_names = source_df.select("SensorName").unique()["SensorName"].to_list()
             valid_names = set()
             invalid_names = set()
             for name in unique_names:
                 name_to_validate = name[:20] if (name and isinstance(name, str) and len(name) >= 20) else name
-                is_valid, _ = is_valid_sensor_name(name_to_validate)
+                is_valid, _ = is_valid_sensor_name(_normalize_name(name_to_validate))
                 if is_valid:
                     valid_names.add(name)
                 else:
@@ -339,12 +328,12 @@ def generate_rejected_sensors_report(
             validation_errors_list.append("LI-COR source excluded from validation")
         elif source == "Conserv":
             device_name = row.get("DeviceName")
-            _, errors = is_valid_sensor_name(device_name)
+            _, errors = is_valid_sensor_name(_normalize_name(device_name))
             validation_errors_list.append("; ".join(errors) if errors else "Unknown error")
         elif source == "Coris":
             sensor_name = row.get("SensorName")
             name_to_validate = sensor_name[:20] if (sensor_name and isinstance(sensor_name, str) and len(sensor_name) >= 20) else sensor_name
-            _, errors = is_valid_sensor_name(name_to_validate)
+            _, errors = is_valid_sensor_name(_normalize_name(name_to_validate))
             validation_errors_list.append("; ".join(errors) if errors else "Unknown error")
         else:
             validation_errors_list.append(f"Unknown source: {source}")

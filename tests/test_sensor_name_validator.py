@@ -100,35 +100,31 @@ class TestIsValidSensorName(unittest.TestCase):
             self.assertTrue(any("collection unit" in e.lower() for e in errors),
                           f"Expected collection unit error for '{name}', got: {errors}")
 
-    def test_invalid_floor(self):
-        """Test that invalid floor codes fail validation."""
-        invalid_floor_names = [
-            "PYPM__XX00104SET____",  # XX is not valid floor
-            "PYPM__AB00104SET____",  # AB is not valid floor
-            "PYPM__0000104SET____",  # 00 could be considered invalid
+    def test_nonstandard_floor_now_valid(self):
+        """Test that non-standard floor codes pass with relaxed validation."""
+        names_with_nonstandard_floors = [
+            "PYPM__XX00104SET____",  # XX - alphanumeric, now valid
+            "PYPM__AB00104SET____",  # AB - alphanumeric, now valid
+            "PYPM__0000104SET____",  # 00 - numeric, valid
+            "PYPM__ZZ00104SET____",  # ZZ - alphanumeric, now valid
         ]
 
-        for name in invalid_floor_names:
+        for name in names_with_nonstandard_floors:
             is_valid, errors = sensor_name_validator.is_valid_sensor_name(name)
-            # Note: 00 might actually be valid depending on interpretation
-            if name != "PYPM__0000104SET____":
-                self.assertFalse(is_valid, f"Expected invalid (floor): '{name}'")
-                self.assertTrue(any("floor" in e.lower() for e in errors),
-                              f"Expected floor error for '{name}', got: {errors}")
+            self.assertTrue(is_valid, f"Expected valid (relaxed floor): '{name}', but got errors: {errors}")
 
-    def test_invalid_floater_flag(self):
-        """Test that invalid floater flags fail validation."""
-        invalid_floater_names = [
-            "PYPM__0100104SET___X",  # X is not valid floater flag
-            "PYPM__0100104SET___1",  # digit not valid
-            "PYPM__0100104SET___f",  # lowercase f not valid
+    def test_nonstandard_floater_flag_now_valid(self):
+        """Test that non-standard floater flags pass with relaxed validation."""
+        names_with_nonstandard_flags = [
+            "PYPM__0100104SET___X",  # X - alphanumeric, now valid
+            "PYPM__0100104SET___1",  # digit, now valid
+            "PYPM__0100104SET___f",  # lowercase f, now valid
+            "PYPM__0100104SET___Z",  # Z - alphanumeric, now valid
         ]
 
-        for name in invalid_floater_names:
+        for name in names_with_nonstandard_flags:
             is_valid, errors = sensor_name_validator.is_valid_sensor_name(name)
-            self.assertFalse(is_valid, f"Expected invalid (floater flag): '{name}'")
-            self.assertTrue(any("floater" in e.lower() for e in errors),
-                          f"Expected floater flag error for '{name}', got: {errors}")
+            self.assertTrue(is_valid, f"Expected valid (relaxed floater): '{name}', but got errors: {errors}")
 
     def test_real_invalid_examples(self):
         """Test with real invalid examples from the data."""
@@ -202,7 +198,7 @@ class TestFilterInvalidSensors(unittest.TestCase):
         df = polars.DataFrame({
             "SensorName": [
                 "PYPM__0100104SET____ RH YPM 104_D444",  # first 20 chars valid
-                "Invalid Name That Is Too Long Here___",   # first 20 chars invalid
+                "0bad_name_not_valid_ some suffix here",   # first 20 chars invalid ('0' not valid collection unit)
                 "LBRBL_0200203W______ Temp BRBL 203",     # first 20 chars valid
             ],
             "DeviceName": [
@@ -256,7 +252,7 @@ class TestFilterInvalidSensors(unittest.TestCase):
                 "PYPM__0100104SET____ RH YPM 104_D444",      # Coris - first 20 valid
                 "RX Station 1_RH",                            # LI-COR - excluded
                 "conserv:308:c000200:RH",                     # Conserv - validated via DeviceName
-                "Invalid Coris Name That Fails______ RH",    # Coris - first 20 invalid
+                "0bad_coris_name_____ some suffix RH",        # Coris - first 20 invalid ('0' not valid collection unit)
             ],
             "DeviceName": [
                 "PYPM__0300302______F",  # valid for Conserv
@@ -455,35 +451,80 @@ class TestGenerateRejectedSensorsReport(unittest.TestCase):
             self.assertIn("LI-COR", report["ValidationErrors"].to_list()[0])
 
 
-class TestValidSectionCodes(unittest.TestCase):
-    """Test various valid section codes."""
+class TestRelaxedValidation(unittest.TestCase):
+    """Test relaxed validation rules for positions 7-20."""
 
-    def test_cardinal_directions(self):
-        """Test cardinal direction section codes."""
-        directions = ['N', 'S', 'E', 'W']
-        for d in directions:
-            # Pad to 2 chars for section (position 14-15)
-            section = d + '_' if len(d) == 1 else d
-            name = f"PYPM__0100104{section}_____"
-            is_valid, errors = sensor_name_validator.is_valid_sensor_name(name)
-            # Note: Single char sections need to be in valid list
-            if section.rstrip('_') in sensor_name_validator.VALID_SECTIONS or section in sensor_name_validator.VALID_SECTIONS:
-                self.assertTrue(is_valid, f"Expected valid for section '{section}': {errors}")
-
-    def test_diagonal_directions(self):
-        """Test diagonal direction section codes."""
-        for section in ['NE', 'NW', 'SE', 'SW']:
+    def test_any_alphanumeric_section_codes(self):
+        """Test that any alphanumeric/underscore section codes pass."""
+        for section in ['NE', 'SW', 'CT', '__', 'ZZ', 'Q1', '99', 'XY']:
             name = f"PYPM__0100104{section}_____"
             is_valid, errors = sensor_name_validator.is_valid_sensor_name(name)
             self.assertTrue(is_valid, f"Expected valid for section '{section}': {errors}")
 
-    def test_numeric_bays(self):
-        """Test numeric bay section codes (01-28)."""
-        for i in [1, 10, 28]:
-            section = f"{i:02d}"
-            name = f"PYPM__0100104{section}_____"
+    def test_any_alphanumeric_floor_codes(self):
+        """Test that any alphanumeric/underscore floor codes pass."""
+        for floor in ['01', 'LL', 'RF', 'XX', 'ZZ', '__', 'Q9', 'AB']:
+            name = f"PYPM__{floor}00104_______"
             is_valid, errors = sensor_name_validator.is_valid_sensor_name(name)
-            self.assertTrue(is_valid, f"Expected valid for bay '{section}': {errors}")
+            self.assertTrue(is_valid, f"Expected valid for floor '{floor}': {errors}")
+
+    def test_any_alphanumeric_floater_flag(self):
+        """Test that any alphanumeric/underscore floater flag passes."""
+        for flag in ['F', '_', 'X', '1', 'f', 'Z']:
+            name = f"PYPM__0100104______{flag}"
+            is_valid, errors = sensor_name_validator.is_valid_sensor_name(name)
+            self.assertTrue(is_valid, f"Expected valid for floater flag '{flag}': {errors}")
+
+
+class TestNameNormalization(unittest.TestCase):
+    """Test space-to-underscore normalization in the filter pipeline."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.logger = create_test_logger()
+
+    def test_normalize_name_replaces_spaces(self):
+        """Test that _normalize_name replaces spaces with underscores."""
+        self.assertEqual(sensor_name_validator._normalize_name("PYPM  0100104SE ____"), "PYPM__0100104SE_____")
+        self.assertEqual(sensor_name_validator._normalize_name("no spaces here_____"), "no spaces here_____".replace(' ', '_'))
+
+    def test_normalize_name_none(self):
+        """Test that _normalize_name handles None."""
+        self.assertIsNone(sensor_name_validator._normalize_name(None))
+
+    def test_conserv_with_spaces_passes_after_normalization(self):
+        """Test that Conserv DeviceNames with spaces pass validation after normalization."""
+        df = polars.DataFrame({
+            "SensorName": ["conserv:307:c000172:Temperature"],
+            "DeviceName": ["PYPM  0100104SET    "],  # spaces where underscores should be
+            "SensorID": ["s1"],
+            "Source": ["Conserv"],
+            "Value": [1.0],
+        })
+
+        valid_df, invalid_df = sensor_name_validator.filter_invalid_sensors(
+            df=df, logger=self.logger
+        )
+
+        self.assertEqual(valid_df.shape[0], 1)
+        self.assertEqual(invalid_df.shape[0], 0)
+
+    def test_coris_with_spaces_passes_after_normalization(self):
+        """Test that Coris SensorNames with spaces in first 20 chars pass after normalization."""
+        df = polars.DataFrame({
+            "SensorName": ["PYPM  0100104SET     RH YPM 104_D444"],  # spaces in first 20
+            "DeviceName": ["YPM 104 D444"],
+            "SensorID": ["s1"],
+            "Source": ["Coris"],
+            "Value": [1.0],
+        })
+
+        valid_df, invalid_df = sensor_name_validator.filter_invalid_sensors(
+            df=df, logger=self.logger
+        )
+
+        self.assertEqual(valid_df.shape[0], 1)
+        self.assertEqual(invalid_df.shape[0], 0)
 
 
 if __name__ == "__main__":
