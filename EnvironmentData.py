@@ -1016,10 +1016,10 @@ class EnvironmentData:
             "SensorReadingLux",
             "SensorReadingUTC_SecondsFromPrior",
             "Historical",
-            "weather_temp_c",
+            "weather_temp_f",
             "weather_humidity_pct",
-            "weather_dew_point_c",
-            "weather_apparent_temp_c",
+            "weather_dew_point_f",
+            "weather_apparent_temp_f",
             "weather_pressure_msl_hpa",
             "weather_pressure_surface_hpa",
             "weather_precip_mm",
@@ -1031,6 +1031,7 @@ class EnvironmentData:
             "weather_shortwave_rad_wm2",
             "weather_direct_rad_wm2",
             "weather_wmo_code",
+            "weather_wmo_description",
         ]
             
         # Only select columns that exist in both the data and the allowed columns

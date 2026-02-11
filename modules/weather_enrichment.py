@@ -57,10 +57,10 @@ WEATHER_PARAMS = [
 
 # Mapping from Open-Meteo parameter names to output column names
 WEATHER_COLUMN_MAP = {
-    "temperature_2m": "weather_temp_c",
+    "temperature_2m": "weather_temp_f",
     "relative_humidity_2m": "weather_humidity_pct",
-    "dew_point_2m": "weather_dew_point_c",
-    "apparent_temperature": "weather_apparent_temp_c",
+    "dew_point_2m": "weather_dew_point_f",
+    "apparent_temperature": "weather_apparent_temp_f",
     "pressure_msl": "weather_pressure_msl_hpa",
     "surface_pressure": "weather_pressure_surface_hpa",
     "precipitation": "weather_precip_mm",
@@ -72,6 +72,45 @@ WEATHER_COLUMN_MAP = {
     "shortwave_radiation": "weather_shortwave_rad_wm2",
     "direct_radiation": "weather_direct_rad_wm2",
     "weather_code": "weather_wmo_code",
+}
+
+# Columns that need Celsius-to-Fahrenheit conversion: F = (C * 9/5) + 32
+CELSIUS_TO_FAHRENHEIT_COLUMNS = [
+    "weather_temp_f",
+    "weather_dew_point_f",
+    "weather_apparent_temp_f",
+]
+
+# WMO Weather interpretation codes (WMO 4677)
+WMO_CODE_DESCRIPTIONS = {
+    0: "Clear sky",
+    1: "Mainly clear",
+    2: "Partly cloudy",
+    3: "Overcast",
+    45: "Fog",
+    48: "Depositing rime fog",
+    51: "Light drizzle",
+    53: "Moderate drizzle",
+    55: "Dense drizzle",
+    56: "Light freezing drizzle",
+    57: "Dense freezing drizzle",
+    61: "Slight rain",
+    63: "Moderate rain",
+    65: "Heavy rain",
+    66: "Light freezing rain",
+    67: "Heavy freezing rain",
+    71: "Slight snow",
+    73: "Moderate snow",
+    75: "Heavy snow",
+    77: "Snow grains",
+    80: "Slight rain showers",
+    81: "Moderate rain showers",
+    82: "Violent rain showers",
+    85: "Slight snow showers",
+    86: "Heavy snow showers",
+    95: "Thunderstorm",
+    96: "Thunderstorm with slight hail",
+    99: "Thunderstorm with heavy hail",
 }
 
 def load_building_coordinates(coordinates_path: str) -> polars.DataFrame:
@@ -349,7 +388,7 @@ def enrich_sensors_with_weather(
     -------
     polars.DataFrame
         Input DataFrame with added weather columns:
-        weather_temp_c, weather_humidity_pct, weather_precip_mm, weather_cloud_cover_pct
+        weather_temp_f, weather_humidity_pct, weather_precip_mm, weather_cloud_cover_pct
     """
     if sensors.is_empty():
         # Return with empty weather columns
@@ -357,6 +396,9 @@ def enrich_sensors_with_weather(
             sensors = sensors.with_columns(
                 polars.lit(None, dtype=polars.Float64).alias(col_name)
             )
+        sensors = sensors.with_columns(
+            polars.lit(None, dtype=polars.Utf8).alias("weather_wmo_description")
+        )
         return sensors
 
     if "SensorName" not in sensors.columns or "SensorReadingUTC" not in sensors.columns:
@@ -368,6 +410,9 @@ def enrich_sensors_with_weather(
             sensors = sensors.with_columns(
                 polars.lit(None, dtype=polars.Float64).alias(col_name)
             )
+        sensors = sensors.with_columns(
+            polars.lit(None, dtype=polars.Utf8).alias("weather_wmo_description")
+        )
         return sensors
 
     # Load building coordinates
@@ -393,6 +438,9 @@ def enrich_sensors_with_weather(
             sensors = sensors.with_columns(
                 polars.lit(None, dtype=polars.Float64).alias(col_name)
             )
+        sensors = sensors.with_columns(
+            polars.lit(None, dtype=polars.Utf8).alias("weather_wmo_description")
+        )
         return sensors
 
     # Group by unique lat/long to minimize API calls
@@ -459,6 +507,9 @@ def enrich_sensors_with_weather(
             sensors = sensors.with_columns(
                 polars.lit(None, dtype=polars.Float64).alias(col_name)
             )
+        sensors = sensors.with_columns(
+            polars.lit(None, dtype=polars.Utf8).alias("weather_wmo_description")
+        )
         return sensors
 
     # Combine all weather data into one lookup table
@@ -475,8 +526,30 @@ def enrich_sensors_with_weather(
     # Clean up temporary columns
     sensors = sensors.drop(["building_code", "_weather_hour_utc"])
 
+    # Convert Celsius columns to Fahrenheit: F = (C * 9/5) + 32
+    conversion_exprs = []
+    for col_name in CELSIUS_TO_FAHRENHEIT_COLUMNS:
+        if col_name in sensors.columns:
+            conversion_exprs.append(
+                (polars.col(col_name) * 9 / 5 + 32).alias(col_name)
+            )
+    if conversion_exprs:
+        sensors = sensors.with_columns(conversion_exprs)
+
+    # Map WMO weather codes to human-readable descriptions
+    if "weather_wmo_code" in sensors.columns:
+        sensors = sensors.with_columns(
+            polars.col("weather_wmo_code")
+            .cast(polars.Int64, strict=False)
+            .map_elements(
+                lambda code: WMO_CODE_DESCRIPTIONS.get(code) if code is not None else None,
+                return_dtype=polars.Utf8,
+            )
+            .alias("weather_wmo_description")
+        )
+
     if logger:
-        matched = sensors.filter(polars.col("weather_temp_c").is_not_null()).shape[0]
+        matched = sensors.filter(polars.col("weather_temp_f").is_not_null()).shape[0]
         total = sensors.shape[0]
         logger.info(
             f"Weather enrichment complete: {matched}/{total} readings matched "
