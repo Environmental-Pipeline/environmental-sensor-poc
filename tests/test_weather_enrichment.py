@@ -361,8 +361,11 @@ class TestEnrichSensorsWithWeather(unittest.TestCase):
                 "time": times,
                 "temperature_2m": [10.0 + i * 0.5 for i in range(24)],
                 "relative_humidity_2m": [60.0 + i for i in range(24)],
+                "dew_point_2m": [5.0 + i * 0.3 for i in range(24)],
+                "apparent_temperature": [8.0 + i * 0.4 for i in range(24)],
                 "precipitation": [0.0] * 24,
                 "cloud_cover": [40.0 + i for i in range(24)],
+                "weather_code": [0] * 12 + [3] * 12,
             }
         }
         mock_response.raise_for_status = MagicMock()
@@ -376,11 +379,28 @@ class TestEnrichSensorsWithWeather(unittest.TestCase):
             logger=self.logger,
         )
 
-        # Check weather columns are present
-        self.assertIn("weather_temp_c", result.columns)
+        # Check weather columns are present (Fahrenheit, not Celsius)
+        self.assertIn("weather_temp_f", result.columns)
+        self.assertIn("weather_dew_point_f", result.columns)
+        self.assertIn("weather_apparent_temp_f", result.columns)
         self.assertIn("weather_humidity_pct", result.columns)
         self.assertIn("weather_precip_mm", result.columns)
         self.assertIn("weather_cloud_cover_pct", result.columns)
+        self.assertNotIn("weather_temp_c", result.columns)
+        self.assertNotIn("weather_dew_point_c", result.columns)
+        self.assertNotIn("weather_apparent_temp_c", result.columns)
+
+        # Check Fahrenheit conversion: C values range 10.0-21.5, so F should be 50.0-70.7
+        matched_rows = result.filter(polars.col("weather_temp_f").is_not_null())
+        if matched_rows.shape[0] > 0:
+            for temp_f in matched_rows["weather_temp_f"].to_list():
+                self.assertGreaterEqual(temp_f, 50.0)
+                self.assertLessEqual(temp_f, 71.0)
+
+        # Check WMO description column
+        self.assertIn("weather_wmo_description", result.columns)
+        wmo_vals = result.filter(polars.col("weather_wmo_description").is_not_null())["weather_wmo_description"].to_list()
+        self.assertTrue(all(v in ("Clear sky", "Overcast") for v in wmo_vals))
 
         # Check that temporary columns are cleaned up
         self.assertNotIn("building_code", result.columns)
@@ -403,7 +423,8 @@ class TestEnrichSensorsWithWeather(unittest.TestCase):
             coordinates_path=self.coords_path,
             logger=self.logger,
         )
-        self.assertIn("weather_temp_c", result.columns)
+        self.assertIn("weather_temp_f", result.columns)
+        self.assertIn("weather_wmo_description", result.columns)
         self.assertTrue(result.is_empty())
 
     @patch("modules.weather_enrichment.requests.get")
@@ -420,9 +441,10 @@ class TestEnrichSensorsWithWeather(unittest.TestCase):
             coordinates_path=self.coords_path,
             logger=self.logger,
         )
-        self.assertIn("weather_temp_c", result.columns)
+        self.assertIn("weather_temp_f", result.columns)
+        self.assertIn("weather_wmo_description", result.columns)
         # All weather values should be null
-        self.assertTrue(result["weather_temp_c"].is_null().all())
+        self.assertTrue(result["weather_temp_f"].is_null().all())
 
     def test_missing_sensor_name_column(self):
         """Test enrichment when SensorName column is missing."""
@@ -435,8 +457,9 @@ class TestEnrichSensorsWithWeather(unittest.TestCase):
             coordinates_path=self.coords_path,
             logger=self.logger,
         )
-        self.assertIn("weather_temp_c", result.columns)
-        self.assertTrue(result["weather_temp_c"].is_null().all())
+        self.assertIn("weather_temp_f", result.columns)
+        self.assertIn("weather_wmo_description", result.columns)
+        self.assertTrue(result["weather_temp_f"].is_null().all())
 
     @patch("modules.weather_enrichment.requests.get")
     @patch("modules.weather_enrichment.time.sleep")
@@ -452,8 +475,9 @@ class TestEnrichSensorsWithWeather(unittest.TestCase):
         )
 
         # Should still have weather columns, all null
-        self.assertIn("weather_temp_c", result.columns)
-        self.assertTrue(result["weather_temp_c"].is_null().all())
+        self.assertIn("weather_temp_f", result.columns)
+        self.assertIn("weather_wmo_description", result.columns)
+        self.assertTrue(result["weather_temp_f"].is_null().all())
         # Original data preserved
         self.assertEqual(result.shape[0], sensors.shape[0])
 
