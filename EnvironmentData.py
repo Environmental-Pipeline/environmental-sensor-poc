@@ -604,6 +604,10 @@ class EnvironmentData:
                     coris_dfs.append(client_sensors)
 
             if coris_dfs:
+                # Normalize schemas across Coris accounts to prevent type mismatches
+                if len(coris_dfs) > 1:
+                    for i, df in enumerate(coris_dfs):
+                        coris_dfs[i] = df.cast({col: polars.Float64 for col in df.columns if df[col].dtype == polars.Int64 and col.startswith('SensorCalibration')})
                 coris_sensors = polars.concat(coris_dfs, how="diagonal")
                 self.validate_sensors(
                     sensors=coris_sensors, utc=current_utc, step="get_current_readings_coris"
