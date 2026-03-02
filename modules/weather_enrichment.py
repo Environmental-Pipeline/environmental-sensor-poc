@@ -33,8 +33,13 @@ import requests
 from typing import Optional
 
 
-# Open-Meteo Archive API endpoint
+# Open-Meteo API endpoints
 OPEN_METEO_ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
+OPEN_METEO_FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
+
+# Number of days before today where Archive API data becomes available.
+# Dates more recent than this threshold use the Forecast API instead.
+ARCHIVE_AVAILABILITY_DAYS = 5
 
 # Weather parameters to fetch
 WEATHER_PARAMS = [
@@ -234,9 +239,11 @@ def fetch_weather_data(
     end_date: str,
     cache_dir: Optional[str] = None,
     logger: Optional[logging.Logger] = None,
+    api_url: Optional[str] = None,
+    extra_params: Optional[dict] = None,
 ) -> Optional[polars.DataFrame]:
     """
-    Fetch hourly weather data from Open-Meteo Archive API for a single location.
+    Fetch hourly weather data from an Open-Meteo API endpoint for a single location.
 
     Parameters
     ----------
@@ -252,6 +259,10 @@ def fetch_weather_data(
         Directory to cache weather responses. If None, no caching.
     logger : logging.Logger, optional
         Logger instance.
+    api_url : str, optional
+        Open-Meteo API endpoint URL. Defaults to the Archive API.
+    extra_params : dict, optional
+        Additional query parameters (e.g. past_days, forecast_days for the Forecast API).
 
     Returns
     -------
@@ -260,6 +271,9 @@ def fetch_weather_data(
         relative_humidity_2m, precipitation, cloud_cover.
         Returns None on API failure.
     """
+    if api_url is None:
+        api_url = OPEN_METEO_ARCHIVE_URL
+
     # Check cache first
     if cache_dir:
         os.makedirs(cache_dir, exist_ok=True)
@@ -285,15 +299,17 @@ def fetch_weather_data(
         "hourly": ",".join(WEATHER_PARAMS),
         "timezone": "UTC",
     }
+    if extra_params:
+        params.update(extra_params)
 
     if logger:
         logger.info(
             f"Fetching weather: {latitude},{longitude} "
-            f"({start_date} to {end_date})"
+            f"({start_date} to {end_date}) via {api_url}"
         )
 
     try:
-        response = requests.get(OPEN_METEO_ARCHIVE_URL, params=params, timeout=30)
+        response = requests.get(api_url, params=params, timeout=30)
         response.raise_for_status()
         data = response.json()
     except Exception as e:
@@ -317,6 +333,80 @@ def fetch_weather_data(
             logger.info(f"Weather data cached: {cache_file}")
 
     return _parse_weather_response(data)
+
+
+def fetch_weather_for_range(
+    latitude: float,
+    longitude: float,
+    start_date: str,
+    end_date: str,
+    cache_dir: Optional[str] = None,
+    logger: Optional[logging.Logger] = None,
+) -> Optional[polars.DataFrame]:
+    """
+    Fetch hourly weather data, automatically choosing Archive or Forecast API.
+
+    Dates older than ARCHIVE_AVAILABILITY_DAYS use the Archive API.
+    More recent dates use the Forecast API with past_days/forecast_days
+    parameters so that recently-collected sensor readings get weather data
+    instead of nulls.
+
+    Parameters
+    ----------
+    latitude, longitude, start_date, end_date, cache_dir, logger
+        Same as fetch_weather_data.
+
+    Returns
+    -------
+    polars.DataFrame or None
+        Combined hourly weather data from both APIs, or None on total failure.
+    """
+    today = datetime.date.today()
+    archive_cutoff = today - datetime.timedelta(days=ARCHIVE_AVAILABILITY_DAYS)
+
+    start_dt = datetime.date.fromisoformat(start_date)
+    end_dt = datetime.date.fromisoformat(end_date)
+
+    parts = []
+
+    # --- Archive portion: dates strictly before the cutoff ---
+    if start_dt <= archive_cutoff:
+        archive_end = min(end_dt, archive_cutoff)
+        archive_df = fetch_weather_data(
+            latitude=latitude,
+            longitude=longitude,
+            start_date=start_dt.isoformat(),
+            end_date=archive_end.isoformat(),
+            cache_dir=cache_dir,
+            logger=logger,
+            api_url=OPEN_METEO_ARCHIVE_URL,
+        )
+        if archive_df is not None:
+            parts.append(archive_df)
+
+    # --- Forecast portion: dates after the cutoff ---
+    if end_dt > archive_cutoff:
+        forecast_start = max(start_dt, archive_cutoff + datetime.timedelta(days=1))
+        forecast_df = fetch_weather_data(
+            latitude=latitude,
+            longitude=longitude,
+            start_date=forecast_start.isoformat(),
+            end_date=end_dt.isoformat(),
+            cache_dir=cache_dir,
+            logger=logger,
+            api_url=OPEN_METEO_FORECAST_URL,
+            extra_params={"past_days": 5, "forecast_days": 0},
+        )
+        if forecast_df is not None:
+            parts.append(forecast_df)
+
+    if not parts:
+        return None
+
+    combined = polars.concat(parts)
+    # De-duplicate in case archive and forecast overlap at the boundary
+    combined = combined.unique(subset=["weather_hour_utc"], keep="first")
+    return combined
 
 
 def _parse_weather_response(data: dict) -> polars.DataFrame:
@@ -467,7 +557,7 @@ def enrich_sensors_with_weather(
     # Fetch weather for each unique location and build a lookup table
     weather_lookup_parts = []
     for (lat, lon), codes in locations.items():
-        weather_df = fetch_weather_data(
+        weather_df = fetch_weather_for_range(
             latitude=lat,
             longitude=lon,
             start_date=start_date,

@@ -482,6 +482,134 @@ class TestEnrichSensorsWithWeather(unittest.TestCase):
         self.assertEqual(result.shape[0], sensors.shape[0])
 
 
+class TestFetchWeatherForRange(unittest.TestCase):
+    """Test the Archive/Forecast API routing logic."""
+
+    def setUp(self):
+        self.logger = create_test_logger()
+        self.tmpdir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    @patch("modules.weather_enrichment.requests.get")
+    def test_old_dates_use_archive_api(self, mock_get):
+        """Dates older than ARCHIVE_AVAILABILITY_DAYS should use the Archive API."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = create_mock_weather_response()
+        mock_response.raise_for_status = MagicMock()
+        mock_get.return_value = mock_response
+
+        # Use dates well in the past (year 2023)
+        result = weather_enrichment.fetch_weather_for_range(
+            latitude=41.3163,
+            longitude=-72.9223,
+            start_date="2023-01-01",
+            end_date="2023-01-03",
+            logger=self.logger,
+        )
+
+        self.assertIsNotNone(result)
+        # Should have called Archive API URL
+        call_args = mock_get.call_args
+        self.assertIn("archive-api.open-meteo.com", call_args[1].get("url", call_args[0][0] if call_args[0] else ""))
+
+    @patch("modules.weather_enrichment.requests.get")
+    def test_recent_dates_use_forecast_api(self, mock_get):
+        """Dates within ARCHIVE_AVAILABILITY_DAYS should use the Forecast API."""
+        import datetime
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        today = datetime.date.today()
+        yesterday = today - datetime.timedelta(days=1)
+        times = [f"{yesterday.isoformat()}T{h:02d}:00" for h in range(24)]
+        mock_response.json.return_value = {
+            "hourly": {
+                "time": times,
+                "temperature_2m": [10.0 + i for i in range(24)],
+                "relative_humidity_2m": [60.0 + i for i in range(24)],
+                "precipitation": [0.0] * 24,
+                "cloud_cover": [50.0] * 24,
+            }
+        }
+        mock_response.raise_for_status = MagicMock()
+        mock_get.return_value = mock_response
+
+        result = weather_enrichment.fetch_weather_for_range(
+            latitude=41.3163,
+            longitude=-72.9223,
+            start_date=yesterday.isoformat(),
+            end_date=today.isoformat(),
+            logger=self.logger,
+        )
+
+        self.assertIsNotNone(result)
+        # Should have called the Forecast API (api.open-meteo.com, not archive-api)
+        call_url = mock_get.call_args[0][0]
+        self.assertEqual(call_url, weather_enrichment.OPEN_METEO_FORECAST_URL)
+        # Should include past_days and forecast_days params
+        call_params = mock_get.call_args[1].get("params", {})
+        self.assertEqual(call_params.get("past_days"), 5)
+        self.assertEqual(call_params.get("forecast_days"), 0)
+
+    @patch("modules.weather_enrichment.requests.get")
+    def test_spanning_range_uses_both_apis(self, mock_get):
+        """Date range spanning old and recent should call both APIs."""
+        import datetime
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        today = datetime.date.today()
+        # Create a range that spans from 10 days ago to today
+        start = today - datetime.timedelta(days=10)
+        times = [f"{start.isoformat()}T{h:02d}:00" for h in range(24)]
+        mock_response.json.return_value = {
+            "hourly": {
+                "time": times,
+                "temperature_2m": [10.0 + i for i in range(24)],
+                "relative_humidity_2m": [60.0 + i for i in range(24)],
+                "precipitation": [0.0] * 24,
+                "cloud_cover": [50.0] * 24,
+            }
+        }
+        mock_response.raise_for_status = MagicMock()
+        mock_get.return_value = mock_response
+
+        result = weather_enrichment.fetch_weather_for_range(
+            latitude=41.3163,
+            longitude=-72.9223,
+            start_date=start.isoformat(),
+            end_date=today.isoformat(),
+            logger=self.logger,
+        )
+
+        self.assertIsNotNone(result)
+        # Should have called both Archive and Forecast APIs (2 calls)
+        self.assertEqual(mock_get.call_count, 2)
+        urls_called = [call[0][0] for call in mock_get.call_args_list]
+        self.assertIn(weather_enrichment.OPEN_METEO_ARCHIVE_URL, urls_called)
+        self.assertIn(weather_enrichment.OPEN_METEO_FORECAST_URL, urls_called)
+
+    @patch("modules.weather_enrichment.requests.get")
+    def test_total_failure_returns_none(self, mock_get):
+        """Both API calls failing should return None."""
+        mock_get.side_effect = Exception("Network error")
+
+        import datetime
+        today = datetime.date.today()
+        start = today - datetime.timedelta(days=10)
+
+        result = weather_enrichment.fetch_weather_for_range(
+            latitude=41.3163,
+            longitude=-72.9223,
+            start_date=start.isoformat(),
+            end_date=today.isoformat(),
+            logger=self.logger,
+        )
+
+        self.assertIsNone(result)
+
+
 class TestParseWeatherResponse(unittest.TestCase):
     """Test parsing of Open-Meteo API responses."""
 
