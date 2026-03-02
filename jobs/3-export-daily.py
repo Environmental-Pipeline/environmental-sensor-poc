@@ -9,6 +9,8 @@ import time
 import json
 import polars
 
+from modules.weather_enrichment import enrich_sensors_with_weather
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
@@ -22,6 +24,8 @@ if os.path.exists("/src/data"):
 SENSOR_READINGS = os.path.join(data_path, "sensor_readings.parquet")
 DAILY_EXPORT    = os.path.join(data_path, "daily_export.parquet")
 HIGH_WATER_MARK = os.path.join(data_path, "daily_export_hwm.json")
+COORDINATES     = os.path.join(home_directory, "data", "building_coordinates.csv")
+WEATHER_CACHE   = os.path.join(data_path, "weather_cache")
 
 # ---------------------------------------------------------------------------
 # High-water mark helpers
@@ -64,6 +68,23 @@ def export_daily() -> None:
         # Write an empty parquet so the upload script has a valid file
         delta.write_parquet(DAILY_EXPORT)
         return
+
+    # Re-enrich rows that have null weather columns so the daily export
+    # contains weather data even for recently-collected readings.
+    if "weather_temp_f" in delta.columns and os.path.exists(COORDINATES):
+        null_weather = delta.filter(polars.col("weather_temp_f").is_null())
+        if null_weather.height > 0:
+            print(f"[3-export-daily] Re-enriching {null_weather.height} rows with null weather data")
+            # Drop existing weather columns before re-enrichment so they get repopulated
+            weather_cols = [c for c in null_weather.columns if c.startswith("weather_")]
+            has_weather = delta.filter(polars.col("weather_temp_f").is_not_null())
+            null_weather = null_weather.drop(weather_cols)
+            null_weather = enrich_sensors_with_weather(
+                sensors=null_weather,
+                coordinates_path=COORDINATES,
+                cache_dir=WEATHER_CACHE,
+            )
+            delta = polars.concat([has_weather, null_weather], how="diagonal_relaxed")
 
     new_hwm = delta.select(polars.col("SensorReadingUTC").max()).item()
 
