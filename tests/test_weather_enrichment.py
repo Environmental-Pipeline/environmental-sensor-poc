@@ -8,6 +8,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 import unittest
 from unittest.mock import patch, MagicMock
+import datetime
 import json
 import tempfile
 import shutil
@@ -506,6 +507,256 @@ class TestParseWeatherResponse(unittest.TestCase):
         self.assertEqual(result.shape[0], 2)
         # Missing params should be filled with None
         self.assertTrue(result["relative_humidity_2m"].is_null().all())
+
+
+class TestForecastCacheKey(unittest.TestCase):
+    """Test forecast cache key generation."""
+
+    def test_deterministic(self):
+        key1 = weather_enrichment._forecast_cache_key(41.3163, -72.9223, "2023-11-20")
+        key2 = weather_enrichment._forecast_cache_key(41.3163, -72.9223, "2023-11-20")
+        self.assertEqual(key1, key2)
+
+    def test_different_dates(self):
+        key1 = weather_enrichment._forecast_cache_key(41.3163, -72.9223, "2023-11-20")
+        key2 = weather_enrichment._forecast_cache_key(41.3163, -72.9223, "2023-11-21")
+        self.assertNotEqual(key1, key2)
+
+    def test_different_from_archive_key(self):
+        forecast_key = weather_enrichment._forecast_cache_key(41.3163, -72.9223, "2023-11-20")
+        archive_key = weather_enrichment._cache_key(41.3163, -72.9223, "2023-11-20", "2023-11-20")
+        self.assertNotEqual(forecast_key, archive_key)
+
+
+class TestFetchForecastData(unittest.TestCase):
+    """Test forecast data fetching with mocked HTTP requests."""
+
+    def setUp(self):
+        self.logger = create_test_logger()
+        self.tmpdir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    @patch("modules.weather_enrichment.requests.get")
+    def test_successful_fetch(self, mock_get):
+        """Test successful forecast API fetch returns DataFrame."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = create_mock_weather_response()
+        mock_response.raise_for_status = MagicMock()
+        mock_get.return_value = mock_response
+
+        result = weather_enrichment.fetch_forecast_data(
+            latitude=41.3163,
+            longitude=-72.9223,
+            logger=self.logger,
+        )
+
+        self.assertIsNotNone(result)
+        self.assertIn("weather_hour_utc", result.columns)
+        self.assertIn("temperature_2m", result.columns)
+        self.assertEqual(result.shape[0], 3)
+
+        # Verify it called the forecast URL with correct parameters
+        args, kwargs = mock_get.call_args
+        self.assertEqual(args[0], weather_enrichment.OPEN_METEO_FORECAST_URL)
+        self.assertEqual(kwargs["params"]["past_days"], 5)
+        self.assertEqual(kwargs["params"]["forecast_days"], 0)
+
+    @patch("modules.weather_enrichment.requests.get")
+    def test_api_failure_returns_none(self, mock_get):
+        """Test that forecast API errors return None gracefully."""
+        mock_get.side_effect = Exception("Network error")
+
+        result = weather_enrichment.fetch_forecast_data(
+            latitude=41.3163,
+            longitude=-72.9223,
+            logger=self.logger,
+        )
+
+        self.assertIsNone(result)
+
+    @patch("modules.weather_enrichment.requests.get")
+    def test_caches_response(self, mock_get):
+        """Test that forecast data is cached and reused."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = create_mock_weather_response()
+        mock_response.raise_for_status = MagicMock()
+        mock_get.return_value = mock_response
+
+        # First call: hits API
+        weather_enrichment.fetch_forecast_data(
+            latitude=41.3163,
+            longitude=-72.9223,
+            cache_dir=self.tmpdir,
+            logger=self.logger,
+        )
+        self.assertEqual(mock_get.call_count, 1)
+
+        # Second call: uses cache
+        result = weather_enrichment.fetch_forecast_data(
+            latitude=41.3163,
+            longitude=-72.9223,
+            cache_dir=self.tmpdir,
+            logger=self.logger,
+        )
+        self.assertEqual(mock_get.call_count, 1)
+        self.assertIsNotNone(result)
+
+    @patch("modules.weather_enrichment.requests.get")
+    def test_bad_response_returns_none(self, mock_get):
+        """Test that unexpected forecast response returns None."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"error": "bad request"}
+        mock_response.raise_for_status = MagicMock()
+        mock_get.return_value = mock_response
+
+        result = weather_enrichment.fetch_forecast_data(
+            latitude=41.3163,
+            longitude=-72.9223,
+            logger=self.logger,
+        )
+
+        self.assertIsNone(result)
+
+
+class TestFetchWeatherForDateRange(unittest.TestCase):
+    """Test the smart date-range splitting between Archive and Forecast APIs."""
+
+    def setUp(self):
+        self.logger = create_test_logger()
+        self.tmpdir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    @patch("modules.weather_enrichment.fetch_forecast_data")
+    @patch("modules.weather_enrichment.fetch_weather_data")
+    @patch("modules.weather_enrichment.datetime")
+    def test_old_dates_use_archive_only(self, mock_dt, mock_archive, mock_forecast):
+        """Dates older than 5 days should only use the Archive API."""
+        mock_dt.date.today.return_value = datetime.date(2023, 11, 20)
+        mock_dt.date.fromisoformat = datetime.date.fromisoformat
+        mock_dt.timedelta = datetime.timedelta
+
+        mock_archive.return_value = polars.DataFrame({
+            "weather_hour_utc": [1699920000],
+            "temperature_2m": [10.0],
+        })
+
+        result = weather_enrichment.fetch_weather_for_date_range(
+            41.3163, -72.9223,
+            "2023-11-01", "2023-11-10",
+            logger=self.logger,
+        )
+
+        mock_archive.assert_called_once()
+        mock_forecast.assert_not_called()
+        self.assertIsNotNone(result)
+
+    @patch("modules.weather_enrichment.fetch_forecast_data")
+    @patch("modules.weather_enrichment.fetch_weather_data")
+    @patch("modules.weather_enrichment.datetime")
+    def test_recent_dates_use_forecast_only(self, mock_dt, mock_archive, mock_forecast):
+        """Dates within 5 days should only use the Forecast API."""
+        mock_dt.date.today.return_value = datetime.date(2023, 11, 20)
+        mock_dt.date.fromisoformat = datetime.date.fromisoformat
+        mock_dt.timedelta = datetime.timedelta
+
+        mock_forecast.return_value = polars.DataFrame({
+            "weather_hour_utc": [1700438400],
+            "temperature_2m": [12.0],
+        })
+
+        result = weather_enrichment.fetch_weather_for_date_range(
+            41.3163, -72.9223,
+            "2023-11-16", "2023-11-20",
+            logger=self.logger,
+        )
+
+        mock_archive.assert_not_called()
+        mock_forecast.assert_called_once()
+        self.assertIsNotNone(result)
+
+    @patch("modules.weather_enrichment.fetch_forecast_data")
+    @patch("modules.weather_enrichment.fetch_weather_data")
+    @patch("modules.weather_enrichment.datetime")
+    def test_spanning_dates_use_both(self, mock_dt, mock_archive, mock_forecast):
+        """Date range spanning the cutoff should use both APIs."""
+        mock_dt.date.today.return_value = datetime.date(2023, 11, 20)
+        mock_dt.date.fromisoformat = datetime.date.fromisoformat
+        mock_dt.timedelta = datetime.timedelta
+
+        mock_archive.return_value = polars.DataFrame({
+            "weather_hour_utc": [1699920000],
+            "temperature_2m": [10.0],
+        })
+        mock_forecast.return_value = polars.DataFrame({
+            "weather_hour_utc": [1700438400],
+            "temperature_2m": [12.0],
+        })
+
+        result = weather_enrichment.fetch_weather_for_date_range(
+            41.3163, -72.9223,
+            "2023-11-10", "2023-11-20",
+            logger=self.logger,
+        )
+
+        mock_archive.assert_called_once()
+        mock_forecast.assert_called_once()
+        self.assertIsNotNone(result)
+        self.assertEqual(result.height, 2)
+
+    @patch("modules.weather_enrichment.fetch_forecast_data")
+    @patch("modules.weather_enrichment.fetch_weather_data")
+    @patch("modules.weather_enrichment.datetime")
+    def test_both_fail_returns_none(self, mock_dt, mock_archive, mock_forecast):
+        """If both APIs fail, return None."""
+        mock_dt.date.today.return_value = datetime.date(2023, 11, 20)
+        mock_dt.date.fromisoformat = datetime.date.fromisoformat
+        mock_dt.timedelta = datetime.timedelta
+
+        mock_archive.return_value = None
+        mock_forecast.return_value = None
+
+        result = weather_enrichment.fetch_weather_for_date_range(
+            41.3163, -72.9223,
+            "2023-11-10", "2023-11-20",
+            logger=self.logger,
+        )
+
+        self.assertIsNone(result)
+
+    @patch("modules.weather_enrichment.fetch_forecast_data")
+    @patch("modules.weather_enrichment.fetch_weather_data")
+    @patch("modules.weather_enrichment.datetime")
+    def test_archive_end_date_capped(self, mock_dt, mock_archive, mock_forecast):
+        """Archive API end date should be capped at cutoff - 1 day."""
+        mock_dt.date.today.return_value = datetime.date(2023, 11, 20)
+        mock_dt.date.fromisoformat = datetime.date.fromisoformat
+        mock_dt.timedelta = datetime.timedelta
+
+        mock_archive.return_value = polars.DataFrame({
+            "weather_hour_utc": [1699920000],
+            "temperature_2m": [10.0],
+        })
+        mock_forecast.return_value = polars.DataFrame({
+            "weather_hour_utc": [1700438400],
+            "temperature_2m": [12.0],
+        })
+
+        weather_enrichment.fetch_weather_for_date_range(
+            41.3163, -72.9223,
+            "2023-11-10", "2023-11-20",
+            logger=self.logger,
+        )
+
+        # Archive should be called with end_date = cutoff - 1 = 2023-11-14
+        archive_call_args = mock_archive.call_args
+        self.assertEqual(archive_call_args[0][3], "2023-11-14")
 
 
 if __name__ == '__main__':

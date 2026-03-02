@@ -9,6 +9,8 @@ import time
 import json
 import polars
 
+from modules.weather_enrichment import enrich_sensors_with_weather
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
@@ -22,6 +24,10 @@ if os.path.exists("/src/data"):
 SENSOR_READINGS = os.path.join(data_path, "sensor_readings.parquet")
 DAILY_EXPORT    = os.path.join(data_path, "daily_export.parquet")
 HIGH_WATER_MARK = os.path.join(data_path, "daily_export_hwm.json")
+COORDINATES_PATH = os.path.join(data_path, "building_coordinates.csv")
+WEATHER_CACHE_DIR = "/opt/env-sensor-data/weather_cache/"
+if os.path.exists("/src/data"):
+    WEATHER_CACHE_DIR = os.path.join(data_path, "weather_cache")
 
 # ---------------------------------------------------------------------------
 # High-water mark helpers
@@ -64,6 +70,19 @@ def export_daily() -> None:
         # Write an empty parquet so the upload script has a valid file
         delta.write_parquet(DAILY_EXPORT)
         return
+
+    # Re-enrich weather data for rows that previously had nulls.
+    # This catches rows consolidated before archive data was available.
+    weather_cols = [c for c in delta.columns if c.startswith("weather_")]
+    if weather_cols:
+        delta = delta.drop(weather_cols)
+    if os.path.exists(COORDINATES_PATH):
+        print(f"[3-export-daily] Re-enriching {delta.height} rows with weather data")
+        delta = enrich_sensors_with_weather(
+            delta,
+            coordinates_path=COORDINATES_PATH,
+            cache_dir=WEATHER_CACHE_DIR,
+        )
 
     new_hwm = delta.select(polars.col("SensorReadingUTC").max()).item()
 

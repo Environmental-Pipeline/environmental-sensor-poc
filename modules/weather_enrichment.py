@@ -33,8 +33,14 @@ import requests
 from typing import Optional
 
 
-# Open-Meteo Archive API endpoint
+# Open-Meteo Archive API endpoint (5-7 day delay for historical data)
 OPEN_METEO_ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
+
+# Open-Meteo Forecast API endpoint (includes recent actuals + forecasts)
+OPEN_METEO_FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
+
+# Number of days before which the Archive API is reliable
+ARCHIVE_DELAY_DAYS = 5
 
 # Weather parameters to fetch
 WEATHER_PARAMS = [
@@ -227,6 +233,13 @@ def _cache_key(lat: float, lon: float, start_date: str, end_date: str) -> str:
     return f"weather_{lat:.4f}_{lon:.4f}_{start_date}_{end_date}_{h}.json"
 
 
+def _forecast_cache_key(lat: float, lon: float, date_str: str) -> str:
+    """Generate a cache filename for a forecast API request (keyed by date to expire daily)."""
+    raw = f"forecast_{lat:.4f}_{lon:.4f}_{date_str}"
+    h = hashlib.md5(raw.encode()).hexdigest()[:12]
+    return f"forecast_{lat:.4f}_{lon:.4f}_{date_str}_{h}.json"
+
+
 def fetch_weather_data(
     latitude: float,
     longitude: float,
@@ -355,6 +368,163 @@ def _parse_weather_response(data: dict) -> polars.DataFrame:
     return df
 
 
+def fetch_forecast_data(
+    latitude: float,
+    longitude: float,
+    cache_dir: Optional[str] = None,
+    logger: Optional[logging.Logger] = None,
+) -> Optional[polars.DataFrame]:
+    """
+    Fetch recent weather data from the Open-Meteo Forecast API.
+
+    Uses past_days=5 and forecast_days=0 to retrieve only recent actual
+    observations, covering the gap where the Archive API has no data yet.
+
+    Parameters
+    ----------
+    latitude : float
+        Location latitude.
+    longitude : float
+        Location longitude.
+    cache_dir : str, optional
+        Directory to cache weather responses. If None, no caching.
+    logger : logging.Logger, optional
+        Logger instance.
+
+    Returns
+    -------
+    polars.DataFrame or None
+        Hourly weather data, or None on failure.
+    """
+    today_str = datetime.date.today().isoformat()
+
+    # Check cache first (keyed by today's date so it expires daily)
+    if cache_dir:
+        os.makedirs(cache_dir, exist_ok=True)
+        cache_file = os.path.join(
+            cache_dir, _forecast_cache_key(latitude, longitude, today_str)
+        )
+        if os.path.exists(cache_file):
+            if logger:
+                logger.info(
+                    f"Forecast cache hit: {latitude},{longitude}"
+                )
+            with open(cache_file, "r") as f:
+                cached = json.load(f)
+            return _parse_weather_response(cached)
+
+    params = {
+        "latitude": latitude,
+        "longitude": longitude,
+        "hourly": ",".join(WEATHER_PARAMS),
+        "timezone": "UTC",
+        "past_days": 5,
+        "forecast_days": 0,
+    }
+
+    if logger:
+        logger.info(
+            f"Fetching forecast: {latitude},{longitude} (past 5 days)"
+        )
+
+    try:
+        response = requests.get(OPEN_METEO_FORECAST_URL, params=params, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+    except Exception as e:
+        if logger:
+            logger.warning(f"Forecast API request failed: {e}")
+        return None
+
+    # Validate response structure
+    if "hourly" not in data or "time" not in data.get("hourly", {}):
+        if logger:
+            logger.warning(
+                f"Unexpected forecast API response for {latitude},{longitude}"
+            )
+        return None
+
+    # Cache the response
+    if cache_dir:
+        with open(cache_file, "w") as f:
+            json.dump(data, f)
+        if logger:
+            logger.info(f"Forecast data cached: {cache_file}")
+
+    return _parse_weather_response(data)
+
+
+def fetch_weather_for_date_range(
+    latitude: float,
+    longitude: float,
+    start_date: str,
+    end_date: str,
+    cache_dir: Optional[str] = None,
+    logger: Optional[logging.Logger] = None,
+) -> Optional[polars.DataFrame]:
+    """
+    Fetch weather data, automatically choosing Archive or Forecast API based on dates.
+
+    - Archive API for dates older than ARCHIVE_DELAY_DAYS
+    - Forecast API (with past_days=5) for recent dates
+
+    Parameters
+    ----------
+    latitude : float
+        Location latitude.
+    longitude : float
+        Location longitude.
+    start_date : str
+        Start date in YYYY-MM-DD format.
+    end_date : str
+        End date in YYYY-MM-DD format.
+    cache_dir : str, optional
+        Directory to cache weather responses.
+    logger : logging.Logger, optional
+        Logger instance.
+
+    Returns
+    -------
+    polars.DataFrame or None
+        Combined hourly weather data, or None if both APIs fail.
+    """
+    today = datetime.date.today()
+    archive_cutoff = today - datetime.timedelta(days=ARCHIVE_DELAY_DAYS)
+
+    start_dt = datetime.date.fromisoformat(start_date)
+    end_dt = datetime.date.fromisoformat(end_date)
+
+    parts = []
+
+    # Use Archive API for dates older than the cutoff
+    if start_dt < archive_cutoff:
+        archive_end = min(end_dt, archive_cutoff - datetime.timedelta(days=1))
+        archive_df = fetch_weather_data(
+            latitude, longitude,
+            start_date, archive_end.isoformat(),
+            cache_dir=cache_dir, logger=logger,
+        )
+        if archive_df is not None:
+            parts.append(archive_df)
+
+    # Use Forecast API for recent dates (within last 5 days)
+    if end_dt >= archive_cutoff:
+        forecast_df = fetch_forecast_data(
+            latitude, longitude,
+            cache_dir=cache_dir, logger=logger,
+        )
+        if forecast_df is not None:
+            parts.append(forecast_df)
+
+    if not parts:
+        return None
+
+    result = polars.concat(parts)
+    # Deduplicate by hour in case of overlap between archive and forecast
+    result = result.unique(subset=["weather_hour_utc"], keep="last")
+    return result
+
+
 def _floor_to_hour(utc_timestamp: int) -> int:
     """Floor a UTC timestamp (seconds) to the start of its hour."""
     return utc_timestamp - (utc_timestamp % 3600)
@@ -467,7 +637,7 @@ def enrich_sensors_with_weather(
     # Fetch weather for each unique location and build a lookup table
     weather_lookup_parts = []
     for (lat, lon), codes in locations.items():
-        weather_df = fetch_weather_data(
+        weather_df = fetch_weather_for_date_range(
             latitude=lat,
             longitude=lon,
             start_date=start_date,
