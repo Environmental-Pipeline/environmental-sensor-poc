@@ -548,10 +548,10 @@ class TestFetchWeatherForRange(unittest.TestCase):
         # Should have called the Forecast API (api.open-meteo.com, not archive-api)
         call_url = mock_get.call_args[0][0]
         self.assertEqual(call_url, weather_enrichment.OPEN_METEO_FORECAST_URL)
-        # Should include past_days and forecast_days params
+        # Should NOT include past_days/forecast_days when start_date/end_date are provided
         call_params = mock_get.call_args[1].get("params", {})
-        self.assertEqual(call_params.get("past_days"), 5)
-        self.assertEqual(call_params.get("forecast_days"), 0)
+        self.assertNotIn("past_days", call_params)
+        self.assertNotIn("forecast_days", call_params)
 
     @patch("modules.weather_enrichment.requests.get")
     def test_spanning_range_uses_both_apis(self, mock_get):
