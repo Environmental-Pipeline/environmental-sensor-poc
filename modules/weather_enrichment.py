@@ -395,6 +395,7 @@ def fetch_weather_for_range(
             cache_dir=cache_dir,
             logger=logger,
             api_url=OPEN_METEO_FORECAST_URL,
+            # past_days/forecast_days removed - conflicts with start_date/end_date
         )
         if forecast_df is not None:
             parts.append(forecast_df)
