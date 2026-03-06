@@ -214,7 +214,10 @@ class CorisClient:
             raise Exception(error_msg)
         
         # Process sensor data
-        sensors = polars.DataFrame(response.json()["Sensors"])
+        raw_sensors = response.json().get("Sensors", [])
+        if not raw_sensors:
+            return polars.DataFrame()
+        sensors = polars.DataFrame(raw_sensors)
         
         # Remove out-of-scope sensors
         for prefix in out_of_scope:
