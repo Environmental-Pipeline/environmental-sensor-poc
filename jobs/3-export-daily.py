@@ -88,6 +88,16 @@ def export_daily() -> None:
 
     new_hwm = delta.select(polars.col("SensorReadingUTC").max()).item()
 
+
+    # Enforce consistent types for weather columns to prevent schema mismatches across daily files
+    FLOAT64_WEATHER_COLS = [
+        'weather_cloud_cover_pct', 'weather_humidity_pct',
+        'weather_wind_direction_deg', 'weather_wmo_code',
+    ]
+    for col in FLOAT64_WEATHER_COLS:
+        if col in delta.columns:
+            delta = delta.with_columns(polars.col(col).cast(polars.Float64))
+
     delta.write_parquet(DAILY_EXPORT)
     write_high_water_mark(int(new_hwm))
 
