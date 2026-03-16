@@ -841,7 +841,13 @@ class EnvironmentData:
 
         # ============ WEATHER ENRICHMENT ============
         # Enrich sensor readings with outdoor weather data from Open-Meteo Archive API
+        # Drop existing weather columns first to prevent double C-to-F conversion
+        # on rows that were already enriched in a prior consolidation cycle.
         if not dt.is_empty():
+            weather_cols = [c for c in dt.columns if c.startswith("weather_")]
+            if weather_cols:
+                self.logger.info(f"Dropping {len(weather_cols)} existing weather columns before re-enrichment")
+                dt = dt.drop(weather_cols)
             coordinates_path = os.path.join(self.home_directory, "data", "building_coordinates.csv")
             if os.path.exists(coordinates_path):
                 try:

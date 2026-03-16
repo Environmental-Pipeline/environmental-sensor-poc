@@ -252,7 +252,12 @@ def filter_invalid_sensors(
                 else:
                     invalid_names.add(name)
             if valid_names:
-                valid_frames.append(source_df.filter(polars.col("SensorName").is_in(list(valid_names))))
+                valid_coris = source_df.filter(polars.col("SensorName").is_in(list(valid_names)))
+                # Truncate SensorName to exactly 20 characters (Coris API appends display names)
+                valid_coris = valid_coris.with_columns(
+                    polars.col("SensorName").str.slice(0, 20).alias("SensorName")
+                )
+                valid_frames.append(valid_coris)
             if invalid_names:
                 invalid_frames.append(source_df.filter(polars.col("SensorName").is_in(list(invalid_names))))
             if logger:
