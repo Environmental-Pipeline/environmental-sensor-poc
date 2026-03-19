@@ -859,6 +859,12 @@ class EnvironmentData:
                     )
                 except Exception as e:
                     self.logger.warning(f"Weather enrichment failed, continuing without: {e}")
+            # Enforce consistent Float64 for weather columns that Open-Meteo
+            # sometimes returns as Int64 (depends on null presence in batch)
+            for wc in ['weather_cloud_cover_pct', 'weather_humidity_pct',
+                        'weather_wind_direction_deg', 'weather_wmo_code']:
+                if wc in dt.columns:
+                    dt = dt.with_columns(polars.col(wc).cast(polars.Float64))
             else:
                 self.logger.info(f"Building coordinates not found at {coordinates_path}, skipping weather enrichment")
 
