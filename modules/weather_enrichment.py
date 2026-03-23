@@ -160,8 +160,8 @@ def extract_building_code(sensor_name: str) -> Optional[str]:
     """
     if sensor_name is None or len(sensor_name) < 5:
         return None
-    # Positions 2-5 (0-indexed: chars at index 1,2,3,4)
-    raw = sensor_name[1:5]
+    # Positions 2-6 (0-indexed: chars at index 1,2,3,4,5)
+    raw = sensor_name[1:6]
     return raw.strip("_") or None
 
 
