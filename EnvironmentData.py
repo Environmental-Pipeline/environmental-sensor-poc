@@ -865,8 +865,6 @@ class EnvironmentData:
                         'weather_wind_direction_deg', 'weather_wmo_code']:
                 if wc in dt.columns:
                     dt = dt.with_columns(polars.col(wc).cast(polars.Float64))
-            else:
-                self.logger.info(f"Building coordinates not found at {coordinates_path}, skipping weather enrichment")
 
         # Add time difference between readings for each sensor within each source, device, and type
         # Only calculate for non-Historical data to avoid mixing backfilled data with real-time readings
