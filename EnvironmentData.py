@@ -848,7 +848,7 @@ class EnvironmentData:
             if weather_cols:
                 self.logger.info(f"Dropping {len(weather_cols)} existing weather columns before re-enrichment")
                 dt = dt.drop(weather_cols)
-            coordinates_path = os.path.join(self.home_directory, "data", "building_coordinates.csv")
+            coordinates_path = os.path.join(os.path.abspath(self.data_path), "building_coordinates.csv")
             if os.path.exists(coordinates_path):
                 try:
                     dt = weather_enrichment.enrich_sensors_with_weather(
