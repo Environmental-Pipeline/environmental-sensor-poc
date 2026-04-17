@@ -755,7 +755,10 @@ class EnvironmentData:
             files_read = []
 
         # Combine the readings into a single polars DataFrame.
-        dt = polars.concat(new_readings) if new_readings else polars.DataFrame()
+        # Use diagonal concat so that if any new-readings file was written with a
+        # slightly different schema (e.g. missing a reading column because no lux
+        # sensors reported in that window), we fill with nulls rather than crashing.
+        dt = polars.concat(new_readings, how="diagonal") if new_readings else polars.DataFrame()
         self.logger.info(f"{dt.shape[0]} new readings after schema enforcement.")
 
         # Clean the data.
@@ -1048,10 +1051,22 @@ class EnvironmentData:
             "weather_wmo_description",
         ]
             
+        # Ensure the core reading columns always exist so downstream files have a
+        # stable schema. If a pull returns no lux (or RH, or F) readings in a given
+        # window, we still write the column as all-null rather than dropping it,
+        # which would cause schema drift and break consolidation concat.
+        reading_cols_required = {
+            "SensorReadingF": polars.Float32,
+            "SensorReadingRh": polars.Float32,
+            "SensorReadingLux": polars.Float32,
+        }
+        for col, dtype in reading_cols_required.items():
+            if col not in dt.columns:
+                dt = dt.with_columns(polars.lit(None, dtype=dtype).alias(col))
         # Only select columns that exist in both the data and the allowed columns
         available_columns = [col for col in desired_columns if col in dt.columns]
         dt = dt.select(available_columns)
-        
+
         return dt
 
     def validate_sensors(
