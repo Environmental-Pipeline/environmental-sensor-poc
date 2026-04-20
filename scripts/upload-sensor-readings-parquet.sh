@@ -15,15 +15,22 @@ S3_BUCKET="s3://spinup-002f52-yale-env-sensor-poc-data"
 FABRIC_APP_ID="c8060d79-3927-46b2-943e-d13020cfcefe"
 FABRIC_TENANT_ID="dd8cbebb-2139-4df8-b411-4e3e87abeb5c"
 FABRIC_CERT="/home/aha48/fabric-service-principal-combined.pem"
-FABRIC_BASE="https://edafileuploads.dfs.core.windows.net/cultural-heritage-environmental-monitoring-dev/Incoming"
+
+# Fabric landing areas. DEV listed first so that if TEST has issues,
+# the DEV flow (which Power BI depends on) is already done before we
+# touch TEST. Add or remove entries here to change destinations.
+FABRIC_BASES=(
+  "https://edafileuploads.dfs.core.windows.net/cultural-heritage-environmental-monitoring-dev/Incoming"
+  "https://edafileuploads.dfs.core.windows.net/cultural-heritage-environmental-monitoring-tst/Incoming"
+)
 
 # ---------------------------------------------------------------------------
-# Helper: upload a file to both S3 and Fabric
+# Helper: upload a file to S3 and to every configured Fabric landing area
 # ---------------------------------------------------------------------------
 upload_file() {
   local src_file="$1"
   local s3_dest="$2"
-  local fabric_dest="$3"
+  local dest_filename="$3"
   local label="$4"
 
   if [ ! -f "$src_file" ]; then
@@ -33,17 +40,40 @@ upload_file() {
 
   # Upload to S3
   echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] Uploading ${label} to S3: ${s3_dest}" >> "$LOG"
-  aws s3 cp "$src_file" "$s3_dest" --profile "$AWS_PROFILE" >> "$LOG" 2>&1
-  echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] S3 ${label} upload complete." >> "$LOG"
+  if aws s3 cp "$src_file" "$s3_dest" --profile "$AWS_PROFILE" >> "$LOG" 2>&1; then
+    echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] S3 ${label} upload complete." >> "$LOG"
+  else
+    echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] ERROR: S3 ${label} upload failed." >> "$LOG"
+    # Don't return; still try Fabric. S3 failure shouldn't block Fabric uploads.
+  fi
 
-  # Upload to Fabric
-  echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] Uploading ${label} to Fabric: ${fabric_dest}" >> "$LOG"
-  azcopy copy "$src_file" "$fabric_dest" >> "$LOG" 2>&1
-  echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] Fabric ${label} upload complete." >> "$LOG"
+  # Upload to every Fabric landing area. Track per-destination success.
+  local fabric_failures=0
+  local fabric_attempts=0
+  for base in "${FABRIC_BASES[@]}"; do
+    fabric_attempts=$((fabric_attempts + 1))
+    local fabric_dest="${base}/${dest_filename}"
+    echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] Uploading ${label} to Fabric: ${fabric_dest}" >> "$LOG"
+    if azcopy copy "$src_file" "$fabric_dest" >> "$LOG" 2>&1; then
+      echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] Fabric ${label} upload complete: ${fabric_dest}" >> "$LOG"
+    else
+      echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] ERROR: Fabric ${label} upload failed: ${fabric_dest}" >> "$LOG"
+      fabric_failures=$((fabric_failures + 1))
+    fi
+  done
+
+  # Exit nonzero only if every Fabric destination failed.
+  if [ "$fabric_failures" -gt 0 ] && [ "$fabric_failures" -eq "$fabric_attempts" ]; then
+    echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] ERROR: All ${fabric_attempts} Fabric destinations failed for ${label}." >> "$LOG"
+    return 1
+  elif [ "$fabric_failures" -gt 0 ]; then
+    echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] WARNING: ${fabric_failures} of ${fabric_attempts} Fabric destinations failed for ${label}." >> "$LOG"
+  fi
 }
 
 # === MAIN ===
 echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] Starting upload..." >> "$LOG"
+echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] Fabric destinations: ${#FABRIC_BASES[@]}" >> "$LOG"
 
 # Authenticate to Fabric via service principal (once, up front)
 echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] Authenticating to Fabric..." >> "$LOG"
@@ -53,8 +83,7 @@ azcopy login --service-principal --application-id "$FABRIC_APP_ID" --tenant-id "
 upload_file \
   "$DAILY_SRC" \
   "${S3_BUCKET}/daily/sensor_readings_${DATE_UTC}.parquet" \
-  "${FABRIC_BASE}/sensor_readings_${DATE_UTC}.parquet" \
+  "sensor_readings_${DATE_UTC}.parquet" \
   "daily-incremental"
-
 
 echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] All uploads complete." >> "$LOG"
