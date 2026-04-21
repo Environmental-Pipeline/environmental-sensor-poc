@@ -217,6 +217,15 @@ def filter_invalid_sensors(
                     logger.warning("Column 'DeviceName' not found - cannot validate Conserv sensors")
                 invalid_frames.append(source_df)
                 continue
+            # Route rows with a null DeviceName straight to invalid_frames
+            # (polars is_in does not match null values, so we must handle them explicitly)
+            null_mask = polars.col("DeviceName").is_null()
+            null_rows = source_df.filter(null_mask)
+            if not null_rows.is_empty():
+                if logger:
+                    logger.info(f"Conserv: {null_rows.shape[0]} rows with null DeviceName routed to invalid")
+                invalid_frames.append(null_rows)
+            source_df = source_df.filter(~null_mask)
             # Validate DeviceName for Conserv (normalize spaces to underscores first)
             unique_pairs = source_df.select("DeviceName").unique()["DeviceName"].to_list()
             valid_names = set()
@@ -240,6 +249,15 @@ def filter_invalid_sensors(
                     logger.warning("Column 'SensorName' not found - cannot validate Coris sensors")
                 invalid_frames.append(source_df)
                 continue
+            # Route rows with a null SensorName straight to invalid_frames
+            # (polars is_in does not match null values, so we must handle them explicitly)
+            null_mask = polars.col("SensorName").is_null()
+            null_rows = source_df.filter(null_mask)
+            if not null_rows.is_empty():
+                if logger:
+                    logger.info(f"Coris: {null_rows.shape[0]} rows with null SensorName routed to invalid")
+                invalid_frames.append(null_rows)
+            source_df = source_df.filter(~null_mask)
             # Validate first 20 chars of SensorName for Coris (normalize spaces to underscores first)
             unique_names = source_df.select("SensorName").unique()["SensorName"].to_list()
             valid_names = set()
