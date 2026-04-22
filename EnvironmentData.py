@@ -281,6 +281,12 @@ class EnvironmentData:
         if api_key and cats_user_id and not api_key.startswith("your_"):
             accounts.append({"api_key": api_key, "cats_user_id": cats_user_id})
             self.logger.info(f"Found additional Coris account: CATS_USER_ID_LIBRARIES={cats_user_id}")
+        # Check for Yale Cultural Heritage project account
+        api_key = env_vars.get("CORIS_API_KEY_PROJECT")
+        cats_user_id = env_vars.get("CATS_USER_ID_PROJECT")
+        if api_key and cats_user_id and not api_key.startswith("your_"):
+            accounts.append({"api_key": api_key, "cats_user_id": cats_user_id})
+            self.logger.info(f"Found additional Coris account: CATS_USER_ID_PROJECT={cats_user_id}")
 
         return accounts
 
