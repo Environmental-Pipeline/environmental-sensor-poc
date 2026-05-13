@@ -10,6 +10,7 @@ import json
 import polars
 
 from modules.weather_enrichment import enrich_sensors_with_weather
+from modules.csc_filter import split_csc_rows, summarize_excluded_by_sensor
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -26,6 +27,14 @@ DAILY_EXPORT    = os.path.join(data_path, "daily_export.parquet")
 HIGH_WATER_MARK = os.path.join(data_path, "daily_export_hwm.json")
 COORDINATES     = os.path.join(home_directory, "data", "building_coordinates.csv")
 WEATHER_CACHE   = os.path.join(data_path, "weather_cache")
+
+EXCLUDED_SUMMARY = os.path.join(data_path, "daily_export_excluded_summary.csv")
+
+# Feature flag for CSC-only export. When false (default), the daily export
+# contains all rows that pass name validation, unchanged from prior behavior.
+# When true, only rows where the parsed building code is "CSC" are exported.
+# Flip via env var at the container level when go-live prerequisites are met.
+CSC_FILTER_ENABLED = os.environ.get("CSC_FILTER_ENABLED", "false").lower() == "true"
 
 # ---------------------------------------------------------------------------
 # High-water mark helpers
@@ -88,6 +97,24 @@ def export_daily() -> None:
 
     new_hwm = delta.select(polars.col("SensorReadingUTC").max()).item()
 
+    # CSC export filter. Always split and always write the excluded summary
+    # CSV so the per-day review file is produced regardless of flag state.
+    # The flag only controls whether the upload uses the filtered or
+    # unfiltered frame. Note: new_hwm is computed on the full delta above
+    # so the high-water mark tracks processed rows, not exported rows.
+    included, excluded = split_csc_rows(delta)
+    excluded_summary = summarize_excluded_by_sensor(excluded)
+    excluded_summary.write_csv(EXCLUDED_SUMMARY)
+    print(
+        f"[3-export-daily] CSC filter split: {included.height} included, "
+        f"{excluded.height} excluded ({excluded_summary.height} unique excluded sensors). "
+        f"Wrote summary to {EXCLUDED_SUMMARY}."
+    )
+    if CSC_FILTER_ENABLED:
+        print("[3-export-daily] CSC_FILTER_ENABLED=true. Exporting filtered (CSC-only) frame.")
+        delta = included
+    else:
+        print("[3-export-daily] CSC_FILTER_ENABLED=false. Exporting unfiltered frame (shadow mode).")
 
     # Enforce consistent types for weather columns to prevent schema mismatches across daily files
     FLOAT64_WEATHER_COLS = [
