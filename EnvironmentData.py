@@ -727,6 +727,89 @@ class EnvironmentData:
             f"{self.data_path}/new-readings/{current_utc}.parquet"
         )
 
+    def backfill_conserv_gaps(self, min_gap_seconds: int = 2 * 3600, max_lookback_days: int = 14):
+        """
+        Detect and refill gaps in Conserv coverage left by a lost connection
+        (e.g. the March DNS failure, where current pulls silently retrieved nothing).
+
+        Keys off the data, not a failure flag: finds the freshest Conserv reading the
+        pipeline holds (master parquet plus any not-yet-consolidated new-readings files),
+        and if that trails 'now' by more than min_gap_seconds, re-pulls the missing window
+        through the existing historical path and stages it as a normal new-readings file.
+        consolidate_readings() then dedupes and merges it, so this is idempotent and never
+        touches the export high-water mark. Self-heals after an outage of any length,
+        including full VM downtime, because the gap is measured from the last good reading.
+        """
+        if not getattr(self, "conserv_client", None):
+            return  # Conserv not enabled on this instance.
+
+        master = f"{self.data_path}/sensor_readings.parquet"
+        if not os.path.exists(master):
+            self.logger.info("backfill_conserv_gaps: no master parquet yet, skipping.")
+            return
+
+        def _max_conserv_utc(df):
+            if df.is_empty() or "Source" not in df.columns or "SensorReadingUTC" not in df.columns:
+                return None
+            return (df.filter(polars.col("Source") == "Conserv")
+                      .select(polars.col("SensorReadingUTC").max()).item())
+
+        try:
+            last_seen = _max_conserv_utc(
+                polars.read_parquet(master, columns=["Source", "SensorReadingUTC"]))
+        except Exception as e:
+            self.logger.warning(f"backfill_conserv_gaps: could not read master parquet: {e}")
+            return
+
+        staging_dir = f"{self.data_path}/new-readings/"
+        if os.path.exists(staging_dir):
+            for f in os.listdir(staging_dir):
+                try:
+                    staged = _max_conserv_utc(
+                        polars.read_parquet(f"{staging_dir}{f}", columns=["Source", "SensorReadingUTC"]))
+                except Exception:
+                    continue
+                if staged is not None and (last_seen is None or staged > last_seen):
+                    last_seen = staged
+
+        if last_seen is None:
+            self.logger.info("backfill_conserv_gaps: no Conserv readings on record, skipping.")
+            return
+
+        now_utc = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
+        gap = now_utc - int(last_seen)
+        if gap <= min_gap_seconds:
+            return
+
+        cap = max_lookback_days * 24 * 3600
+        start_utc = int(last_seen)
+        if gap > cap:
+            start_utc = now_utc - cap
+            self.logger.error(
+                f"COMPLETENESS ALERT: Conserv gap of {gap // 3600}h exceeds the "
+                f"{max_lookback_days}-day backfill cap; filling the most recent "
+                f"{max_lookback_days} days only. Older data needs a manual re-pull.")
+
+        self.logger.warning(
+            f"backfill_conserv_gaps: Conserv trailing gap of {gap // 3600}h; "
+            f"re-pulling {start_utc} to {now_utc}.")
+
+        df = self.conserv_client.get_historical_data(start_utc, now_utc)
+        if df is None or df.is_empty():
+            self.logger.warning(
+                "backfill_conserv_gaps: historical re-pull returned no data "
+                "(Conserv may still be unreachable); will retry next run.")
+            return
+
+        df = self.standardize_sensor_dataframe(df)
+
+        os.makedirs(staging_dir, exist_ok=True)
+        out = f"{staging_dir}{now_utc}_backfill.parquet"
+        df.write_parquet(out)
+        self.logger.warning(
+            f"backfill_conserv_gaps: staged {df.shape[0]} re-pulled rows to {out}; "
+            "consolidation will dedupe and merge them.")
+
     def consolidate_readings(self):
         """
         Combine new and historical readings into one database. Build (or re-build) the analytical tables.

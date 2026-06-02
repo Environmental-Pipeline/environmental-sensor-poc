@@ -28,13 +28,15 @@ WEATHER_CACHE   = os.path.join(data_path, "weather_cache")
 
 # use EnvironmentData to consolidate new and historical readings into one database.
 from EnvironmentData import EnvironmentData
-EnvironmentData(
+_env = EnvironmentData(
     days_back = int(read_env_variable('DAYS_BACK')),
     testing = read_env_variable('TESTING').lower() == 'true',
     coris_enabled = read_env_variable('CORIS_ENABLED').lower() == 'true',
     conserv_enabled = read_env_variable('CONSERV_ENABLED').lower() == 'true',
     licor_enabled = read_env_variable('LICOR_ENABLED').lower() == 'true',
-).consolidate_readings()
+)
+_env.backfill_conserv_gaps()
+_env.consolidate_readings()
 
 # ---------------------------------------------------------------------------
 # Backfill weather data for rows that previously had nulls
