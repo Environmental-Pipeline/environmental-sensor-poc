@@ -480,7 +480,7 @@ class ConservAPIClient:
             return combined_data
         else:
             if self.logger:
-                self.logger.warning("No current readings retrieved from any customer")
+                self.logger.error("No current readings retrieved from any customer")
             return None
 
 
