@@ -24,6 +24,16 @@ FABRIC_BASES=(
   "https://edafileuploads.dfs.core.windows.net/cultural-heritage-environmental-monitoring-tst/Incoming"
 )
 
+# Add the PROD landing area on/after the go-live delivery date (first PROD drop is
+# 2026-06-16, carrying the 15th's data). DEV/TST stay enabled as a safety net.
+# Touch ${DATA_DIR}/PROD_UPLOAD_OFF to disable the PROD upload without editing this file.
+PROD_BASE="https://edafileuploads.dfs.core.windows.net/cultural-heritage-environmental-monitoring-prd/Incoming"
+PROD_START_YMD=20260616
+PROD_KILL_FILE="${DATA_DIR}/PROD_UPLOAD_OFF"
+if [[ ! -f "$PROD_KILL_FILE" ]] && (( $(date -u +%Y%m%d) >= PROD_START_YMD )); then
+  FABRIC_BASES+=( "$PROD_BASE" )
+fi
+
 # ---------------------------------------------------------------------------
 # Helper: upload a file to S3 and to every configured Fabric landing area
 # ---------------------------------------------------------------------------
