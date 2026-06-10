@@ -33,8 +33,26 @@ EXCLUDED_SUMMARY = os.path.join(data_path, "daily_export_excluded_summary.csv")
 # Feature flag for CSC-only export. When false (default), the daily export
 # contains all rows that pass name validation, unchanged from prior behavior.
 # When true, only rows where the parsed building code is "CSC" are exported.
-# Flip via env var at the container level when go-live prerequisites are met.
-CSC_FILTER_ENABLED = os.environ.get("CSC_FILTER_ENABLED", "false").lower() == "true"
+# Enablement is resolved by _resolve_csc_filter_enabled() below: it auto-enables
+# on/after the go-live date in UTC. CSC_FILTER_ENABLED=true/false overrides the
+# date, and touching /src/data/CSC_FILTER_OFF force-disables it with no recreate.
+def _resolve_csc_filter_enabled():
+    # Auto-enable the CSC export filter on/after go-live without a manual flag flip.
+    # Precedence: kill file > explicit env override > go-live date (all UTC).
+    from datetime import datetime, timezone, date
+    CSC_GO_LIVE = date(2026, 6, 15)
+    CSC_KILL_FILE = "/src/data/CSC_FILTER_OFF"
+    if os.path.exists(CSC_KILL_FILE):
+        return False
+    override = os.environ.get("CSC_FILTER_ENABLED", "").strip().lower()
+    if override in ("true", "1", "yes"):
+        return True
+    if override in ("false", "0", "no"):
+        return False
+    return datetime.now(timezone.utc).date() >= CSC_GO_LIVE
+
+
+CSC_FILTER_ENABLED = _resolve_csc_filter_enabled()
 
 # ---------------------------------------------------------------------------
 # High-water mark helpers
