@@ -1,11 +1,10 @@
-FROM python:3
+FROM python:3.14
 RUN apt-get update && apt-get install -y cron
 
 WORKDIR /src
 
-COPY requirements-docker.txt ./
-COPY requirements.txt ./
-RUN python3 -m pip install --no-cache-dir -r requirements-docker.txt
+COPY requirements.lock.txt requirements-docker.txt requirements.txt ./
+RUN python3 -m pip install --no-cache-dir -r requirements.lock.txt
 
 # Copy necessary files. We leave out 1-examples-pull-data.ipynb since it could interfere with cron jobs.
 # To use 2-examples-analysis.ipynb, wait until the first consolidation (after 10 minutes) has run to ensure data files exist.
