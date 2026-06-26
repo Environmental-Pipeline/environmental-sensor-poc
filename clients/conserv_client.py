@@ -683,6 +683,7 @@ class ConservAPIClient:
             polars.lit("Temperature").alias("SensorType"),
             polars.col("SensorReadingF"),
             polars.lit(None, dtype=polars.Float32).alias("SensorReadingRh"),
+            polars.lit(None, dtype=polars.Float32).alias("SensorReadingLux"),
             #polars.col("customer_id"),
             polars.col("QueryUTC")
         ])
@@ -702,12 +703,46 @@ class ConservAPIClient:
             polars.lit("RH").alias("SensorType"),
             polars.lit(None, dtype=polars.Float32).alias("SensorReadingF"),
             polars.col("SensorReadingRh"),
+            polars.lit(None, dtype=polars.Float32).alias("SensorReadingLux"),
             #polars.col("customer_id"),
             polars.col("QueryUTC")
         ])
         
-        # Combine temperature and RH rows
-        df = polars.concat([temp_rows, rh_rows], how="vertical")
+        # Locate the illuminance column defensively (raw label is "Illuminance (lux)";
+        # match loosely so encoding/whitespace variants still resolve). Values arrive as
+        # strings because export_data reads with infer_schema=False, so cast like temp/RH.
+        lux_col = None
+        for col in df.columns:
+            if "llumin" in col or "lux" in col.lower():
+                lux_col = col
+                break
+
+        blocks = [temp_rows, rh_rows]
+        if lux_col is not None:
+            lux_rows = df.select([
+                polars.col("Historical"),
+                polars.col("SensorReadingUTC"),
+                polars.col("Source"),
+                polars.col("DeviceId").alias("DeviceID"),
+                polars.col("DeviceName"),
+                polars.concat_str([
+                    polars.col("DeviceId"),
+                    polars.lit(":Lux")
+                ]).alias("SensorID"),
+                polars.col("DeviceName").alias("SensorName"),
+                polars.lit("LuxSensor").alias("SensorType"),
+                polars.lit(None, dtype=polars.Float32).alias("SensorReadingF"),
+                polars.lit(None, dtype=polars.Float32).alias("SensorReadingRh"),
+                polars.col(lux_col).cast(polars.Float32, strict=False).alias("SensorReadingLux"),
+                #polars.col("customer_id"),
+                polars.col("QueryUTC")
+            ])
+            blocks.append(lux_rows)
+        elif self.logger:
+            self.logger.warning("Conserv transform: no illuminance column found; emitting Temperature/RH only")
+
+        # Combine temperature, RH, and (when present) lux rows
+        df = polars.concat(blocks, how="vertical")
 
         if self.logger:
             self.logger.info(f"Conserv transformation complete: {df.shape[0]} records (doubled from device to sensor format)")
