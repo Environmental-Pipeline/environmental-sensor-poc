@@ -478,10 +478,29 @@ def build_devices(
         .unique()
     )
     if device_names.shape[0] != device_names["DeviceName"].unique().shape[0]:
+        # Identify the offending names so the log is actionable rather than opaque.
+        dupes = (
+            device_names.group_by("DeviceName")
+            .agg(polars.col("DeviceID").n_unique().alias("n_ids"),
+                 polars.col("DeviceID").unique().alias("ids"))
+            .filter(polars.col("n_ids") > 1)
+            .sort("n_ids", descending=True)
+        )
+        detail = "; ".join(
+            f"{r['DeviceName']} -> {sorted(r['ids'])}" for r in dupes.iter_rows(named=True)
+        )
+        msg = (
+            "DeviceName to DeviceID is not a 1-1 mapping "
+            f"({dupes.shape[0]} name(s)): {detail}. "
+            "Continuing; devices are keyed on DeviceID so the build is unaffected."
+        )
         if error_callback:
+            # Non-fatal: a duplicate sensor name (e.g. a device swap reusing a name)
+            # is a recoverable data-quality condition. Log loudly and continue rather
+            # than aborting consolidation, which would freeze the master write.
             error_callback(
-                "DeviceName to DeviceID is not a 1-1 mapping.",
-                True,
+                msg,
+                False,
             )
         else:
             raise ValueError("DeviceName to DeviceID is not a 1-1 mapping.")
