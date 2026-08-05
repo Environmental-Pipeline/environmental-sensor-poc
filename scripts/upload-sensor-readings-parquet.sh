@@ -90,10 +90,32 @@ echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] Authenticating to Fabric..." >> "$LO
 azcopy login --service-principal --application-id "$FABRIC_APP_ID" --tenant-id "$FABRIC_TENANT_ID" --certificate-path "$FABRIC_CERT" >> "$LOG" 2>&1
 
 # --- Daily incremental upload (delta only) ---
-upload_file \
+delivery_ok=0
+if upload_file \
   "$DAILY_SRC" \
   "${S3_BUCKET}/daily/sensor_readings_${DATE_UTC}.parquet" \
   "sensor_readings_${DATE_UTC}.parquet" \
-  "daily-incremental"
+  "daily-incremental"; then
+  delivery_ok=1
+fi
 
 echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] All uploads complete." >> "$LOG"
+
+# --- Off-box heartbeat -------------------------------------------------------
+# Ping only when the delivery actually succeeded. Silence is the alert: if this
+# ping stops arriving, healthchecks.io notifies from outside Yale, which still
+# works when the VM is unreachable. See /opt/env-sensor-data/.healthcheck
+HC_CONF="${DATA_DIR}/.healthcheck"
+if [ "$delivery_ok" -eq 1 ] && [ -r "$HC_CONF" ]; then
+  # shellcheck disable=SC1090
+  . "$HC_CONF"
+  if [ -n "${HEALTHCHECK_URL:-}" ]; then
+    if curl -fsS -m 15 --retry 3 -o /dev/null "$HEALTHCHECK_URL"; then
+      echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] Heartbeat sent." >> "$LOG"
+    else
+      echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] WARNING: heartbeat ping failed." >> "$LOG"
+    fi
+  fi
+elif [ "$delivery_ok" -ne 1 ]; then
+  echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] Delivery failed; heartbeat withheld." >> "$LOG"
+fi
