@@ -52,7 +52,9 @@ upload_file() {
   echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] Uploading ${label} to S3: ${s3_dest}" >> "$LOG"
   if aws s3 cp "$src_file" "$s3_dest" --profile "$AWS_PROFILE" >> "$LOG" 2>&1; then
     echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] S3 ${label} upload complete." >> "$LOG"
+    RESULT_S3="ok"
   else
+    RESULT_S3="failed"
     echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] ERROR: S3 ${label} upload failed." >> "$LOG"
     # Don't return; still try Fabric. S3 failure shouldn't block Fabric uploads.
   fi
@@ -64,9 +66,13 @@ upload_file() {
     fabric_attempts=$((fabric_attempts + 1))
     local fabric_dest="${base}/${dest_filename}"
     echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] Uploading ${label} to Fabric: ${fabric_dest}" >> "$LOG"
+    local area
+    area="$(echo "$base" | sed -E 's#.*monitoring-([a-z]+)/Incoming#\1#')"
     if azcopy copy "$src_file" "$fabric_dest" >> "$LOG" 2>&1; then
       echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] Fabric ${label} upload complete: ${fabric_dest}" >> "$LOG"
+      RESULT_FABRIC="${RESULT_FABRIC}${RESULT_FABRIC:+,}\"${area}\":\"ok\""
     else
+      RESULT_FABRIC="${RESULT_FABRIC}${RESULT_FABRIC:+,}\"${area}\":\"failed\""
       echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] ERROR: Fabric ${label} upload failed: ${fabric_dest}" >> "$LOG"
       fabric_failures=$((fabric_failures + 1))
     fi
@@ -82,6 +88,8 @@ upload_file() {
 }
 
 # === MAIN ===
+RESULT_S3="not_attempted"
+RESULT_FABRIC=""
 echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] Starting upload..." >> "$LOG"
 echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] Fabric destinations: ${#FABRIC_BASES[@]}" >> "$LOG"
 
@@ -100,6 +108,27 @@ if upload_file \
 fi
 
 echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] All uploads complete." >> "$LOG"
+
+# --- Delivery status for the dashboard ---------------------------------------
+# Written on every run, success or failure. The dashboard mounts DATA_DIR
+# read-only and cannot see this log, so this file is the only way delivery
+# state reaches it. Absence of this file means the upload never ran.
+STATUS_FILE="${DATA_DIR}/delivery_status.json"
+_bytes=0
+[ -f "$DAILY_SRC" ] && _bytes=$(stat -c%s "$DAILY_SRC")
+cat > "${STATUS_FILE}.tmp" << JSONEOF
+{
+  "run_utc": "$(date -u '+%Y-%m-%dT%H:%M:%SZ')",
+  "delivery_ok": ${delivery_ok},
+  "filename": "sensor_readings_${DATE_UTC}.parquet",
+  "source_file": "${DAILY_SRC}",
+  "bytes": ${_bytes},
+  "s3": "${RESULT_S3}",
+  "fabric": {${RESULT_FABRIC}}
+}
+JSONEOF
+mv "${STATUS_FILE}.tmp" "$STATUS_FILE"
+echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] Wrote ${STATUS_FILE}" >> "$LOG"
 
 # --- Off-box heartbeat -------------------------------------------------------
 # Ping only when the delivery actually succeeded. Silence is the alert: if this
