@@ -118,4 +118,6 @@ if [ "$delivery_ok" -eq 1 ] && [ -r "$HC_CONF" ]; then
   fi
 elif [ "$delivery_ok" -ne 1 ]; then
   echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] Delivery failed; heartbeat withheld." >> "$LOG"
+else
+  echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] WARNING: delivery succeeded but $HC_CONF is missing or unreadable; heartbeat NOT sent." >> "$LOG"
 fi
