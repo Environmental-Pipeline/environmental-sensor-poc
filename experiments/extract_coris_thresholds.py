@@ -93,7 +93,7 @@ for a in alerts:
                 'TimeoutMinutes': c.get('TimeoutMinutes'),
                 'ThresholdF': c.get('ThresholdF'),
                 'ThresholdC': c.get('ThresholdC'),
-                'ThresholdRh': c.get('ThresholdRh'),
+                'ThresholdRh': c.get('ThresholdRh'), 'ThresholdLux': c.get('ThresholdLux'), 'ThresholdBatteryPercentage': c.get('ThresholdBatteryPercentage'), 'ThresholdOther': (';'.join(f'{k}={c[k]}' for k in sorted(c) if k.startswith('Threshold') and c[k] is not None and k not in ('ThresholdF','ThresholdC','ThresholdRh','ThresholdLux','ThresholdBatteryPercentage')) or None),
                 'SnapshotUTC': snap_iso,
             })
 
