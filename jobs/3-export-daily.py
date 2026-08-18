@@ -11,6 +11,7 @@ import polars
 
 from modules.weather_enrichment import enrich_sensors_with_weather
 from modules.csc_filter import split_csc_rows, summarize_excluded_by_sensor
+from modules.coris_thresholds import write_threshold_tables
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -89,6 +90,17 @@ def export_daily() -> None:
 
     # Filter to rows newer than the high-water mark
     delta = df.filter(polars.col("SensorReadingUTC") > hwm)
+
+    # Coris threshold reference tables, delivered alongside the parquet.
+    # A vendor API failure must not take down the export, so this is isolated.
+    try:
+        written = write_threshold_tables(data_path)
+        for path in written:
+            print(f"[3-export-daily] Wrote {path}")
+        if not written:
+            print("[3-export-daily] WARNING: threshold extract returned no rows")
+    except Exception as exc:
+        print(f"[3-export-daily] ERROR: threshold extract failed: {exc}")
 
     if delta.height == 0:
         print("[3-export-daily] No new rows since last export. Writing empty parquet.")
