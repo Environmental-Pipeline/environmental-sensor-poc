@@ -107,6 +107,23 @@ if upload_file \
   delivery_ok=1
 fi
 
+# --- Coris threshold reference tables ----------------------------------------
+# Written by 3-export-daily.py with a UTC date stamp. Reference data, so a
+# failure here is logged but does not affect delivery_ok: the parquet is the
+# delivery that matters and a missing reference table should not read as a
+# total delivery failure.
+for _t in coris_alert_rules coris_alert_sensor_assignments; do
+  _src="${DATA_DIR}/${_t}_${DATE_UTC}.csv"
+  if [ -f "$_src" ]; then
+    upload_file "$_src" \
+      "${S3_BUCKET}/reference/${_t}_${DATE_UTC}.csv" \
+      "${_t}_${DATE_UTC}.csv" \
+      "threshold-${_t}" || true
+  else
+    echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] WARNING: ${_src} not found, skipping." >> "$LOG"
+  fi
+done
+
 echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] All uploads complete." >> "$LOG"
 
 # --- Delivery status for the dashboard ---------------------------------------
