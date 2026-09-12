@@ -217,7 +217,7 @@ class CorisClient:
         raw_sensors = response.json().get("Sensors", [])
         if not raw_sensors:
             return polars.DataFrame()
-        sensors = polars.DataFrame(raw_sensors)
+        sensors = polars.DataFrame(raw_sensors, infer_schema_length=None)
         
         # Remove out-of-scope sensors
         for prefix in out_of_scope:
