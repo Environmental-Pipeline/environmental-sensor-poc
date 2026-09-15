@@ -197,7 +197,7 @@ def build_ticket_table(env_path='/src/.env', since_utc=None, snapshot_utc=None):
         rows.append({
             'Ticket_ID': t.get('CriticalAlertTicketID'),
             'Critical_Alert_ID': t.get('CriticalAlertID'),
-            'Alert_Description': t.get('CriticalAlertDescription'),
+            'Alert_Name': t.get('CriticalAlertDescription'),
             'Condition': cond,
             'Sensor_ID': f"coris:{t.get('SensorID')}",
             'Coris_Sensor_ID': t.get('SensorID'),
