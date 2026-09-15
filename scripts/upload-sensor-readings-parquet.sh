@@ -30,6 +30,15 @@ FABRIC_BASES=(
 PROD_BASE="https://edafileuploads.dfs.core.windows.net/cultural-heritage-environmental-monitoring-prd/Incoming"
 PROD_START_YMD=20260616
 PROD_KILL_FILE="${DATA_DIR}/PROD_UPLOAD_OFF"
+
+# Areas that receive reference/threshold files (not the readings parquet).
+# New file types start in DEV only; DM promotes by editing this file to e.g.
+# "dev,tst" or "dev,tst,prd". Missing file means DEV only.
+THRESHOLD_AREAS_FILE="${DATA_DIR}/threshold_upload_areas"
+THRESHOLD_AREAS="dev"
+if [[ -f "$THRESHOLD_AREAS_FILE" ]]; then
+  THRESHOLD_AREAS="$(tr -d '[:space:]' < "$THRESHOLD_AREAS_FILE")"
+fi
 if [[ ! -f "$PROD_KILL_FILE" ]] && (( $(date -u +%Y%m%d) >= PROD_START_YMD )); then
   FABRIC_BASES+=( "$PROD_BASE" )
 fi
@@ -42,6 +51,7 @@ upload_file() {
   local s3_dest="$2"
   local dest_filename="$3"
   local label="$4"
+  local areas="${5:-dev,tst,prd}"
 
   if [ ! -f "$src_file" ]; then
     echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] ERROR: ${label} file not found: ${src_file}" >> "$LOG"
@@ -68,6 +78,11 @@ upload_file() {
     echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] Uploading ${label} to Fabric: ${fabric_dest}" >> "$LOG"
     local area
     area="$(echo "$base" | sed -E 's#.*monitoring-([a-z]+)/Incoming#\1#')"
+    if [[ ",${areas}," != *",${area},"* ]]; then
+      echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] Skipping ${label} for ${area} (not in ${areas})." >> "$LOG"
+      fabric_attempts=$((fabric_attempts - 1))
+      continue
+    fi
     if azcopy copy "$src_file" "$fabric_dest" >> "$LOG" 2>&1; then
       echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] Fabric ${label} upload complete: ${fabric_dest}" >> "$LOG"
       RESULT_FABRIC="${RESULT_FABRIC}${RESULT_FABRIC:+,}\"${area}\":\"ok\""
@@ -118,7 +133,7 @@ for _t in coris_alert_rules coris_alert_sensor_assignments; do
     upload_file "$_src" \
       "${S3_BUCKET}/reference/${_t}_${DATE_UTC}.csv" \
       "${_t}_${DATE_UTC}.csv" \
-      "threshold-${_t}" || true
+      "threshold-${_t}" "$THRESHOLD_AREAS" || true
   else
     echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] WARNING: ${_src} not found, skipping." >> "$LOG"
   fi
