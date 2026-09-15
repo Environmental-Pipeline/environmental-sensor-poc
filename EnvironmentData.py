@@ -950,7 +950,11 @@ class EnvironmentData:
                         logger=self.logger,
                     )
                 except Exception as e:
-                    self.logger.warning(f"Weather enrichment failed, continuing without: {e}")
+                    # Do not write a master without weather columns. Staging files
+                    # accumulate until the next successful run; the dashboard and
+                    # cron-errors.log surface the failure within the hour.
+                    self.logger.error(f"Weather enrichment failed; aborting consolidation: {e}")
+                    raise
             # Enforce consistent Float64 for weather columns that Open-Meteo
             # sometimes returns as Int64 (depends on null presence in batch)
             for wc in ['weather_cloud_cover_pct', 'weather_humidity_pct',

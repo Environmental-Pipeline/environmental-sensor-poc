@@ -138,6 +138,18 @@ def load_building_coordinates(coordinates_path: str) -> polars.DataFrame:
             f"Building coordinates file not found: {coordinates_path}"
         )
 
+    expected = ["building_code", "latitude", "longitude", "building_name"]
+    with open(coordinates_path, newline="") as f:
+        lines = [ln.rstrip("\r\n") for ln in f if ln.strip()]
+    header = [h.strip() for h in lines[0].split(",")]
+    if header != expected:
+        raise ValueError(
+            f"{coordinates_path}: header {header} != expected {expected}")
+    bad = [(i + 1, ln) for i, ln in enumerate(lines) if ln.count(",") != 3]
+    if bad:
+        detail = "; ".join(f"line {n}: {ln!r}" for n, ln in bad[:5])
+        raise ValueError(
+            f"{coordinates_path}: {len(bad)} row(s) do not have exactly 4 fields: {detail}")
     return polars.read_csv(coordinates_path)
 
 
