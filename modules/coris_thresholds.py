@@ -89,26 +89,26 @@ def build_threshold_tables(env_path='/src/.env'):
         for idx, level in enumerate(a.get('CriticalAlertLevels') or [], start=1):
             for c in (level.get('CriticalAlertLevelConditions') or [{}]):
                 rules.append({
-                    'CriticalAlertID': aid,
-                    'Alert Name': name,
+                    'Critical_Alert_ID': aid,
+                    'Alert_Name': name,
                     'Condition': cond,
                     'Level': idx,
-                    'Level Description': LEVEL_DESC.get(idx),
-                    'BoundType': bound,
-                    'Thresholds (F)': c.get('ThresholdF'),
-                    'Thresholds (C)': c.get('ThresholdC'),
-                    'Thresholds (RH%)': c.get('ThresholdRh'),
-                    'Timeout (min)': c.get('TimeoutMinutes'),
+                    'Level_Description': LEVEL_DESC.get(idx),
+                    'Bound_Type': bound,
+                    'Thresholds_F': c.get('ThresholdF'),
+                    'Thresholds_C': c.get('ThresholdC'),
+                    'Thresholds_RH_Percent': c.get('ThresholdRh'),
+                    'Timeout_Min': c.get('TimeoutMinutes'),
                     'Active': c.get('ConditionEnabled'),
-                    '# Sensor': active_sensors,
+                    'Sensor_Number': active_sensors,
                 })
 
         for sid in sorted(csc_hit - disabled):
             assigns.append({
-                'CriticalAlertID': aid,
-                'SensorID': f'coris:{sid}',
+                'Critical_Alert_ID': aid,
+                'Sensor_ID': f'coris:{sid}',
                 'Sensor': (id2name.get(sid) or '')[:20],
-                'Alert Name': name,
+                'Alert_Name': name,
             })
 
     return rules, assigns
