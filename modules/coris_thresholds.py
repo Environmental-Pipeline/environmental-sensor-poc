@@ -129,3 +129,111 @@ def write_threshold_tables(data_path, env_path='/src/.env', as_of=None):
         if p:
             written.append(p)
     return written
+
+
+# ---------------------------------------------------------------------------
+# Alert tickets (third file, requested by DM 2026-09-11)
+# ---------------------------------------------------------------------------
+import math
+import json
+
+TICKET_STATE_FILE = 'coris_tickets_state.json'
+
+
+def _epoch(v):
+    """Coris returns *UTC fields as int or string; normalize to int epoch or None."""
+    if v in (None, '', 0, '0'):
+        return None
+    try:
+        e = int(float(v))
+        return e if e > 1e9 else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _iso(e):
+    return datetime.fromtimestamp(e, timezone.utc).strftime('%Y-%m-%d %H:%M:%S') if e else ''
+
+
+def build_ticket_table(env_path='/src/.env', since_utc=None, snapshot_utc=None):
+    """Return ticket rows for CSC sensors on environmental alerts.
+
+    since_utc: epoch; only tickets created, resolved, or updated after it are
+    returned (delta). None returns every ticket Coris still holds (full).
+    """
+    env = _load_env(env_path)
+    acct = env['CATS_USER_ID_PROJECT']
+    url = f"{CORIS_BASE}?ApiKey={env['CORIS_API_KEY_PROJECT']}&CatsUserID={acct}"
+    r = requests.get(url, timeout=60)
+    if r.status_code != 200:
+        raise RuntimeError(f"Coris returned HTTP {r.status_code}")
+    d = r.json()
+    tickets = d.get('Tickets') if isinstance(d, dict) else None
+    if not isinstance(tickets, list):
+        raise RuntimeError("Coris response missing Tickets list")
+
+    alert_cond = {a.get('CriticalAlertID'): a.get('CriticalAlertConditionType')
+                  for a in d.get('CriticalAlerts', [])}
+    snap = snapshot_utc or int(datetime.now(timezone.utc).timestamp())
+    snap_iso = _iso(snap)
+
+    rows = []
+    for t in tickets:
+        name = t.get('SensorName') or ''
+        if extract_building_code(name) != 'CSC':
+            continue
+        cond = alert_cond.get(t.get('CriticalAlertID'))
+        if cond not in ENV_CONDITIONS:
+            continue
+        c = _epoch(t.get('CreatedUTC'))
+        ls = _epoch(t.get('LevelStartedUTC'))
+        res = _epoch(t.get('ResolvedUTC'))
+        upd = _epoch(t.get('LastUpdatedUTC'))
+        if since_utc is not None:
+            latest = max((x for x in (c, res, upd) if x), default=0)
+            if latest <= since_utc:
+                continue
+        dur = math.ceil((res - c) / 60) if (c and res and res >= c) else ''
+        rows.append({
+            'Ticket_ID': t.get('CriticalAlertTicketID'),
+            'Critical_Alert_ID': t.get('CriticalAlertID'),
+            'Alert_Description': t.get('CriticalAlertDescription'),
+            'Condition': cond,
+            'Sensor_ID': f"coris:{t.get('SensorID')}",
+            'Coris_Sensor_ID': t.get('SensorID'),
+            'Sensor_Name': name[:20],
+            'Ticket_State': t.get('TicketState'),
+            'Active_Level': t.get('TicketActiveLevel'),
+            'Created_UTC': _iso(c),
+            'Level_Started_UTC': _iso(ls),
+            'Resolved_UTC': _iso(res),
+            'Duration_Minutes': dur,
+            'Alerts_Enabled': t.get('EnableAlerts'),
+            'Coris_Account_ID': acct,
+            'Snapshot_UTC': snap_iso,
+        })
+    rows.sort(key=lambda x: (x['Created_UTC'], x['Ticket_ID'] or 0))
+    return rows, snap
+
+
+def write_ticket_table(data_path, env_path='/src/.env', as_of=None, full=False):
+    """Write coris_alert_tickets_YYYY-MM-DD.csv into data_path.
+
+    Delta mode (default): tickets changed since the epoch in
+    data_path/coris_tickets_state.json. First run, or full=True, writes every
+    ticket. State is advanced only after a successful write. Returns the path
+    or None if there was nothing to write.
+    """
+    state_path = os.path.join(data_path, TICKET_STATE_FILE)
+    since = None
+    if not full and os.path.exists(state_path):
+        with open(state_path) as f:
+            since = json.load(f).get('last_snapshot_utc')
+    rows, snap = build_ticket_table(env_path, since_utc=since)
+    day = (as_of or datetime.now(timezone.utc)).strftime('%Y-%m-%d')
+    p = _write_csv(os.path.join(data_path, f"coris_alert_tickets_{day}.csv"), rows)
+    with open(state_path, 'w') as f:
+        json.dump({'last_snapshot_utc': snap, 'snapshot_iso': _iso(snap),
+                   'mode': 'full' if since is None else 'delta',
+                   'rows_written': len(rows)}, f, indent=2)
+    return p

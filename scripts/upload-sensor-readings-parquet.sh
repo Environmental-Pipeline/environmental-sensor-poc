@@ -127,7 +127,7 @@ fi
 # failure here is logged but does not affect delivery_ok: the parquet is the
 # delivery that matters and a missing reference table should not read as a
 # total delivery failure.
-for _t in coris_alert_rules coris_alert_sensor_assignments; do
+for _t in coris_alert_rules coris_alert_sensor_assignments coris_alert_tickets; do
   _src="${DATA_DIR}/${_t}_${DATE_UTC}.csv"
   if [ -f "$_src" ]; then
     upload_file "$_src" \

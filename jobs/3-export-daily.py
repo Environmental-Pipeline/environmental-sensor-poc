@@ -11,7 +11,7 @@ import polars
 
 from modules.weather_enrichment import enrich_sensors_with_weather
 from modules.csc_filter import split_csc_rows, summarize_excluded_by_sensor
-from modules.coris_thresholds import write_threshold_tables
+from modules.coris_thresholds import write_threshold_tables, write_ticket_table
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -101,6 +101,14 @@ def export_daily() -> None:
             print("[3-export-daily] WARNING: threshold extract returned no rows")
     except Exception as exc:
         print(f"[3-export-daily] ERROR: threshold extract failed: {exc}")
+
+    # Coris alert tickets (delta since last export; full history on first run).
+    try:
+        tpath = write_ticket_table(data_path)
+        print(f"[3-export-daily] Wrote {tpath}" if tpath
+              else "[3-export-daily] No ticket changes since last export")
+    except Exception as exc:
+        print(f"[3-export-daily] ERROR: ticket extract failed: {exc}")
 
     if delta.height == 0:
         print("[3-export-daily] No new rows since last export. Writing empty parquet.")
