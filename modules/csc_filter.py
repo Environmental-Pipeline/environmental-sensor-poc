@@ -21,7 +21,8 @@ Exclusion reasons:
   - "unparseable_name"  : SensorName too short or otherwise can't yield a code
 """
 
-from typing import Tuple
+import os
+from typing import Optional, Set, Tuple
 
 import polars
 
@@ -31,8 +32,36 @@ from modules.weather_enrichment import extract_building_code
 CSC_BUILDING_CODE = "CSC"
 
 
+def _parse_codes(value: Optional[str]) -> Optional[Set[str]]:
+    if value is None:
+        return None
+    codes = {c.strip() for c in value.split(",") if c.strip()}
+    return codes or None
+
+
+def load_export_allowlists(env_path: str = "/src/.env") -> Tuple[Set[str], Set[str]]:
+    """Return (prod_codes, staging_codes) from .env.
+
+    EXPORT_BUILDINGS_PROD     comma list, default "CSC"
+    EXPORT_BUILDINGS_STAGING  comma list, default = prod list
+    Reads os.environ first, then the .env file, so either works.
+    """
+    env = {}
+    if os.path.exists(env_path):
+        with open(env_path) as f:
+            for line in f:
+                line = line.strip()
+                if "=" in line and not line.startswith("#"):
+                    k, v = line.split("=", 1)
+                    env[k.strip()] = v.strip()
+    prod = _parse_codes(os.environ.get("EXPORT_BUILDINGS_PROD") or env.get("EXPORT_BUILDINGS_PROD")) or {CSC_BUILDING_CODE}
+    staging = _parse_codes(os.environ.get("EXPORT_BUILDINGS_STAGING") or env.get("EXPORT_BUILDINGS_STAGING")) or set(prod)
+    return prod, staging
+
+
 def split_csc_rows(
     df: polars.DataFrame,
+    allowed: Optional[Set[str]] = None,
 ) -> Tuple[polars.DataFrame, polars.DataFrame]:
     """
     Split the input DataFrame into (included, excluded).
@@ -62,7 +91,8 @@ def split_csc_rows(
         .alias("parsed_building_code")
     )
 
-    is_csc = polars.col("parsed_building_code") == CSC_BUILDING_CODE
+    allowed = set(allowed) if allowed else {CSC_BUILDING_CODE}
+    is_csc = polars.col("parsed_building_code").is_in(sorted(allowed))
 
     included = (
         annotated

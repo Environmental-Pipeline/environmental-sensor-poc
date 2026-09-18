@@ -10,7 +10,7 @@ import json
 import polars
 
 from modules.weather_enrichment import enrich_sensors_with_weather
-from modules.csc_filter import split_csc_rows, summarize_excluded_by_sensor
+from modules.csc_filter import split_csc_rows, summarize_excluded_by_sensor, load_export_allowlists
 from modules.coris_thresholds import write_threshold_tables, write_ticket_table
 
 # ---------------------------------------------------------------------------
@@ -25,6 +25,7 @@ if os.path.exists("/src/data"):
 
 SENSOR_READINGS = os.path.join(data_path, "sensor_readings.parquet")
 DAILY_EXPORT    = os.path.join(data_path, "daily_export.parquet")
+DAILY_EXPORT_STAGING = os.path.join(data_path, "daily_export_staging.parquet")
 HIGH_WATER_MARK = os.path.join(data_path, "daily_export_hwm.json")
 COORDINATES     = os.path.join(home_directory, "data", "building_coordinates.csv")
 WEATHER_CACHE   = os.path.join(data_path, "weather_cache")
@@ -140,7 +141,10 @@ def export_daily() -> None:
     # The flag only controls whether the upload uses the filtered or
     # unfiltered frame. Note: new_hwm is computed on the full delta above
     # so the high-water mark tracks processed rows, not exported rows.
-    included, excluded = split_csc_rows(delta)
+    prod_codes, staging_codes = load_export_allowlists()
+    print(f"[3-export-daily] Export allowlists: prod={sorted(prod_codes)} staging={sorted(staging_codes)}")
+    included, excluded = split_csc_rows(delta, allowed=prod_codes)
+    included_staging, _ = split_csc_rows(delta, allowed=staging_codes)
     excluded_summary = summarize_excluded_by_sensor(excluded)
     excluded_summary.write_csv(EXCLUDED_SUMMARY)
     print(
@@ -149,10 +153,12 @@ def export_daily() -> None:
         f"Wrote summary to {EXCLUDED_SUMMARY}."
     )
     if CSC_FILTER_ENABLED:
-        print("[3-export-daily] CSC_FILTER_ENABLED=true. Exporting filtered (CSC-only) frame.")
+        print("[3-export-daily] CSC_FILTER_ENABLED=true. Exporting filtered frames (prod and staging).")
+        staging = included_staging
         delta = included
     else:
         print("[3-export-daily] CSC_FILTER_ENABLED=false. Exporting unfiltered frame (shadow mode).")
+        staging = delta
 
     # Enforce consistent types for weather columns to prevent schema mismatches across daily files
     FLOAT64_WEATHER_COLS = [
@@ -162,11 +168,15 @@ def export_daily() -> None:
     for col in FLOAT64_WEATHER_COLS:
         if col in delta.columns:
             delta = delta.with_columns(polars.col(col).cast(polars.Float64))
+        if col in staging.columns:
+            staging = staging.with_columns(polars.col(col).cast(polars.Float64))
 
     delta.write_parquet(DAILY_EXPORT)
+    staging.write_parquet(DAILY_EXPORT_STAGING)
     write_high_water_mark(int(new_hwm))
 
-    print(f"[3-export-daily] Exported {delta.height} rows to {DAILY_EXPORT}")
+    print(f"[3-export-daily] Exported {delta.height} rows to {DAILY_EXPORT} (prod)")
+    print(f"[3-export-daily] Exported {staging.height} rows to {DAILY_EXPORT_STAGING} (staging: dev/tst)")
     print(f"[3-export-daily] New high-water mark: {new_hwm}  ({time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime(new_hwm))})")
 
 

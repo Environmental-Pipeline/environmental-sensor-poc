@@ -4,6 +4,7 @@ set -euo pipefail
 # === CONFIG ===
 DATA_DIR="/opt/env-sensor-data"
 DAILY_SRC="${DATA_DIR}/daily_export.parquet"
+DAILY_SRC_STAGING="${DATA_DIR}/daily_export_staging.parquet"
 DATE_UTC="$(date -u +%Y-%m-%d)"
 LOG="/home/aha48/sensor_readings_upload.log"
 
@@ -58,9 +59,11 @@ upload_file() {
     return 1
   fi
 
-  # Upload to S3
-  echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] Uploading ${label} to S3: ${s3_dest}" >> "$LOG"
-  if aws s3 cp "$src_file" "$s3_dest" --profile "$AWS_PROFILE" >> "$LOG" 2>&1; then
+  # Upload to S3 (skipped when s3_dest is empty)
+  if [ -z "$s3_dest" ]; then
+    echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] Skipping S3 for ${label} (no S3 destination)." >> "$LOG"
+    RESULT_S3="skipped"
+  elif { echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] Uploading ${label} to S3: ${s3_dest}" >> "$LOG"; aws s3 cp "$src_file" "$s3_dest" --profile "$AWS_PROFILE" >> "$LOG" 2>&1; }; then
     echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] S3 ${label} upload complete." >> "$LOG"
     RESULT_S3="ok"
   else
@@ -118,8 +121,20 @@ if upload_file \
   "$DAILY_SRC" \
   "${S3_BUCKET}/daily/sensor_readings_${DATE_UTC}.parquet" \
   "sensor_readings_${DATE_UTC}.parquet" \
-  "daily-incremental"; then
+  "daily-incremental" "prd"; then
   delivery_ok=1
+fi
+READINGS_S3="$RESULT_S3"
+
+# Staging readings (wider building allowlist) to DEV and TST only.
+if [ -f "$DAILY_SRC_STAGING" ]; then
+  upload_file "$DAILY_SRC_STAGING" "" \
+    "sensor_readings_${DATE_UTC}.parquet" \
+    "daily-incremental-staging" "dev,tst" || true
+  READINGS_FABRIC="$RESULT_FABRIC"
+else
+  READINGS_FABRIC="$RESULT_FABRIC"
+  echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] WARNING: ${DAILY_SRC_STAGING} not found; dev/tst get no readings this run." >> "$LOG"
 fi
 
 # --- Coris threshold reference tables ----------------------------------------
@@ -155,8 +170,8 @@ cat > "${STATUS_FILE}.tmp" << JSONEOF
   "filename": "sensor_readings_${DATE_UTC}.parquet",
   "source_file": "${DAILY_SRC}",
   "bytes": ${_bytes},
-  "s3": "${RESULT_S3}",
-  "fabric": {${RESULT_FABRIC}}
+  "s3": "${READINGS_S3}",
+  "fabric": {${READINGS_FABRIC}}
 }
 JSONEOF
 mv "${STATUS_FILE}.tmp" "$STATUS_FILE"
