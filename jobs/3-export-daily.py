@@ -31,6 +31,9 @@ COORDINATES     = os.path.join(home_directory, "data", "building_coordinates.csv
 WEATHER_CACHE   = os.path.join(data_path, "weather_cache")
 
 EXCLUDED_SUMMARY = os.path.join(data_path, "daily_export_excluded_summary.csv")
+# Column names, order and dtypes DM receives. The export refuses to write a file
+# that differs, so a schema change can never reach DM by accident.
+SCHEMA_CONTRACT = os.path.join(data_path, "export_schema_contract.json")
 
 # Feature flag for CSC-only export. When false (default), the daily export
 # contains all rows that pass name validation, unchanged from prior behavior.
@@ -59,38 +62,113 @@ CSC_FILTER_ENABLED = _resolve_csc_filter_enabled()
 # ---------------------------------------------------------------------------
 # High-water mark helpers
 # ---------------------------------------------------------------------------
-def read_high_water_mark() -> int:
-    """Return the last exported SensorReadingUTC, or 0 if no mark exists."""
+# last_ingested_utc drives the export: every row whose IngestedUTC is past it has
+# not been delivered yet, whatever its reading time (backfills included).
+# last_exported_utc (max reading time delivered) is kept so an older image can
+# still run after a rollback, and so consolidation can migrate an old master.
+def read_high_water_marks() -> tuple:
+    """Return (last_exported_utc, last_ingested_utc); 0 for any missing mark."""
     if os.path.exists(HIGH_WATER_MARK):
         with open(HIGH_WATER_MARK) as f:
             mark = json.load(f)
-        return int(mark.get("last_exported_utc", 0))
-    return 0
+        return int(mark.get("last_exported_utc", 0)), int(mark.get("last_ingested_utc", 0))
+    return 0, 0
 
 
-def write_high_water_mark(last_utc: int) -> None:
-    """Persist the high-water mark to disk."""
-    with open(HIGH_WATER_MARK, "w") as f:
+def write_high_water_marks(last_utc: int, last_ingested: int) -> None:
+    """Persist both marks atomically."""
+    tmp = HIGH_WATER_MARK + ".tmp"
+    with open(tmp, "w") as f:
         json.dump({
-            "last_exported_utc": last_utc,
+            "last_exported_utc": int(last_utc),
+            "last_ingested_utc": int(last_ingested),
             "exported_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         }, f, indent=2)
+    os.replace(tmp, HIGH_WATER_MARK)
+
+
+def _fail(msg: str) -> None:
+    """Log to stderr (cron-errors.log) and exit non-zero without writing outputs."""
+    print(f"[3-export-daily] ERROR: {msg}", file=sys.stderr)
+    sys.exit(2)
+
+
+def _schema_of(frame: polars.DataFrame) -> list:
+    return [[name, str(dtype)] for name, dtype in frame.schema.items()]
+
+
+def check_schema_contract(frames: dict) -> None:
+    """Refuse to export if any output frame differs from the saved contract."""
+    if not os.path.exists(SCHEMA_CONTRACT):
+        ref = next(iter(frames.values()))
+        with open(SCHEMA_CONTRACT, "w") as f:
+            json.dump(_schema_of(ref), f, indent=1)
+        print(f"[3-export-daily] WARNING: no schema contract found; created {SCHEMA_CONTRACT} from this export.")
+    with open(SCHEMA_CONTRACT) as f:
+        contract = json.load(f)
+    for label, frame in frames.items():
+        got = _schema_of(frame)
+        if got != contract:
+            missing = [c for c in contract if c not in got]
+            extra = [c for c in got if c not in contract]
+            _fail(f"{label} export schema differs from contract; nothing written, HWM unchanged. "
+                  f"missing/changed={missing} unexpected/changed={extra}")
+
+
+def retire_previous_outputs() -> None:
+    """
+    Move yesterday's export files aside before building today's. If this run
+    fails, the 02:15 upload finds no file and withholds the heartbeat, instead of
+    shipping yesterday's rows again under today's filename.
+    """
+    for path in (DAILY_EXPORT, DAILY_EXPORT_STAGING):
+        if os.path.exists(path):
+            os.replace(path, path + ".prev")
+
 
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+FLOAT64_WEATHER_COLS = [
+    'weather_cloud_cover_pct', 'weather_humidity_pct',
+    'weather_wind_direction_deg', 'weather_wmo_code',
+]
+
+
+def _cast_weather(frame: polars.DataFrame) -> polars.DataFrame:
+    # Enforce consistent types for weather columns to prevent schema mismatches across daily files
+    for col in FLOAT64_WEATHER_COLS:
+        if col in frame.columns:
+            frame = frame.with_columns(polars.col(col).cast(polars.Float64))
+    return frame
+
+
 def export_daily() -> None:
     if not os.path.exists(SENSOR_READINGS):
         print(f"[3-export-daily] sensor_readings.parquet not found at {SENSOR_READINGS}, skipping.")
         return
 
-    hwm = read_high_water_mark()
-    print(f"[3-export-daily] High-water mark: {hwm}  ({time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime(hwm)) if hwm else 'none'})")
+    retire_previous_outputs()
+
+    hwm, ingest_mark = read_high_water_marks()
+    print(f"[3-export-daily] Marks: last_exported_utc={hwm} "
+          f"({time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime(hwm)) if hwm else 'none'}), "
+          f"last_ingested_utc={ingest_mark}")
 
     df = polars.read_parquet(SENSOR_READINGS)
 
-    # Filter to rows newer than the high-water mark
-    delta = df.filter(polars.col("SensorReadingUTC") > hwm)
+    if "IngestedUTC" in df.columns:
+        delta = df.filter(polars.col("IngestedUTC") > ingest_mark)
+        new_ingest_mark = (delta.select(polars.col("IngestedUTC").max()).item()
+                           if delta.height else ingest_mark)
+        print(f"[3-export-daily] Selecting by ingestion time: {delta.height} rows ingested since {ingest_mark}")
+    else:
+        # Master not yet migrated (no consolidation has run on this image): fall back
+        # to reading time. The next consolidation migrates using last_exported_utc.
+        delta = df.filter(polars.col("SensorReadingUTC") > hwm)
+        new_ingest_mark = ingest_mark
+        print("[3-export-daily] WARNING: master has no IngestedUTC yet; selecting by reading time.")
+    delta = delta.drop("IngestedUTC", strict=False)
 
     # Coris threshold reference tables, delivered alongside the parquet.
     # A vendor API failure must not take down the export, so this is isolated.
@@ -112,9 +190,11 @@ def export_daily() -> None:
         print(f"[3-export-daily] ERROR: ticket extract failed: {exc}")
 
     if delta.height == 0:
-        print("[3-export-daily] No new rows since last export. Writing empty parquet.")
-        # Write an empty parquet so the upload script has a valid file
-        delta.write_parquet(DAILY_EXPORT)
+        print("[3-export-daily] No new rows since last export. Writing empty parquet files.")
+        empty = _cast_weather(delta)
+        check_schema_contract({"prod": empty, "staging": empty})
+        empty.write_parquet(DAILY_EXPORT)
+        empty.write_parquet(DAILY_EXPORT_STAGING)
         return
 
     # Re-enrich rows that have null weather columns so the daily export
@@ -134,13 +214,12 @@ def export_daily() -> None:
             )
             delta = polars.concat([has_weather, null_weather], how="diagonal_relaxed")
 
-    new_hwm = delta.select(polars.col("SensorReadingUTC").max()).item()
+    new_hwm = max(hwm, int(delta.select(polars.col("SensorReadingUTC").max()).item()))
 
     # CSC export filter. Always split and always write the excluded summary
     # CSV so the per-day review file is produced regardless of flag state.
     # The flag only controls whether the upload uses the filtered or
-    # unfiltered frame. Note: new_hwm is computed on the full delta above
-    # so the high-water mark tracks processed rows, not exported rows.
+    # unfiltered frame.
     prod_codes, staging_codes = load_export_allowlists()
     print(f"[3-export-daily] Export allowlists: prod={sorted(prod_codes)} staging={sorted(staging_codes)}")
     included, excluded = split_csc_rows(delta, allowed=prod_codes)
@@ -160,24 +239,18 @@ def export_daily() -> None:
         print("[3-export-daily] CSC_FILTER_ENABLED=false. Exporting unfiltered frame (shadow mode).")
         staging = delta
 
-    # Enforce consistent types for weather columns to prevent schema mismatches across daily files
-    FLOAT64_WEATHER_COLS = [
-        'weather_cloud_cover_pct', 'weather_humidity_pct',
-        'weather_wind_direction_deg', 'weather_wmo_code',
-    ]
-    for col in FLOAT64_WEATHER_COLS:
-        if col in delta.columns:
-            delta = delta.with_columns(polars.col(col).cast(polars.Float64))
-        if col in staging.columns:
-            staging = staging.with_columns(polars.col(col).cast(polars.Float64))
+    delta = _cast_weather(delta)
+    staging = _cast_weather(staging)
+    check_schema_contract({"prod": delta, "staging": staging})
 
     delta.write_parquet(DAILY_EXPORT)
     staging.write_parquet(DAILY_EXPORT_STAGING)
-    write_high_water_mark(int(new_hwm))
+    write_high_water_marks(new_hwm, new_ingest_mark)
 
     print(f"[3-export-daily] Exported {delta.height} rows to {DAILY_EXPORT} (prod)")
     print(f"[3-export-daily] Exported {staging.height} rows to {DAILY_EXPORT_STAGING} (staging: dev/tst)")
-    print(f"[3-export-daily] New high-water mark: {new_hwm}  ({time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime(new_hwm))})")
+    print(f"[3-export-daily] New marks: last_exported_utc={new_hwm} "
+          f"({time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime(new_hwm))}), last_ingested_utc={new_ingest_mark}")
 
 
 if __name__ == "__main__":

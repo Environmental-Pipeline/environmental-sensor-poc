@@ -817,6 +817,62 @@ class EnvironmentData:
             f"backfill_conserv_gaps: staged {df.shape[0]} re-pulled rows to {out}; "
             "consolidation will dedupe and merge them.")
 
+    def _read_export_reading_hwm(self) -> int:
+        """Reading-time export high-water mark (last_exported_utc), 0 if none."""
+        import json
+        path = os.path.join(self.data_path, "daily_export_hwm.json")
+        try:
+            with open(path) as f:
+                return int(json.load(f).get("last_exported_utc", 0))
+        except FileNotFoundError:
+            return 0
+
+    def _write_master(self, dt: polars.DataFrame) -> None:
+        """Write the master parquet atomically so readers never see a partial file."""
+        path = f"{self.data_path}/sensor_readings.parquet"
+        tmp = f"{path}.tmp"
+        dt.write_parquet(tmp)
+        os.replace(tmp, path)
+
+    def _drop_backfill_overlap(self, new: polars.DataFrame, historical: polars.DataFrame,
+                               tolerance: int = 450) -> polars.DataFrame:
+        """
+        Drop backfilled (Historical) readings that duplicate a reading already held
+        for the same sensor within `tolerance` seconds. Coris's historical endpoint
+        stamps readings on a 15-minute grid while live pulls use the sensor's own
+        time, so the same reading arrives twice a few minutes apart and the exact
+        (SensorID, SensorReadingUTC) key misses it (Sept 27 incident). Half the
+        900 s cadence means each held reading can pair with at most one backfilled
+        one. Live readings are never dropped here.
+        """
+        if new.is_empty() or "Historical" not in new.columns:
+            return new
+        is_hist = polars.col("Historical").fill_null(False)
+        hist_new = new.filter(is_hist).select("SensorID", "SensorReadingUTC")
+        if hist_new.is_empty():
+            return new
+        lo = hist_new["SensorReadingUTC"].min() - tolerance
+        hi = hist_new["SensorReadingUTC"].max() + tolerance
+        refs = [new.filter(~is_hist).select("SensorID", "SensorReadingUTC")]
+        if not historical.is_empty():
+            refs.append(historical.filter(polars.col("SensorReadingUTC").is_between(lo, hi))
+                        .select("SensorID", "SensorReadingUTC"))
+        ref = (polars.concat(refs)
+               .rename({"SensorReadingUTC": "_ref_utc"})
+               .sort("_ref_utc"))
+        if ref.is_empty():
+            return new
+        matched = (hist_new.sort("SensorReadingUTC")
+                   .join_asof(ref, left_on="SensorReadingUTC", right_on="_ref_utc",
+                              by="SensorID", strategy="nearest", tolerance=tolerance)
+                   .filter(polars.col("_ref_utc").is_not_null())
+                   .select("SensorID", "SensorReadingUTC"))
+        if matched.height:
+            self.logger.info(f"Backfill overlap guard: dropped {matched.height} backfilled readings "
+                             f"within {tolerance}s of a reading already held")
+            new = new.join(matched, on=["SensorID", "SensorReadingUTC"], how="anti")
+        return new
+
     def consolidate_readings(self):
         """
         Combine new and historical readings into one database. Build (or re-build) the analytical tables.
@@ -866,6 +922,27 @@ class EnvironmentData:
             # Create empty DataFrame with correct schema for first run
             historical = polars.DataFrame()
 
+        run_utc = self.get_current_utc()
+        key = ["SensorID", "SensorReadingUTC"]
+
+        # IngestedUTC records when a row first entered the master; the daily export
+        # delivers by it, so late or backfilled readings still go out. A master
+        # written before this column existed is migrated once: rows at or before
+        # the export high-water mark were already delivered (0), newer rows were
+        # not (this run's time).
+        if not historical.is_empty() and "IngestedUTC" not in historical.columns:
+            export_hwm = self._read_export_reading_hwm()
+            historical = historical.with_columns(
+                polars.when(polars.col("SensorReadingUTC") <= export_hwm)
+                .then(polars.lit(0, dtype=polars.Int64))
+                .otherwise(polars.lit(run_utc, dtype=polars.Int64))
+                .alias("IngestedUTC")
+            )
+            self.logger.warning(
+                f"IngestedUTC migration: stamped {historical.height} existing rows "
+                f"(export HWM {export_hwm}; newer rows marked undelivered)"
+            )
+
         # Only clean/validate new readings if there are any
         if not dt.is_empty():
             dt = self.clean_validate_sensors(
@@ -877,6 +954,17 @@ class EnvironmentData:
             if not historical.is_empty():
                 historical = self.enforce_schema(historical, "HistoricalData")
 
+            # Keep only rows new to the master. The existing row always wins, so a
+            # delivered reading is never replaced or re-stamped (unique() without
+            # keep= makes no guarantee which duplicate survives).
+            staged_count = dt.height
+            dt = dt.unique(subset=key, keep="first", maintain_order=True)
+            if not historical.is_empty():
+                dt = dt.join(historical.select(key), on=key, how="anti")
+            dt = self._drop_backfill_overlap(dt, historical)
+            dt = dt.with_columns(polars.lit(run_utc, dtype=polars.Int64).alias("IngestedUTC"))
+            self.logger.info(f"{dt.height} of {staged_count} staged readings are new to the master")
+
             # Append these to the database.
             dt = polars.concat([historical, dt], how="diagonal")
         else:
@@ -884,15 +972,14 @@ class EnvironmentData:
             self.logger.info("No new readings to consolidate. Using historical data only.")
             dt = historical
 
-        # Remove duplicate readings based on SensorID and SensorReadingUTC
-        # This handles cases where Conserv (15-min intervals) might pull the same readings multiple times
+        # Safety net for duplicates already in the master: historical rows come
+        # first, so keep="first" preserves the existing (delivered) row.
         initial_count = dt.shape[0]
-        dt = dt.unique(subset=["SensorID", "SensorReadingUTC"])
+        if not dt.is_empty():
+            dt = dt.unique(subset=key, keep="first", maintain_order=True)
         final_count = dt.shape[0]
-        
         if initial_count != final_count:
-            duplicates_removed = initial_count - final_count
-            self.logger.info(f"Removed {duplicates_removed} duplicate readings (SensorID + SensorReadingUTC)")
+            self.logger.info(f"Removed {initial_count - final_count} duplicate readings (SensorID + SensorReadingUTC)")
 
         # ============ FILTER INVALID SENSOR NAMES ============
         # Filter out sensors that don't conform to the Yale naming convention
@@ -1000,7 +1087,7 @@ class EnvironmentData:
         dt = self.standardize_sensor_dataframe(dt)
 
         # Write the file.
-        dt.write_parquet(f"{self.data_path}/sensor_readings.parquet")
+        self._write_master(dt)
         # self.logger.info(f"{dt.shape[0]} total readings.")
 
         # Run validation with return_results=True to collect all validation results
@@ -1149,6 +1236,7 @@ class EnvironmentData:
             "weather_direct_rad_wm2",
             "weather_wmo_code",
             "weather_wmo_description",
+            "IngestedUTC",
         ]
             
         # Ensure the core reading columns always exist so downstream files have a

@@ -70,7 +70,8 @@ if os.path.exists(SENSOR_READINGS) and os.path.exists(COORDINATES):
 
             df = polars.concat([already_filled, needs_backfill], how="diagonal_relaxed")
             df = df.sort("SensorReadingUTC")
-            df.write_parquet(SENSOR_READINGS)
+            df.write_parquet(SENSOR_READINGS + ".tmp")
+            os.replace(SENSOR_READINGS + ".tmp", SENSOR_READINGS)
             filled = df.filter(polars.col("weather_temp_f").is_not_null()).height
             print(f"[2-consolidate] Backfill complete. {filled}/{df.height} rows now have weather data")
         else:
