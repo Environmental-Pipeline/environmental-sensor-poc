@@ -594,11 +594,18 @@ class EnvironmentData:
 
             coris_dfs = []
             for client_idx, coris_client in enumerate(self.coris_clients):
-                client_sensors = coris_client.get_current_readings(
-                    out_of_scope=self.out_of_scope,
-                    testing=self.testing,
-                    testing_sensor_ids=self.testing_sensor_ids
-                )
+                try:
+                    client_sensors = coris_client.get_current_readings(
+                        out_of_scope=self.out_of_scope,
+                        testing=self.testing,
+                        testing_sensor_ids=self.testing_sensor_ids
+                    )
+                except Exception as e:
+                    acct = (getattr(coris_client, 'cats_user_id', None)
+                            or getattr(coris_client, 'CatsUserID', None)
+                            or f"client {client_idx}")
+                    self.logger.error(f"Coris account {acct} failed, skipping this cycle: {e}")
+                    continue
 
                 # Convert data types to match expected schema before validation
                 if not client_sensors.is_empty():
