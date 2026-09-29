@@ -38,7 +38,8 @@ sleep 8
 
 docker ps --filter name=sensorpull-run --format '{{.Status}}' | grep -q '^Up' || { echo "FAIL: container not up"; exit 1; }
 CRON=$(docker exec sensorpull-run sh -c 'crontab -l | grep -c cron-errors')
-[ "$CRON" = "3" ] || { echo "FAIL: expected 3 cron lines capturing stderr, found $CRON"; exit 1; }
+WANT=$(grep -c cron-errors "$REPO/jobs/cronjobs")
+[ "$CRON" = "$WANT" ] || { echo "FAIL: expected $WANT cron lines capturing stderr, found $CRON"; exit 1; }
 STAGED_AFTER=$(ls "$DATA/new-readings" | wc -l)
 [ "$STAGED_AFTER" -ge "$STAGED_BEFORE" ] || { echo "FAIL: staging files lost ($STAGED_BEFORE -> $STAGED_AFTER)"; exit 1; }
 

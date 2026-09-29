@@ -1,3 +1,4 @@
 */15 * * * * cd /src/ && /usr/local/bin/python3 /src/jobs/1-pull.py 2>>/src/data/cron-errors.log # pull reading every 15 minutes, this is the frequency used by Conserv.
 45 * * * * cd /src/ && /usr/local/bin/python3 /src/jobs/2-consolidate.py 2>>/src/data/cron-errors.log # consolidate into analytical tables at the 45 minute mark each hour, targeting ready by the start of each hour.
 0 2 * * * cd /src/ && /usr/local/bin/python3 /src/jobs/3-export-daily.py 2>>/src/data/cron-errors.log # export incremental delta for daily upload at 2:00 AM UTC (before upload at 2:15).
+20 * * * * cd /src/ && TQDM_DISABLE=1 /usr/local/bin/python3 /src/jobs/4-backfill-coris.py 2>>/src/data/cron-errors.log # re-pull any Coris account more than 2h behind (Phase 2); lock prevents overlap.

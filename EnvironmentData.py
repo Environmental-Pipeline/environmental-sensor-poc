@@ -873,6 +873,116 @@ class EnvironmentData:
             new = new.join(matched, on=["SensorID", "SensorReadingUTC"], how="anti")
         return new
 
+    def backfill_coris_gaps(self, min_gap_seconds: int = 2 * 3600, max_lookback_days: int = 14,
+                            end_margin_seconds: int = 1800, retry_empty_seconds: int = 6 * 3600):
+        """
+        Re-pull Coris readings for any account whose newest held reading trails now
+        by more than min_gap_seconds, so an outage (an expired key, a crashed pull,
+        the VM down) fills itself once the cause is fixed. Mirrors
+        backfill_conserv_gaps(), per Coris account.
+
+        - Gap is measured per account from the master plus unconsolidated staging
+          files, over that account's sensors (resolved from /cats/user/).
+        - The window ends end_margin_seconds before now so a backfilled reading can
+          never land after the next live pull's readings; live pulls cover the rest.
+        - Accounts whose key fails or whose sensors have no readings in the master
+          (no valid-named sensors) are skipped and logged.
+        - A window that returned nothing is not retried for retry_empty_seconds
+          (the sensors may simply be offline), to spare ~18 minutes of API calls.
+        - Slices are staged atomically as new-readings/*_backfill.parquet; the
+          consolidation's overlap guard and the ingestion-time export do the rest.
+        """
+        import json
+        if not (self.coris_enabled and getattr(self, "coris_clients", None)):
+            return
+        master = f"{self.data_path}/sensor_readings.parquet"
+        if not os.path.exists(master):
+            return
+        cols = ["Source", "SensorID", "SensorReadingUTC"]
+        held = [polars.read_parquet(master, columns=cols)]
+        staging_dir = f"{self.data_path}/new-readings/"
+        if os.path.exists(staging_dir):
+            for f in os.listdir(staging_dir):
+                try:
+                    held.append(polars.read_parquet(f"{staging_dir}{f}", columns=cols))
+                except Exception:
+                    continue
+        last_by_sensor = (polars.concat(held, how="diagonal_relaxed")
+                          .filter(polars.col("Source") == "Coris")
+                          .group_by("SensorID").agg(polars.col("SensorReadingUTC").max().alias("last")))
+
+        state_path = f"{self.data_path}/coris_backfill_state.json"
+        try:
+            with open(state_path) as fh:
+                state = json.load(fh)
+        except (FileNotFoundError, ValueError):
+            state = {}
+
+        now_utc = self.get_current_utc()
+        end_utc = now_utc - end_margin_seconds
+        cap = max_lookback_days * 24 * 3600
+        for client in self.coris_clients:
+            acct = str(getattr(client, "cats_user_id", "?"))
+            try:
+                sensors = client.get_sensors(out_of_scope=self.out_of_scope)
+            except Exception as e:
+                self.logger.warning(f"backfill_coris_gaps: account {acct} unavailable, skipping: {e}")
+                continue
+            if sensors.is_empty():
+                self.logger.info(f"backfill_coris_gaps: account {acct} has no sensors, skipping.")
+                continue
+            mine = last_by_sensor.filter(polars.col("SensorID").is_in(sensors["SensorID"].unique().implode()))
+            if mine.is_empty():
+                self.logger.info(f"backfill_coris_gaps: no readings held for account {acct} "
+                                 "(no valid-named sensors), skipping.")
+                continue
+            last_seen = int(mine["last"].max())
+            gap = now_utc - last_seen
+            if gap <= min_gap_seconds:
+                continue
+            prev = state.get(acct, {})
+            if (prev.get("last_seen") == last_seen and prev.get("rows_staged") == 0
+                    and now_utc - int(prev.get("attempted_utc", 0)) < retry_empty_seconds):
+                self.logger.info(f"backfill_coris_gaps: account {acct} still {gap // 3600}h behind; "
+                                 "last attempt returned nothing, retrying later.")
+                continue
+            start_utc = last_seen
+            if end_utc - start_utc > cap:
+                start_utc = end_utc - cap
+                self.logger.error(
+                    f"COMPLETENESS ALERT: Coris account {acct} gap of {gap // 3600}h exceeds the "
+                    f"{max_lookback_days}-day backfill cap; filling the most recent {max_lookback_days} days only.")
+            self.logger.warning(f"backfill_coris_gaps: account {acct} trailing gap of {gap // 3600}h; "
+                                f"re-pulling {start_utc} to {end_utc}.")
+            staged = 0
+            s = start_utc
+            while s < end_utc:
+                e = min(s + 86400, end_utc)
+                frames = client.get_historical_data_bulk(
+                    acceptable_range=self.acceptable_range, start_utc=s, end_utc=e,
+                    out_of_scope=self.out_of_scope, testing=self.testing,
+                    testing_sensor_ids=self.testing_sensor_ids)
+                frames = [self.clean_validate_sensors(sensors=f, step=f"backfill_coris_{acct}_{s}") for f in frames]
+                frames = [f for f in frames if f is not None and not f.is_empty()]
+                if frames:
+                    df = self.standardize_sensor_dataframe(polars.concat(frames, how="diagonal_relaxed"))
+                    df = df.filter(polars.col("SensorReadingUTC").is_between(start_utc, end_utc))
+                    if not df.is_empty():
+                        os.makedirs(staging_dir, exist_ok=True)
+                        name = f"{now_utc}_coris{acct}_{s}_backfill.parquet"
+                        tmp = f"{self.data_path}/.{name}.tmp"
+                        df.write_parquet(tmp)
+                        os.replace(tmp, f"{staging_dir}{name}")
+                        staged += df.height
+                s = e
+            state[acct] = {"attempted_utc": now_utc, "last_seen": last_seen,
+                           "window": [start_utc, end_utc], "rows_staged": staged}
+            with open(state_path + ".tmp", "w") as fh:
+                json.dump(state, fh, indent=2)
+            os.replace(state_path + ".tmp", state_path)
+            self.logger.warning(f"backfill_coris_gaps: account {acct} staged {staged} re-pulled rows; "
+                                "consolidation will dedupe and merge them.")
+
     def consolidate_readings(self):
         """
         Combine new and historical readings into one database. Build (or re-build) the analytical tables.
