@@ -534,6 +534,7 @@ class EnvironmentData:
 
         # Make a log entry and gather the current UTC.
         current_utc = self.get_current_utc()
+        source_results = {}  # per Coris account / Conserv customer, for source_status.json
         # self.logger.info(f"get_current_readings: {current_utc}")
 
         # ============ CONSERV DATA PROCESSING ============
@@ -546,6 +547,7 @@ class EnvironmentData:
                 conserv_data = self.conserv_client.get_current_readings(
                     test=self.testing
                 )
+                source_results.update(self._conserv_source_results(conserv_data))
 
                 if conserv_data is not None and not conserv_data.is_empty():
                     self.logger.info(f"Conserv current data shape: {conserv_data.shape}")
@@ -580,6 +582,9 @@ class EnvironmentData:
 
             except Exception as e:
                 self.logger.warning(f"Failed to fetch current Conserv data: {e}")
+                for c in getattr(self.conserv_client, "customers", []):
+                    source_results.setdefault(f"conserv:{c['customer_id']}",
+                                              {"ok": False, "rows": 0, "newest": None, "error": str(e)[:500]})
                 import traceback
 
                 self.logger.warning(
@@ -605,7 +610,14 @@ class EnvironmentData:
                             or getattr(coris_client, 'CatsUserID', None)
                             or f"client {client_idx}")
                     self.logger.error(f"Coris account {acct} failed, skipping this cycle: {e}")
+                    source_results[f"coris:{acct}"] = {"ok": False, "rows": 0, "newest": None, "error": str(e)[:500]}
                     continue
+                source_results[f"coris:{getattr(coris_client, 'cats_user_id', client_idx)}"] = {
+                    "ok": True, "rows": client_sensors.height,
+                    "newest": (int(client_sensors["SensorReadingUTC"].max())
+                               if not client_sensors.is_empty() and "SensorReadingUTC" in client_sensors.columns
+                               and client_sensors["SensorReadingUTC"].max() is not None else None),
+                    "error": None}
 
                 # Convert data types to match expected schema before validation
                 if not client_sensors.is_empty():
@@ -729,10 +741,69 @@ class EnvironmentData:
             all_sensors = self.standardize_sensor_dataframe(all_sensors)
 
         # Save the new-readings file. A daily process will pull these later to clean, validate, and consolidate them into the database.
+        try:
+            self._update_source_status(source_results)
+        except Exception as e:  # status reporting must never break a pull
+            self.logger.warning(f"source_status.json not updated: {e}")
+
+        # Written aside and renamed in, so consolidation never reads a half-written file.
         os.makedirs(f"{self.data_path}/new-readings/", exist_ok=True)
-        all_sensors.write_parquet(
-            f"{self.data_path}/new-readings/{current_utc}.parquet"
-        )
+        tmp = f"{self.data_path}/.{current_utc}.parquet.tmp"
+        all_sensors.write_parquet(tmp)
+        os.replace(tmp, f"{self.data_path}/new-readings/{current_utc}.parquet")
+
+    def _conserv_source_results(self, conserv_data) -> dict:
+        """Per-customer outcome of this Conserv pull, with the newest reading seen."""
+        status = getattr(self.conserv_client, "last_status", {}) or {}
+        newest = {}
+        if conserv_data is not None and not conserv_data.is_empty() \
+                and {"SensorID", "SensorReadingUTC"} <= set(conserv_data.columns):
+            per = (conserv_data
+                   .with_columns(polars.col("SensorID").str.split(":").list.get(1).alias("_cust"))
+                   .group_by("_cust").agg(polars.col("SensorReadingUTC").max().alias("newest")))
+            newest = {str(r["_cust"]): r["newest"] for r in per.iter_rows(named=True)}
+        out = {}
+        for cid, st in status.items():
+            n = newest.get(str(cid))
+            out[f"conserv:{cid}"] = {"ok": st.get("ok", False), "rows": st.get("rows", 0),
+                                     "newest": int(n) if n is not None else None, "error": st.get("error")}
+        return out
+
+    def _update_source_status(self, results: dict) -> None:
+        """
+        Merge this pull's per-account/customer outcome into source_status.json.
+        Keeps the newest reading ever seen per source and when a run of errors
+        began, which is what the freshness alert and the dashboard read.
+        """
+        import json
+        path = os.path.join(self.data_path, "source_status.json")
+        try:
+            with open(path) as fh:
+                status = json.load(fh)
+        except (FileNotFoundError, ValueError):
+            status = {}
+        sources = status.get("sources", {})
+        now = self.get_current_utc()
+        for key, r in results.items():
+            e = sources.get(key, {"first_seen_utc": now})
+            e["last_attempt_utc"] = now
+            e["rows_last"] = int(r.get("rows") or 0)
+            if r.get("ok"):
+                e["last_success_utc"] = now
+                e["current_error"] = None
+                e["error_since_utc"] = None
+            else:
+                e["last_error_utc"] = now
+                e["current_error"] = (r.get("error") or "unknown error")[:500]
+                e["error_since_utc"] = e.get("error_since_utc") or now
+            if r.get("newest"):
+                e["newest_reading_utc"] = max(int(e.get("newest_reading_utc") or 0), int(r["newest"]))
+            sources[key] = e
+        status = {"updated_utc": now, "sources": sources}
+        tmp = path + ".tmp"
+        with open(tmp, "w") as fh:
+            json.dump(status, fh, indent=2, sort_keys=True)
+        os.replace(tmp, path)
 
     def backfill_conserv_gaps(self, min_gap_seconds: int = 2 * 3600, max_lookback_days: int = 14):
         """

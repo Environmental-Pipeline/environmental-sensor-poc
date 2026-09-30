@@ -89,6 +89,25 @@ class ConservAPIClient:
                     f"No .env file found at {env_file_path}. If running from a subdirectory, set home_directory parameter to parent directory (e.g., home_directory='..')."
             )
 
+        # Optional allowlist: CONSERV_CUSTOMERS=307,333 keeps only those customer ids.
+        # Dead customers (403/404) otherwise cost ~200 s of every pull.
+        allowed = os.environ.get("CONSERV_CUSTOMERS", "").strip()
+        if not allowed:
+            try:
+                with open(env_file_path) as f:
+                    for line in f:
+                        if line.startswith("CONSERV_CUSTOMERS="):
+                            allowed = line.split("=", 1)[1].strip()
+                            break
+            except FileNotFoundError:
+                pass
+        if allowed:
+            keep = {c.strip() for c in allowed.split(",") if c.strip()}
+            dropped = [c["customer_id"] for c in customers if str(c["customer_id"]) not in keep]
+            customers = [c for c in customers if str(c["customer_id"]) in keep]
+            if dropped and logger:
+                logger.info(f"Conserv: skipping customers not in CONSERV_CUSTOMERS: {dropped}")
+
         if not customers:
             raise ValueError("No Conserv API keys found in .env file")
 
@@ -418,6 +437,8 @@ class ConservAPIClient:
         all_customer_data = []
         
         # Process each customer with progress bar
+        # Per-customer outcome of this pull, read by EnvironmentData for source_status.json.
+        self.last_status = {}
         pbar = tqdm.tqdm(total=len(customers_to_process), desc="Gathering Conserv current readings")
         for customer in customers_to_process:
             try:
@@ -448,9 +469,12 @@ class ConservAPIClient:
             except Exception as e:
                 if self.logger:
                     self.logger.warning(f"Failed to fetch current data for customer {customer['customer_id']}: {e}")
+                self.last_status[str(customer['customer_id'])] = {"ok": False, "rows": 0, "error": str(e)[:500]}
                 # Continue with other customers
                 continue
             finally:
+                _cd = locals().get("customer_data")
+                self.last_status.setdefault(str(customer['customer_id']), {"ok": True, "rows": len(_cd) if _cd is not None else 0, "error": None})
                 pbar.update(1)
         
         pbar.close()
