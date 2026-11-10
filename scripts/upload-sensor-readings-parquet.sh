@@ -44,6 +44,18 @@ if [[ ! -f "$PROD_KILL_FILE" ]] && (( $(date -u +%Y%m%d) >= PROD_START_YMD )); t
   FABRIC_BASES+=( "$PROD_BASE" )
 fi
 
+# Databricks landing areas (parallel run alongside Fabric, from 2026-11-10,
+# per Michael Dunlap). Same service principal and cert. Appended after Fabric
+# so a Databricks problem never delays a Fabric drop. Area gating works the
+# same way (dev/tst parsed from the container name). PROD will be
+# https://azureedaprodstorage.dfs.core.windows.net/cultural-heritage-environmental-monitoring-prd/Incoming
+# once DM says it is built.
+DATABRICKS_BASES=(
+  "https://azureedastorage.dfs.core.windows.net/cultural-heritage-environmental-monitoring-dev/Incoming"
+  "https://azureedastorage.dfs.core.windows.net/cultural-heritage-environmental-monitoring-tst/Incoming"
+)
+FABRIC_BASES+=( "${DATABRICKS_BASES[@]}" )
+
 # ---------------------------------------------------------------------------
 # Helper: upload a file to S3 and to every configured Fabric landing area
 # ---------------------------------------------------------------------------
@@ -81,6 +93,10 @@ upload_file() {
     echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] Uploading ${label} to Fabric: ${fabric_dest}" >> "$LOG"
     local area
     area="$(echo "$base" | sed -E 's#.*monitoring-([a-z]+)/Incoming#\1#')"
+    # Status key: Fabric areas stay "dev"/"tst"/"prd"; Databricks areas get a
+    # "databricks-" prefix so they don't overwrite the Fabric result.
+    local key="$area"
+    [[ "$base" != *edafileuploads* ]] && key="databricks-${area}"
     if [[ ",${areas}," != *",${area},"* ]]; then
       echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] Skipping ${label} for ${area} (not in ${areas})." >> "$LOG"
       fabric_attempts=$((fabric_attempts - 1))
@@ -88,9 +104,9 @@ upload_file() {
     fi
     if azcopy copy "$src_file" "$fabric_dest" >> "$LOG" 2>&1; then
       echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] Fabric ${label} upload complete: ${fabric_dest}" >> "$LOG"
-      RESULT_FABRIC="${RESULT_FABRIC}${RESULT_FABRIC:+,}\"${area}\":\"ok\""
+      RESULT_FABRIC="${RESULT_FABRIC}${RESULT_FABRIC:+,}\"${key}\":\"ok\""
     else
-      RESULT_FABRIC="${RESULT_FABRIC}${RESULT_FABRIC:+,}\"${area}\":\"failed\""
+      RESULT_FABRIC="${RESULT_FABRIC}${RESULT_FABRIC:+,}\"${key}\":\"failed\""
       echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] ERROR: Fabric ${label} upload failed: ${fabric_dest}" >> "$LOG"
       fabric_failures=$((fabric_failures + 1))
     fi
